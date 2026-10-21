@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955719,
+  "key": "vehicle_chevrolet-captiva-sport-2.4-at",
+  "data": {
+    "id": "chevrolet-captiva-sport-2.4-at",
+    "brand": "Chevrolet",
+    "model": "Captiva Sport",
+    "generation_years": "2008-2016",
+    "trim_engine": "2.4L ECOTEC DOHC (182 HP)",
+    "displacement_cc": 2384,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 65,
+    "tank_capacity_gallons": 17.17,
+    "reserve_liters_est": 7.5,
+    "body_type": "suv",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 24,
+      "avg": 28,
+      "max": 33
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

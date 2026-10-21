@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955894,
+  "key": "vehicle_volkswagen-jetta-mk7-1.4-tsi-at",
+  "data": {
+    "id": "volkswagen-jetta-mk7-1.4-tsi-at",
+    "brand": "Volkswagen",
+    "model": "Jetta",
+    "generation_years": "2019-2026",
+    "trim_engine": "1.4L TSI Turbo 16V (150 HP)",
+    "displacement_cc": 1395,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Extra",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 37,
+      "avg": 43,
+      "max": 49
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

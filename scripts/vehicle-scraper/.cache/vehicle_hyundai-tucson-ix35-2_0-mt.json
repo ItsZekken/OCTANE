@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955872,
+  "key": "vehicle_hyundai-tucson-ix35-2.0-mt",
+  "data": {
+    "id": "hyundai-tucson-ix35-2.0-mt",
+    "brand": "Hyundai",
+    "model": "Tucson ix35",
+    "generation_years": "2010-2015",
+    "trim_engine": "2.0L Theta II DOHC (163 HP)",
+    "displacement_cc": 1998,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 58,
+    "tank_capacity_gallons": 15.32,
+    "reserve_liters_est": 7.5,
+    "body_type": "suv",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 29,
+      "avg": 33,
+      "max": 38
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

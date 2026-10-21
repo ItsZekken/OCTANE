@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955678,
+  "key": "vehicle_chevrolet-spark-724-taxi-1.0-mt",
+  "data": {
+    "id": "chevrolet-spark-724-taxi-1.0-mt",
+    "brand": "Chevrolet",
+    "model": "Spark 7/24",
+    "generation_years": "2006-2018",
+    "trim_engine": "1.0L S-TEC 4-Cil (65 HP)",
+    "displacement_cc": 995,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "sight-glass",
+    "urban_consumption_ref_kmgal": {
+      "min": 45,
+      "avg": 51,
+      "max": 57
+    },
+    "platform_tags": [
+      "Taxi",
+      "Urbano"
+    ]
+  }
+}

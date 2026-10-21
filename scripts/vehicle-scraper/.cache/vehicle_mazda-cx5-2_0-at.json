@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955758,
+  "key": "vehicle_mazda-cx5-2.0-at",
+  "data": {
+    "id": "mazda-cx5-2.0-at",
+    "brand": "Mazda",
+    "model": "CX-5",
+    "generation_years": "2013-2026",
+    "trim_engine": "2.0L Skyactiv-G 4x2 (153 HP)",
+    "displacement_cc": 1998,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 56,
+    "tank_capacity_gallons": 14.79,
+    "reserve_liters_est": 7.5,
+    "body_type": "suv",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 32,
+      "avg": 36,
+      "max": 41
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

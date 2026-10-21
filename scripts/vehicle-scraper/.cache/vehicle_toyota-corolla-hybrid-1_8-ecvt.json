@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955827,
+  "key": "vehicle_toyota-corolla-hybrid-1.8-ecvt",
+  "data": {
+    "id": "toyota-corolla-hybrid-1.8-ecvt",
+    "brand": "Toyota",
+    "model": "Corolla Híbrido",
+    "generation_years": "2020-2026",
+    "trim_engine": "1.8L 2ZR-FXE Atkinson Hybrid (121 HP)",
+    "displacement_cc": 1798,
+    "transmission": "CVT",
+    "fuel_type": "Híbrido (HEV/MHEV)",
+    "tank_capacity_liters": 43,
+    "tank_capacity_gallons": 11.36,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 65,
+      "avg": 75,
+      "max": 85
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

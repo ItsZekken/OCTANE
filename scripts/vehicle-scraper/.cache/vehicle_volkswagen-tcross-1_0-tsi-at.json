@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955897,
+  "key": "vehicle_volkswagen-tcross-1.0-tsi-at",
+  "data": {
+    "id": "volkswagen-tcross-1.0-tsi-at",
+    "brand": "Volkswagen",
+    "model": "T-Cross",
+    "generation_years": "2021-2026",
+    "trim_engine": "1.0L Turbo 200 TSI (114 HP)",
+    "displacement_cc": 999,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Extra",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 36,
+      "avg": 41,
+      "max": 46
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955756,
+  "key": "vehicle_mazda-cx30-2.5-at-awd",
+  "data": {
+    "id": "mazda-cx30-2.5-at-awd",
+    "brand": "Mazda",
+    "model": "CX-30",
+    "generation_years": "2020-2026",
+    "trim_engine": "2.5L Skyactiv-G AWD (186 HP)",
+    "displacement_cc": 2488,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 48,
+    "tank_capacity_gallons": 12.68,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 30,
+      "avg": 34,
+      "max": 39
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

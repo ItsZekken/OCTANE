@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955706,
+  "key": "vehicle_chevrolet-onix-turbo-sedan-1.0t-at",
+  "data": {
+    "id": "chevrolet-onix-turbo-sedan-1.0t-at",
+    "brand": "Chevrolet",
+    "model": "Onix Sedán",
+    "generation_years": "2020-2026",
+    "trim_engine": "1.0L Turbo ECOTEC 3-Cil (115 HP)",
+    "displacement_cc": 999,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 44,
+    "tank_capacity_gallons": 11.62,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 38,
+      "avg": 43,
+      "max": 48
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

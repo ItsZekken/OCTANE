@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955599,
+  "key": "vehicle_kia-k3-sedan-1.6-at",
+  "data": {
+    "id": "kia-k3-sedan-1.6-at",
+    "brand": "Kia",
+    "model": "K3",
+    "generation_years": "2024-2026",
+    "trim_engine": "1.6L Smartstream 4-Cil (121 HP)",
+    "displacement_cc": 1598,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 45,
+    "tank_capacity_gallons": 11.89,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 37,
+      "avg": 42,
+      "max": 47
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

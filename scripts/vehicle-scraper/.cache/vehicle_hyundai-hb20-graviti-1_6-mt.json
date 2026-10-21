@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955867,
+  "key": "vehicle_hyundai-hb20-graviti-1.6-mt",
+  "data": {
+    "id": "hyundai-hb20-graviti-1.6-mt",
+    "brand": "Hyundai",
+    "model": "HB20 Graviti",
+    "generation_years": "2020-2024",
+    "trim_engine": "1.6L Gamma 16V Dual CVVT (121 HP)",
+    "displacement_cc": 1591,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 37,
+      "avg": 42,
+      "max": 47
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

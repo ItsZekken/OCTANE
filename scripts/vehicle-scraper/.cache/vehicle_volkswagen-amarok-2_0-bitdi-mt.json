@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955901,
+  "key": "vehicle_volkswagen-amarok-2.0-bitdi-mt",
+  "data": {
+    "id": "volkswagen-amarok-2.0-bitdi-mt",
+    "brand": "Volkswagen",
+    "model": "Amarok",
+    "generation_years": "2011-2026",
+    "trim_engine": "2.0L BiTDI Diésel 4x4 (180 HP)",
+    "displacement_cc": 1968,
+    "transmission": "MT",
+    "fuel_type": "Diesel",
+    "tank_capacity_liters": 80,
+    "tank_capacity_gallons": 21.13,
+    "reserve_liters_est": 10,
+    "body_type": "pickup",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 32,
+      "avg": 37,
+      "max": 42
+    },
+    "platform_tags": [
+      "Trabajo",
+      "Particular",
+      "4x4"
+    ]
+  }
+}

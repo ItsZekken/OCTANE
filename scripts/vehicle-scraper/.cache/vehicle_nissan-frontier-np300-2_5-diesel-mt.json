@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955821,
+  "key": "vehicle_nissan-frontier-np300-2.5-diesel-mt",
+  "data": {
+    "id": "nissan-frontier-np300-2.5-diesel-mt",
+    "brand": "Nissan",
+    "model": "Frontier NP300",
+    "generation_years": "2016-2026",
+    "trim_engine": "2.5L YD25DDTi Turbo Diésel (161 HP)",
+    "displacement_cc": 2488,
+    "transmission": "MT",
+    "fuel_type": "Diesel",
+    "tank_capacity_liters": 80,
+    "tank_capacity_gallons": 21.13,
+    "reserve_liters_est": 10,
+    "body_type": "pickup",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 32,
+      "avg": 37,
+      "max": 42
+    },
+    "platform_tags": [
+      "Trabajo",
+      "Particular",
+      "4x4"
+    ]
+  }
+}

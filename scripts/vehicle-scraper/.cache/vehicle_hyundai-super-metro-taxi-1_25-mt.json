@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955858,
+  "key": "vehicle_hyundai-super-metro-taxi-1.25-mt",
+  "data": {
+    "id": "hyundai-super-metro-taxi-1.25-mt",
+    "brand": "Hyundai",
+    "model": "Super Metro Taxi",
+    "generation_years": "2015-2023",
+    "trim_engine": "1.25L Kappa MPI 4-Cil (86 HP)",
+    "displacement_cc": 1248,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 43,
+    "tank_capacity_gallons": 11.36,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "sight-glass",
+    "urban_consumption_ref_kmgal": {
+      "min": 40,
+      "avg": 45,
+      "max": 51
+    },
+    "platform_tags": [
+      "Taxi",
+      "Urbano"
+    ]
+  }
+}

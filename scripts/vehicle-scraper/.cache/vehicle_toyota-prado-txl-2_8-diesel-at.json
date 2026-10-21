@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955844,
+  "key": "vehicle_toyota-prado-txl-2.8-diesel-at",
+  "data": {
+    "id": "toyota-prado-txl-2.8-diesel-at",
+    "brand": "Toyota",
+    "model": "Land Cruiser Prado",
+    "generation_years": "2018-2024",
+    "trim_engine": "2.8L 1GD-FTV Turbo Diésel (201 HP)",
+    "displacement_cc": 2755,
+    "transmission": "AT",
+    "fuel_type": "Diesel",
+    "tank_capacity_liters": 87,
+    "tank_capacity_gallons": 22.98,
+    "reserve_liters_est": 10,
+    "body_type": "suv",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 28,
+      "avg": 32,
+      "max": 37
+    },
+    "platform_tags": [
+      "Particular",
+      "4x4"
+    ]
+  }
+}

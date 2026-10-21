@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955765,
+  "key": "vehicle_suzuki-alto-k10-1.0-mt",
+  "data": {
+    "id": "suzuki-alto-k10-1.0-mt",
+    "brand": "Suzuki",
+    "model": "Alto K10",
+    "generation_years": "2011-2020",
+    "trim_engine": "1.0L K10B 3-Cil (67 HP)",
+    "displacement_cc": 998,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "sight-glass",
+    "urban_consumption_ref_kmgal": {
+      "min": 50,
+      "avg": 58,
+      "max": 65
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

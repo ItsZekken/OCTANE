@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955728,
+  "key": "vehicle_mazda-2-skyactiv-hb-1.5-mt",
+  "data": {
+    "id": "mazda-2-skyactiv-hb-1.5-mt",
+    "brand": "Mazda",
+    "model": "Mazda 2",
+    "generation_years": "2015-2024",
+    "trim_engine": "1.5L Skyactiv-G DOHC 16V (106 HP)",
+    "displacement_cc": 1496,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 44,
+    "tank_capacity_gallons": 11.62,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 44,
+      "avg": 50,
+      "max": 56
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

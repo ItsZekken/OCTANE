@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955865,
+  "key": "vehicle_hyundai-accent-i25-1.6-mt",
+  "data": {
+    "id": "hyundai-accent-i25-1.6-mt",
+    "brand": "Hyundai",
+    "model": "Accent i25",
+    "generation_years": "2011-2018",
+    "trim_engine": "1.6L Gamma DOHC 16V CVVT (122 HP)",
+    "displacement_cc": 1591,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 43,
+    "tank_capacity_gallons": 11.36,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 36,
+      "avg": 41,
+      "max": 46
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

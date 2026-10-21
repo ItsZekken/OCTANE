@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955927,
+  "key": "vehicle_jac-js4-1.5t-cvt",
+  "data": {
+    "id": "jac-js4-1.5t-cvt",
+    "brand": "JAC",
+    "model": "JS4",
+    "generation_years": "2021-2026",
+    "trim_engine": "1.5L Turbo 16V (147 HP)",
+    "displacement_cc": 1499,
+    "transmission": "CVT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 34,
+      "avg": 38,
+      "max": 43
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

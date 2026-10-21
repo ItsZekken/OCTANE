@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955938,
+  "key": "vehicle_foton-tunland-2.8-diesel-mt",
+  "data": {
+    "id": "foton-tunland-2.8-diesel-mt",
+    "brand": "Foton",
+    "model": "Tunland",
+    "generation_years": "2013-2024",
+    "trim_engine": "2.8L Cummins ISF Turbo Diésel (161 HP)",
+    "displacement_cc": 2776,
+    "transmission": "MT",
+    "fuel_type": "Diesel",
+    "tank_capacity_liters": 76,
+    "tank_capacity_gallons": 20.08,
+    "reserve_liters_est": 10,
+    "body_type": "pickup",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 30,
+      "avg": 35,
+      "max": 40
+    },
+    "platform_tags": [
+      "Trabajo",
+      "Particular",
+      "4x4"
+    ]
+  }
+}

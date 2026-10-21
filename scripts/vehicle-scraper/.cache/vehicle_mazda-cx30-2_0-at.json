@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955752,
+  "key": "vehicle_mazda-cx30-2.0-at",
+  "data": {
+    "id": "mazda-cx30-2.0-at",
+    "brand": "Mazda",
+    "model": "CX-30",
+    "generation_years": "2020-2026",
+    "trim_engine": "2.0L Skyactiv-G 4x2 (153 HP)",
+    "displacement_cc": 1998,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 51,
+    "tank_capacity_gallons": 13.47,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 34,
+      "avg": 39,
+      "max": 44
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

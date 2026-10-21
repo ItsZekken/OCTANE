@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955838,
+  "key": "vehicle_toyota-hilux-2.4-diesel-mt",
+  "data": {
+    "id": "toyota-hilux-2.4-diesel-mt",
+    "brand": "Toyota",
+    "model": "Hilux",
+    "generation_years": "2016-2026",
+    "trim_engine": "2.4L 2GD-FTV Turbo Diésel (148 HP)",
+    "displacement_cc": 2393,
+    "transmission": "MT",
+    "fuel_type": "Diesel",
+    "tank_capacity_liters": 80,
+    "tank_capacity_gallons": 21.13,
+    "reserve_liters_est": 10,
+    "body_type": "pickup",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 34,
+      "avg": 39,
+      "max": 44
+    },
+    "platform_tags": [
+      "Trabajo",
+      "Particular",
+      "4x4"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955724,
+  "key": "vehicle_mazda-2-de-1.5-mt",
+  "data": {
+    "id": "mazda-2-de-1.5-mt",
+    "brand": "Mazda",
+    "model": "Mazda 2",
+    "generation_years": "2008-2015",
+    "trim_engine": "1.5L MZR DOHC 16V (102 HP)",
+    "displacement_cc": 1498,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 43,
+    "tank_capacity_gallons": 11.36,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 38,
+      "avg": 43,
+      "max": 48
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

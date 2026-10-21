@@ -1,0 +1,30 @@
+{
+  "timestamp": 1792516955853,
+  "key": "vehicle_hyundai-grand-i10-hb-1.25-mt",
+  "data": {
+    "id": "hyundai-grand-i10-hb-1.25-mt",
+    "brand": "Hyundai",
+    "model": "Grand i10",
+    "generation_years": "2014-2022",
+    "trim_engine": "1.25L Kappa MPI 4-Cil (86 HP)",
+    "displacement_cc": 1248,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 43,
+    "tank_capacity_gallons": 11.36,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 42,
+      "avg": 47,
+      "max": 53
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Taxi",
+      "Urbano"
+    ]
+  }
+}

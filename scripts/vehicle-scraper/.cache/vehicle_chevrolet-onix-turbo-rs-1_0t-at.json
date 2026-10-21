@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955708,
+  "key": "vehicle_chevrolet-onix-turbo-rs-1.0t-at",
+  "data": {
+    "id": "chevrolet-onix-turbo-rs-1.0t-at",
+    "brand": "Chevrolet",
+    "model": "Onix RS",
+    "generation_years": "2020-2026",
+    "trim_engine": "1.0L Turbo ECOTEC 3-Cil (115 HP)",
+    "displacement_cc": 999,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 44,
+    "tank_capacity_gallons": 11.62,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 39,
+      "avg": 44,
+      "max": 49
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

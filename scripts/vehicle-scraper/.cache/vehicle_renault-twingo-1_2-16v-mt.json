@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955619,
+  "key": "vehicle_renault-twingo-1.2-16v-mt",
+  "data": {
+    "id": "renault-twingo-1.2-16v-mt",
+    "brand": "Renault",
+    "model": "Twingo",
+    "generation_years": "2005-2013",
+    "trim_engine": "1.2L 16V D4F (75 HP)",
+    "displacement_cc": 1149,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 40,
+    "tank_capacity_gallons": 10.57,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 45,
+      "avg": 50,
+      "max": 55
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

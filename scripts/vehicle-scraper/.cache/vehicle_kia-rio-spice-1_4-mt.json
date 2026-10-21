@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955593,
+  "key": "vehicle_kia-rio-spice-1.4-mt",
+  "data": {
+    "id": "kia-rio-spice-1.4-mt",
+    "brand": "Kia",
+    "model": "Rio Spice",
+    "generation_years": "2012-2017",
+    "trim_engine": "1.4L Gamma CVVT 4-Cil (107 HP)",
+    "displacement_cc": 1396,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 43,
+    "tank_capacity_gallons": 11.36,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 37,
+      "avg": 42,
+      "max": 47
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

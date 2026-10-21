@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955914,
+  "key": "vehicle_ford-escape-hybrid-2.5-ecvt",
+  "data": {
+    "id": "ford-escape-hybrid-2.5-ecvt",
+    "brand": "Ford",
+    "model": "Escape Híbrida",
+    "generation_years": "2020-2026",
+    "trim_engine": "2.5L i-VCT Atkinson Full Hybrid (200 HP)",
+    "displacement_cc": 2488,
+    "transmission": "CVT",
+    "fuel_type": "Híbrido (HEV/MHEV)",
+    "tank_capacity_liters": 54,
+    "tank_capacity_gallons": 14.27,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 58,
+      "avg": 66,
+      "max": 74
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

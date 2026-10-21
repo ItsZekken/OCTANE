@@ -1,0 +1,30 @@
+{
+  "timestamp": 1792516955683,
+  "key": "vehicle_chevrolet-beat-1.2-mt",
+  "data": {
+    "id": "chevrolet-beat-1.2-mt",
+    "brand": "Chevrolet",
+    "model": "Beat",
+    "generation_years": "2018-2022",
+    "trim_engine": "1.2L DOHC 16V S-TEC II (81 HP)",
+    "displacement_cc": 1206,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 42,
+      "avg": 48,
+      "max": 54
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Taxi",
+      "Particular"
+    ]
+  }
+}

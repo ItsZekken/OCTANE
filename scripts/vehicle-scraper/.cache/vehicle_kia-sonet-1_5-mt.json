@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955608,
+  "key": "vehicle_kia-sonet-1.5-mt",
+  "data": {
+    "id": "kia-sonet-1.5-mt",
+    "brand": "Kia",
+    "model": "Sonet",
+    "generation_years": "2021-2026",
+    "trim_engine": "1.5L Smartstream MPI 4-Cil (113 HP)",
+    "displacement_cc": 1497,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 45,
+    "tank_capacity_gallons": 11.89,
+    "reserve_liters_est": 5.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 39,
+      "avg": 44,
+      "max": 49
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

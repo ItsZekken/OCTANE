@@ -1,0 +1,40 @@
+<svg viewBox="0 0 800 280" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+  <!-- Ground Datum & Contact Shadow (Y=250) -->
+  <line x1="80" y1="250" x2="720" y2="250" stroke="#27272A" stroke-width="3" stroke-linecap="round"/>
+  <line x1="120" y1="250" x2="670" y2="250" stroke="#000000" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Wheel Arch Cutout Shadows -->
+  <circle cx="215" cy="202" r="52" fill="#09090B"/>
+  <circle cx="585" cy="202" r="52" fill="#09090B"/>
+
+  <!-- Body Silhouette -->
+  <path fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="6" stroke-linejoin="round" d="M 112 210 C 110 180, 120 156, 146 142 C 174 130, 222 124, 260 120 L 346 68 C 364 60, 388 58, 418 58 L 564 60 L 616 84 L 636 128 L 702 130 C 710 138, 710 164, 704 184 C 698 200, 686 208, 670 212 L 633 216 A 48 48 0 0 0 537 216 L 263 216 A 48 48 0 0 0 167 216 Z"/>
+  <!-- Roof Highlight Line -->
+  <path d="M 148 142 C 176 130, 224 124, 262 120 L 348 70 L 562 62 L 614 86 L 634 130 L 700 132" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Greenhouse Glass & B-Pillar -->
+  <path fill="#111116" stroke="#09090B" stroke-width="6" stroke-linejoin="round" d="M 276 120 L 354 74 C 368 66, 390 65, 416 65 L 550 66 L 592 92 L 610 122 L 452 122 Z"/>
+  <line x1="442" y1="65" x2="438" y2="122" stroke="#09090B" stroke-width="12"/>
+
+  <!-- Lighting: Front Headlight & Rear Stop -->
+  <path d="M 124 156 L 172 142 L 166 162 Z" fill="#F8FAFC" stroke="#09090B" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M 684 136 L 704 138 L 702 166 L 682 162 Z" fill="#F43F5E" stroke="#09090B" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- Front Wheel (Center: 215, 202) -->
+  <g transform="translate(215, 202)">
+    <circle r="46" fill="#141418" stroke="#09090B" stroke-width="6"/>
+    <circle r="28" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="-25" y1="0" x2="25" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="0" y1="-25" x2="0" y2="25" stroke="#D4D4D8" stroke-width="5"/>
+    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+  </g>
+
+  <!-- Rear Wheel (Center: 585, 202) -->
+  <g transform="translate(585, 202)">
+    <circle r="46" fill="#141418" stroke="#09090B" stroke-width="6"/>
+    <circle r="28" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="-25" y1="0" x2="25" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="0" y1="-25" x2="0" y2="25" stroke="#D4D4D8" stroke-width="5"/>
+    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+  </g>
+</svg>

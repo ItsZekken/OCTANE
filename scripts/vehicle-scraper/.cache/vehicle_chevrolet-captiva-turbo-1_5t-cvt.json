@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955721,
+  "key": "vehicle_chevrolet-captiva-turbo-1.5t-cvt",
+  "data": {
+    "id": "chevrolet-captiva-turbo-1.5t-cvt",
+    "brand": "Chevrolet",
+    "model": "Captiva",
+    "generation_years": "2020-2026",
+    "trim_engine": "1.5L Turbo DOHC 16V (144 HP)",
+    "displacement_cc": 1451,
+    "transmission": "CVT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 52,
+    "tank_capacity_gallons": 13.74,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 30,
+      "avg": 34,
+      "max": 39
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

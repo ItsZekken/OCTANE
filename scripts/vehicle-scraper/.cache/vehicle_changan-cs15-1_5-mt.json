@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955933,
+  "key": "vehicle_changan-cs15-1.5-mt",
+  "data": {
+    "id": "changan-cs15-1.5-mt",
+    "brand": "Changan",
+    "model": "CS15",
+    "generation_years": "2017-2024",
+    "trim_engine": "1.5L EA15 BlueCore (105 HP)",
+    "displacement_cc": 1480,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 42,
+    "tank_capacity_gallons": 11.1,
+    "reserve_liters_est": 5.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 36,
+      "avg": 41,
+      "max": 46
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

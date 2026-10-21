@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955783,
+  "key": "vehicle_suzuki-vitara-live-1.6-at",
+  "data": {
+    "id": "suzuki-vitara-live-1.6-at",
+    "brand": "Suzuki",
+    "model": "Vitara Live",
+    "generation_years": "2016-2024",
+    "trim_engine": "1.6L M16A VVT (118 HP)",
+    "displacement_cc": 1586,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 47,
+    "tank_capacity_gallons": 12.42,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 36,
+      "avg": 41,
+      "max": 46
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

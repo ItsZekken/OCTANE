@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955741,
+  "key": "vehicle_mazda-3-bl-2.0-at",
+  "data": {
+    "id": "mazda-3-bl-2.0-at",
+    "brand": "Mazda",
+    "model": "Mazda 3 All-New",
+    "generation_years": "2010-2014",
+    "trim_engine": "2.0L LF-VE Activematic (148 HP)",
+    "displacement_cc": 1999,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 55,
+    "tank_capacity_gallons": 14.53,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 29,
+      "avg": 33,
+      "max": 38
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

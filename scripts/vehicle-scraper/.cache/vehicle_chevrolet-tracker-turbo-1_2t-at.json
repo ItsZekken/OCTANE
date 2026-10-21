@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955713,
+  "key": "vehicle_chevrolet-tracker-turbo-1.2t-at",
+  "data": {
+    "id": "chevrolet-tracker-turbo-1.2t-at",
+    "brand": "Chevrolet",
+    "model": "Tracker",
+    "generation_years": "2020-2026",
+    "trim_engine": "1.2L Turbo ECOTEC 3-Cil (132 HP)",
+    "displacement_cc": 1199,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 44,
+    "tank_capacity_gallons": 11.62,
+    "reserve_liters_est": 5.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 36,
+      "avg": 41,
+      "max": 46
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

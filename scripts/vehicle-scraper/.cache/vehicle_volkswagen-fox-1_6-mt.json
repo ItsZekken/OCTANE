@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955881,
+  "key": "vehicle_volkswagen-fox-1.6-mt",
+  "data": {
+    "id": "volkswagen-fox-1.6-mt",
+    "brand": "Volkswagen",
+    "model": "Fox",
+    "generation_years": "2005-2015",
+    "trim_engine": "1.6L EA111 8V (101 HP)",
+    "displacement_cc": 1598,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 35,
+      "avg": 39,
+      "max": 44
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

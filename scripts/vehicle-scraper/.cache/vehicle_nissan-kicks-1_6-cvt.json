@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955819,
+  "key": "vehicle_nissan-kicks-1.6-cvt",
+  "data": {
+    "id": "nissan-kicks-1.6-cvt",
+    "brand": "Nissan",
+    "model": "Kicks",
+    "generation_years": "2017-2026",
+    "trim_engine": "1.6L HR16DE (118 HP)",
+    "displacement_cc": 1598,
+    "transmission": "CVT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 41,
+    "tank_capacity_gallons": 10.83,
+    "reserve_liters_est": 5.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 35,
+      "avg": 40,
+      "max": 45
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

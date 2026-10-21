@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340" width="100%" height="100%" fill="none">
+    <defs>
+        <!-- CAD Precision Grid -->
+        <pattern id="cad-grid-picanto" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" stroke="#8A8A93" stroke-width="0.5" stroke-opacity="0.08" />
+        </pattern>
+        <pattern id="cad-major-grid-picanto" width="100" height="100" patternUnits="userSpaceOnUse">
+            <path d="M 100 0 L 0 0 0 100" stroke="#8A8A93" stroke-width="0.75" stroke-opacity="0.12" />
+        </pattern>
+        <!-- Leader and Caliper Markers -->
+        <marker id="tick-dim" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="6" markerHeight="6">
+            <circle cx="3" cy="3" r="1.5" fill="#8A8A93" fill-opacity="0.7"/>
+        </marker>
+        <marker id="node-arrow" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="6" markerHeight="6">
+            <circle cx="3" cy="3" r="1.5" fill="#FF5500"/>
+        </marker>
+    </defs>
+
+    <!-- Background Blueprint Grids -->
+    <rect width="800" height="340" fill="url(#cad-grid-picanto)" stroke="none" />
+    <rect width="800" height="340" fill="url(#cad-major-grid-picanto)" stroke="none" />
+
+    <!-- Technical Header Blueprint Stamp -->
+    <g font-family="'JetBrains Mono', monospace, ui-monospace" font-size="8.5" letter-spacing="0.15em" fill="#8A8A93" fill-opacity="0.6">
+        <text x="24" y="24">OCTANE · TELEMETRÍA DE CHASIS • CAD 1:25</text>
+        <text x="776" y="24" text-anchor="end">KIA PICANTO 1.0L MPI • CHASIS JA</text>
+    </g>
+
+    <!-- Ground Datum Line -->
+    <line x1="40" y1="262" x2="760" y2="262" stroke="#2E2E38" stroke-width="1" stroke-dasharray="8 4 2 4" />
+
+    <!-- =================================================================
+         CHASSIS WIREFRAME (High-Contrast stroke="#8A8A93", stroke-width="1.2")
+         ================================================================= -->
+    <g id="vehicle-wireframe-picanto" stroke="#8A8A93" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+
+        <!-- Main Body Contour -->
+        <path d="
+            M 120 238
+            C 108 236, 96 228, 92 218
+            C 88 206, 90 194, 96 184
+            C 102 174, 114 168, 132 164
+            L 194 152
+            C 214 148, 230 142, 244 132
+            L 326 80
+            C 342 70, 362 66, 388 66
+            L 590 68
+            C 610 68, 626 74, 642 84
+            L 676 122
+            C 690 138, 698 160, 700 182
+            L 702 214
+            C 702 228, 694 238, 678 240
+            L 654 240
+        " stroke-opacity="0.95" fill="none" />
+
+        <!-- Front Lower Lip & Underbody -->
+        <path d="
+            M 92 218
+            L 86 230
+            C 84 236, 88 240, 96 240
+            L 170 240
+        " stroke-opacity="0.8" fill="none" />
+
+        <!-- Front Wheel Arch: Center 206, R=48 -->
+        <path d="
+            M 156 240
+            C 156 212, 178 190, 206 190
+            C 234 190, 256 212, 256 240
+        " stroke-opacity="0.9" fill="none" />
+
+        <!-- Rocker Panel Sill -->
+        <line x1="256" y1="240" x2="520" y2="240" stroke-opacity="0.85" />
+        <line x1="256" y1="234" x2="520" y2="234" stroke-width="0.8" stroke-opacity="0.4" />
+
+        <!-- Rear Wheel Arch: Center 570, R=48 -->
+        <path d="
+            M 520 240
+            C 520 212, 542 190, 570 190
+            C 598 190, 620 212, 620 240
+        " stroke-opacity="0.9" fill="none" />
+
+        <!-- Rear Underbody Exit -->
+        <path d="M 620 240 L 664 240 C 674 240, 680 236, 682 230 L 684 222" stroke-opacity="0.7" fill="none" />
+
+        <!-- Greenhouse Window Frame -->
+        <path d="
+            M 248 134
+            L 330 82
+            C 344 74, 364 70, 388 70
+            L 586 72
+            C 604 72, 618 78, 632 88
+            L 662 124
+            C 666 130, 664 134, 654 134
+            L 248 134
+            Z
+        " stroke-width="1.0" stroke-opacity="0.7" fill="#8A8A93" fill-opacity="0.04" />
+
+        <!-- B-Pillar Structural Post -->
+        <rect x="426" y="72" width="12" height="62" stroke-width="0.8" stroke-opacity="0.75" fill="#8A8A93" fill-opacity="0.12" />
+
+        <!-- Door Cutlines -->
+        <path d="M 282 134 L 272 160 C 268 174, 266 196, 266 240" stroke-width="0.9" stroke-opacity="0.65" />
+        <path d="M 432 134 L 430 176 C 430 202, 430 222, 430 240" stroke-width="0.9" stroke-opacity="0.65" />
+        <path d="M 606 134 C 618 146, 624 162, 624 182 C 624 192, 622 202, 620 210" stroke-width="0.9" stroke-opacity="0.65" />
+
+        <!-- Waist Character Line -->
+        <line x1="132" y1="164" x2="674" y2="148" stroke-width="0.8" stroke-opacity="0.45" />
+
+        <!-- Door Handles -->
+        <rect x="372" y="144" width="20" height="4" rx="1" stroke-width="0.8" stroke-opacity="0.7" fill="#8A8A93" fill-opacity="0.2" />
+        <rect x="526" y="144" width="20" height="4" rx="1" stroke-width="0.8" stroke-opacity="0.7" fill="#8A8A93" fill-opacity="0.2" />
+
+        <!-- Side Mirror -->
+        <path d="M 276 128 C 264 126, 252 130, 250 138 C 250 144, 258 148, 270 148 L 282 140 Z" stroke-width="1.0" stroke-opacity="0.8" />
+
+        <!-- Headlight and Taillight contours -->
+        <path d="M 96 184 L 142 174 L 156 184 L 112 200 Z" stroke-width="0.9" stroke-opacity="0.8" fill="#8A8A93" fill-opacity="0.1" />
+        <circle cx="118" cy="190" r="5" stroke-width="0.8" stroke-opacity="0.8" />
+        <path d="M 686 146 L 698 158 L 698 200 L 686 204 C 684 184, 684 164, 686 146 Z" stroke-width="0.9" stroke-opacity="0.8" fill="#8A8A93" fill-opacity="0.1" />
+
+        <!-- FRONT WHEEL (Center 206, 240) -->
+        <g id="wheel-front">
+            <circle cx="206" cy="240" r="38" stroke-width="1.2" stroke-opacity="0.95" />
+            <circle cx="206" cy="240" r="30" stroke-width="0.8" stroke-opacity="0.7" />
+            <circle cx="206" cy="240" r="24" stroke-width="0.6" stroke-opacity="0.35" stroke-dasharray="2 2" />
+            <circle cx="206" cy="240" r="7" stroke-width="1.0" stroke-opacity="0.9" fill="#8A8A93" fill-opacity="0.25" />
+            <line x1="206" y1="210" x2="206" y2="270" stroke-width="0.9" stroke-opacity="0.6" />
+            <line x1="176" y1="240" x2="236" y2="240" stroke-width="0.9" stroke-opacity="0.6" />
+            <line x1="185" y1="219" x2="227" y2="261" stroke-width="0.9" stroke-opacity="0.6" />
+            <line x1="185" y1="261" x2="227" y2="219" stroke-width="0.9" stroke-opacity="0.6" />
+        </g>
+
+        <!-- REAR WHEEL (Center 570, 240) -->
+        <g id="wheel-rear">
+            <circle cx="570" cy="240" r="38" stroke-width="1.2" stroke-opacity="0.95" />
+            <circle cx="570" cy="240" r="30" stroke-width="0.8" stroke-opacity="0.7" />
+            <circle cx="570" cy="240" r="24" stroke-width="0.6" stroke-opacity="0.35" stroke-dasharray="2 2" />
+            <circle cx="570" cy="240" r="7" stroke-width="1.0" stroke-opacity="0.9" fill="#8A8A93" fill-opacity="0.25" />
+            <line x1="570" y1="210" x2="570" y2="270" stroke-width="0.9" stroke-opacity="0.6" />
+            <line x1="540" y1="240" x2="600" y2="240" stroke-width="0.9" stroke-opacity="0.6" />
+            <line x1="549" y1="219" x2="591" y2="261" stroke-width="0.9" stroke-opacity="0.6" />
+            <line x1="549" y1="261" x2="591" y2="219" stroke-width="0.9" stroke-opacity="0.6" />
+        </g>
+
+    </g>
+
+    <!-- =================================================================
+         DIMENSION LEADER LINES IN #2E2E38 (Length & Wheelbase)
+         ================================================================= -->
+    <!-- Wheelbase: 2,400 MM (x: 206 -> 570) -->
+    <g stroke="#2E2E38" stroke-width="1">
+        <line x1="206" y1="240" x2="206" y2="295" stroke-dasharray="2 2" />
+        <line x1="570" y1="240" x2="570" y2="295" stroke-dasharray="2 2" />
+        <line x1="206" y1="290" x2="570" y2="290" marker-start="url(#tick-dim)" marker-end="url(#tick-dim)" />
+    </g>
+    <text x="388" y="286" font-family="'JetBrains Mono', monospace" font-size="8" fill="#8A8A93" text-anchor="middle" letter-spacing="0.1em">BATALLA 2,400 MM</text>
+
+    <!-- Length: 3,595 MM (x: 86 -> 702) -->
+    <g stroke="#2E2E38" stroke-width="1">
+        <line x1="86" y1="230" x2="86" y2="318" stroke-dasharray="2 2" />
+        <line x1="702" y1="214" x2="702" y2="318" stroke-dasharray="2 2" />
+        <line x1="86" y1="314" x2="702" y2="314" marker-start="url(#tick-dim)" marker-end="url(#tick-dim)" />
+    </g>
+    <text x="394" y="326" font-family="'JetBrains Mono', monospace" font-size="8" fill="#8A8A93" text-anchor="middle" letter-spacing="0.1em">LONGITUD 3,595 MM</text>
+
+    <!-- =================================================================
+         3 GLOWING NODES IN #FF5500 WITH 1PX LEADER LINES
+         1) Front Engine  2) Rear 35L Tank  3) Wheel Axle
+         ================================================================= -->
+    <!-- Node 1: Front Engine (155, 175) -->
+    <g id="cad-node-engine">
+        <circle cx="155" cy="175" r="7" fill="#FF5500" fill-opacity="0.25" />
+        <circle cx="155" cy="175" r="3" fill="#FF5500" stroke="#FF5500" stroke-width="1" />
+        <!-- 1px leader line up-left -->
+        <polyline points="155,175 140,135 70,135" stroke="#FF5500" stroke-width="1" fill="none" />
+        <text x="68" y="131" font-family="'JetBrains Mono', monospace" font-size="7.5" fill="#FF5500" text-anchor="end" letter-spacing="0.08em">MOTOR 1.0L MPI</text>
+    </g>
+
+    <!-- Node 2: Rear 35L Tank (625, 175) -->
+    <g id="cad-node-tank">
+        <circle cx="625" cy="175" r="7" fill="#FF5500" fill-opacity="0.25" />
+        <circle cx="625" cy="175" r="3" fill="#FF5500" stroke="#FF5500" stroke-width="1" />
+        <!-- 1px leader line up-right -->
+        <polyline points="625,175 645,135 725,135" stroke="#FF5500" stroke-width="1" fill="none" />
+        <text x="728" y="131" font-family="'JetBrains Mono', monospace" font-size="7.5" fill="#FF5500" text-anchor="start" letter-spacing="0.08em">TANQUE 35.0L</text>
+    </g>
+
+    <!-- Node 3: Wheel Axle (206, 240) -->
+    <g id="cad-node-axle">
+        <circle cx="206" cy="240" r="7" fill="#FF5500" fill-opacity="0.25" />
+        <circle cx="206" cy="240" r="3" fill="#FF5500" stroke="#FF5500" stroke-width="1" />
+        <!-- 1px leader line down-left -->
+        <polyline points="206,240 185,270 120,270" stroke="#FF5500" stroke-width="1" fill="none" />
+        <text x="116" y="266" font-family="'JetBrains Mono', monospace" font-size="7.5" fill="#FF5500" text-anchor="end" letter-spacing="0.08em">EJE DELANTERO</text>
+    </g>
+
+</svg>

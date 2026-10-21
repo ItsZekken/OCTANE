@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955694,
+  "key": "vehicle_chevrolet-aveo-emotion-gt-1.6-mt",
+  "data": {
+    "id": "chevrolet-aveo-emotion-gt-1.6-mt",
+    "brand": "Chevrolet",
+    "model": "Aveo Emotion GT",
+    "generation_years": "2007-2013",
+    "trim_engine": "1.6L DOHC 16V E-TEC II (103 HP)",
+    "displacement_cc": 1598,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 45,
+    "tank_capacity_gallons": 11.89,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 33,
+      "avg": 37,
+      "max": 42
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

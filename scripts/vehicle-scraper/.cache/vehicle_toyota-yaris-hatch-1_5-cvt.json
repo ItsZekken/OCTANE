@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955834,
+  "key": "vehicle_toyota-yaris-hatch-1.5-cvt",
+  "data": {
+    "id": "toyota-yaris-hatch-1.5-cvt",
+    "brand": "Toyota",
+    "model": "Yaris",
+    "generation_years": "2018-2026",
+    "trim_engine": "1.5L 2NR-FE Dual VVT-i (106 HP)",
+    "displacement_cc": 1496,
+    "transmission": "CVT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 42,
+    "tank_capacity_gallons": 11.1,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 42,
+      "avg": 48,
+      "max": 54
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

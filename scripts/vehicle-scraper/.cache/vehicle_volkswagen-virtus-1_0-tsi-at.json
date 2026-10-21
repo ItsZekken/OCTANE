@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955890,
+  "key": "vehicle_volkswagen-virtus-1.0-tsi-at",
+  "data": {
+    "id": "volkswagen-virtus-1.0-tsi-at",
+    "brand": "Volkswagen",
+    "model": "Virtus",
+    "generation_years": "2023-2026",
+    "trim_engine": "1.0L Turbo 200 TSI 3-Cil (114 HP)",
+    "displacement_cc": 999,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Extra",
+    "tank_capacity_liters": 52,
+    "tank_capacity_gallons": 13.74,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 38,
+      "avg": 44,
+      "max": 50
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

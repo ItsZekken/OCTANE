@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955788,
+  "key": "vehicle_suzuki-jimny-1.5-mt",
+  "data": {
+    "id": "suzuki-jimny-1.5-mt",
+    "brand": "Suzuki",
+    "model": "Jimny",
+    "generation_years": "2019-2026",
+    "trim_engine": "1.5L K15B 16V 4x4 (100 HP)",
+    "displacement_cc": 1462,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 40,
+    "tank_capacity_gallons": 10.57,
+    "reserve_liters_est": 5.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 34,
+      "avg": 38,
+      "max": 43
+    },
+    "platform_tags": [
+      "Particular",
+      "4x4"
+    ]
+  }
+}

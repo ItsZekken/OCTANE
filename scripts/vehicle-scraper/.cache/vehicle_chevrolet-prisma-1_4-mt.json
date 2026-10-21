@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955702,
+  "key": "vehicle_chevrolet-prisma-1.4-mt",
+  "data": {
+    "id": "chevrolet-prisma-1.4-mt",
+    "brand": "Chevrolet",
+    "model": "Prisma",
+    "generation_years": "2017-2020",
+    "trim_engine": "1.4L SPE/4 8V (98 HP)",
+    "displacement_cc": 1389,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 54,
+    "tank_capacity_gallons": 14.27,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 37,
+      "avg": 42,
+      "max": 47
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

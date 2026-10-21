@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955785,
+  "key": "vehicle_suzuki-grand-vitara-sz-2.0-mt",
+  "data": {
+    "id": "suzuki-grand-vitara-sz-2.0-mt",
+    "brand": "Suzuki",
+    "model": "Grand Vitara SZ",
+    "generation_years": "2008-2018",
+    "trim_engine": "2.0L J20A 16V (138 HP)",
+    "displacement_cc": 1995,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 66,
+    "tank_capacity_gallons": 17.44,
+    "reserve_liters_est": 10,
+    "body_type": "suv",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 28,
+      "avg": 32,
+      "max": 37
+    },
+    "platform_tags": [
+      "Particular",
+      "4x4"
+    ]
+  }
+}

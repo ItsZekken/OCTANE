@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955781,
+  "key": "vehicle_suzuki-baleno-1.4-mt",
+  "data": {
+    "id": "suzuki-baleno-1.4-mt",
+    "brand": "Suzuki",
+    "model": "Baleno",
+    "generation_years": "2017-2022",
+    "trim_engine": "1.4L K14B 4-Cil (91 HP)",
+    "displacement_cc": 1373,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 37,
+    "tank_capacity_gallons": 9.77,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 42,
+      "avg": 47,
+      "max": 53
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

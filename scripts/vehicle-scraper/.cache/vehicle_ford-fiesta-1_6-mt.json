@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955903,
+  "key": "vehicle_ford-fiesta-1.6-mt",
+  "data": {
+    "id": "ford-fiesta-1.6-mt",
+    "brand": "Ford",
+    "model": "Fiesta",
+    "generation_years": "2011-2019",
+    "trim_engine": "1.6L Ti-VCT 16V (120 HP)",
+    "displacement_cc": 1596,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 45,
+    "tank_capacity_gallons": 11.89,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 36,
+      "avg": 41,
+      "max": 46
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

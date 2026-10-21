@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955807,
+  "key": "vehicle_nissan-versa-ii-1.6-cvt",
+  "data": {
+    "id": "nissan-versa-ii-1.6-cvt",
+    "brand": "Nissan",
+    "model": "Versa",
+    "generation_years": "2020-2026",
+    "trim_engine": "1.6L HR16DE Gen 3 (118 HP)",
+    "displacement_cc": 1598,
+    "transmission": "CVT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 41,
+    "tank_capacity_gallons": 10.83,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 38,
+      "avg": 43,
+      "max": 48
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

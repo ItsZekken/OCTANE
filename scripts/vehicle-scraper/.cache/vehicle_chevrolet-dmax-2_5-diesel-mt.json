@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955715,
+  "key": "vehicle_chevrolet-dmax-2.5-diesel-mt",
+  "data": {
+    "id": "chevrolet-dmax-2.5-diesel-mt",
+    "brand": "Chevrolet",
+    "model": "D-Max",
+    "generation_years": "2006-2015",
+    "trim_engine": "2.5L Turbo Diésel CRDI (134 HP)",
+    "displacement_cc": 2499,
+    "transmission": "MT",
+    "fuel_type": "Diesel",
+    "tank_capacity_liters": 76,
+    "tank_capacity_gallons": 20.08,
+    "reserve_liters_est": 10,
+    "body_type": "pickup",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 33,
+      "avg": 38,
+      "max": 43
+    },
+    "platform_tags": [
+      "Trabajo",
+      "Particular"
+    ]
+  }
+}

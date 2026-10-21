@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955700,
+  "key": "vehicle_chevrolet-onix-i-1.4-mt",
+  "data": {
+    "id": "chevrolet-onix-i-1.4-mt",
+    "brand": "Chevrolet",
+    "model": "Onix",
+    "generation_years": "2016-2020",
+    "trim_engine": "1.4L SPE/4 8V (98 HP)",
+    "displacement_cc": 1389,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 54,
+    "tank_capacity_gallons": 14.27,
+    "reserve_liters_est": 6.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 37,
+      "avg": 42,
+      "max": 47
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

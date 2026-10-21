@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955935,
+  "key": "vehicle_changan-alsvin-1.5-dct",
+  "data": {
+    "id": "changan-alsvin-1.5-dct",
+    "brand": "Changan",
+    "model": "Alsvin",
+    "generation_years": "2022-2026",
+    "trim_engine": "1.5L BlueCore 16V (107 HP)",
+    "displacement_cc": 1480,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 40,
+    "tank_capacity_gallons": 10.57,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 38,
+      "avg": 43,
+      "max": 48
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

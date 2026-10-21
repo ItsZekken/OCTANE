@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955912,
+  "key": "vehicle_ford-escape-2.0t-at",
+  "data": {
+    "id": "ford-escape-2.0t-at",
+    "brand": "Ford",
+    "model": "Escape",
+    "generation_years": "2013-2020",
+    "trim_engine": "2.0L EcoBoost Turbo AWD (240 HP)",
+    "displacement_cc": 1999,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Extra",
+    "tank_capacity_liters": 57,
+    "tank_capacity_gallons": 15.06,
+    "reserve_liters_est": 7.5,
+    "body_type": "suv",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 26,
+      "avg": 30,
+      "max": 35
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

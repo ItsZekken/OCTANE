@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955832,
+  "key": "vehicle_toyota-corolla-cross-hybrid-1.8-ecvt",
+  "data": {
+    "id": "toyota-corolla-cross-hybrid-1.8-ecvt",
+    "brand": "Toyota",
+    "model": "Corolla Cross Híbrida",
+    "generation_years": "2021-2026",
+    "trim_engine": "1.8L 2ZR-FXE Atkinson Hybrid (121 HP)",
+    "displacement_cc": 1798,
+    "transmission": "CVT",
+    "fuel_type": "Híbrido (HEV/MHEV)",
+    "tank_capacity_liters": 43,
+    "tank_capacity_gallons": 11.36,
+    "reserve_liters_est": 5.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 60,
+      "avg": 70,
+      "max": 80
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

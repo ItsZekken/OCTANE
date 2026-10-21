@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955595,
+  "key": "vehicle_kia-rio-allnew-1.4-mt",
+  "data": {
+    "id": "kia-rio-allnew-1.4-mt",
+    "brand": "Kia",
+    "model": "Rio",
+    "generation_years": "2018-2023",
+    "trim_engine": "1.4L Kappa MPI 4-Cil (99 HP)",
+    "displacement_cc": 1368,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 45,
+    "tank_capacity_gallons": 11.89,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 38,
+      "avg": 43,
+      "max": 48
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

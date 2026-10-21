@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955585,
+  "key": "vehicle_kia-picanto-fl-1.0-mt",
+  "data": {
+    "id": "kia-picanto-fl-1.0-mt",
+    "brand": "Kia",
+    "model": "Picanto",
+    "generation_years": "2024-2026",
+    "trim_engine": "1.0L Smartstream MPI 3-Cil (66 HP)",
+    "displacement_cc": 998,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 47,
+      "avg": 52,
+      "max": 58
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

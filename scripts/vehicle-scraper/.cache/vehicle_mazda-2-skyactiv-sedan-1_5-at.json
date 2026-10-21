@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955732,
+  "key": "vehicle_mazda-2-skyactiv-sedan-1.5-at",
+  "data": {
+    "id": "mazda-2-skyactiv-sedan-1.5-at",
+    "brand": "Mazda",
+    "model": "Mazda 2 Sedán",
+    "generation_years": "2015-2024",
+    "trim_engine": "1.5L Skyactiv-G DOHC 16V (106 HP)",
+    "displacement_cc": 1496,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 44,
+    "tank_capacity_gallons": 11.62,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 41,
+      "avg": 46,
+      "max": 52
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

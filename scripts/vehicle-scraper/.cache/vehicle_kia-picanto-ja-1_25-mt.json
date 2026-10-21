@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955578,
+  "key": "vehicle_kia-picanto-ja-1.25-mt",
+  "data": {
+    "id": "kia-picanto-ja-1.25-mt",
+    "brand": "Kia",
+    "model": "Picanto",
+    "generation_years": "2017-2023",
+    "trim_engine": "1.25L Kappa II MPI 4-Cil (83 HP)",
+    "displacement_cc": 1248,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 42,
+      "avg": 47,
+      "max": 53
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

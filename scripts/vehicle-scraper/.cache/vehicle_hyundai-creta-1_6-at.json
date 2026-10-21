@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955875,
+  "key": "vehicle_hyundai-creta-1.6-at",
+  "data": {
+    "id": "hyundai-creta-1.6-at",
+    "brand": "Hyundai",
+    "model": "Creta",
+    "generation_years": "2016-2024",
+    "trim_engine": "1.6L Gamma MPI 4-Cil (121 HP)",
+    "displacement_cc": 1591,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 33,
+      "avg": 37,
+      "max": 42
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955929,
+  "key": "vehicle_byd-f3-taxi-1.5-mt",
+  "data": {
+    "id": "byd-f3-taxi-1.5-mt",
+    "brand": "BYD",
+    "model": "F3",
+    "generation_years": "2010-2018",
+    "trim_engine": "1.5L 473QE DOHC 16V (105 HP)",
+    "displacement_cc": 1488,
+    "transmission": "MT",
+    "fuel_type": "GNV/Dual",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 36,
+      "avg": 40,
+      "max": 45
+    },
+    "platform_tags": [
+      "Taxi",
+      "DiDi",
+      "InDrive"
+    ]
+  }
+}

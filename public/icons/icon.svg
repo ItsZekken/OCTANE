@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="grad-bg" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#18181B"/>
+      <stop offset="100%" stop-color="#09090B"/>
+    </radialGradient>
+    <linearGradient id="grad-accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="100%" stop-color="#EA580C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Void -->
+  <rect width="512" height="512" rx="112" fill="url(#grad-bg)"/>
+
+  <!-- Subtle Dial Outer Track -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#27272A" stroke-width="4"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#18181B" stroke-width="2" stroke-dasharray="4 8"/>
+
+  <!-- Active Tachometer Arc -->
+  <path d="M 128 384 A 180 180 0 1 1 384 384" fill="none" stroke="url(#grad-accent)" stroke-width="14" stroke-linecap="round"/>
+
+  <!-- Dial Major Tick Marks -->
+  <line x1="256" y1="84" x2="256" y2="108" stroke="#F59E0B" stroke-width="6" stroke-linecap="round"/>
+  <line x1="104" y1="256" x2="128" y2="256" stroke="#52525B" stroke-width="4" stroke-linecap="round"/>
+  <line x1="384" y1="256" x2="408" y2="256" stroke="#52525B" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Central Precision "O" Glyph -->
+  <circle cx="256" cy="256" r="74" fill="none" stroke="#FAFAFA" stroke-width="20"/>
+
+  <!-- Horology Aperture & Indicator Pip -->
+  <circle cx="256" cy="256" r="28" fill="#09090B"/>
+  <rect x="251" y="240" width="10" height="32" rx="2" fill="url(#grad-accent)"/>
+  <circle cx="256" cy="182" r="5" fill="#F59E0B"/>
+</svg>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#09090B">
+    <meta name="description" content="OCTANE — Telemetría y horología vehicular de alta precisión">
+    
+    <!-- Mobile & PWA App Capabilities -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="OCTANE">
+    <meta name="application-name" content="OCTANE">
+
+    <!-- Web App Manifest & Favicons -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+    <title>OCTANE — Telemetría Vehicular</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="/src/style/tokens.css">
+</head>
+
+<body class="min-h-screen relative selection:bg-orange-500/20 selection:text-orange-400 bg-[var(--bg-void)] text-[var(--text-primary)]">
+
+    <!-- MINIMAL FLAT STATUS TOAST -->
+    <div id="toast-pill" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-200 opacity-0 -translate-y-3 flex items-center gap-2 px-3.5 py-1.5 rounded-sm bg-[var(--text-primary)] text-[var(--bg-void)] font-mono text-[11px] font-semibold tracking-wider uppercase border border-[var(--line-strong)]">
+        <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] animate-pulse"></span>
+        <span id="toast-text">OCTANE</span>
+    </div>
+
+    <!-- ROOT APPLICATION CONTAINER -->
+    <div id="app" class="min-h-screen flex flex-col"></div>
+
+    <!-- MAIN APP SCRIPT ENTRY -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

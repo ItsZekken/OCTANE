@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955747,
+  "key": "vehicle_mazda-3-mhev-2.0-at",
+  "data": {
+    "id": "mazda-3-mhev-2.0-at",
+    "brand": "Mazda",
+    "model": "Mazda 3",
+    "generation_years": "2022-2026",
+    "trim_engine": "2.0L e-Skyactiv G MHEV (153 HP)",
+    "displacement_cc": 1998,
+    "transmission": "AT",
+    "fuel_type": "Híbrido (HEV/MHEV)",
+    "tank_capacity_liters": 51,
+    "tank_capacity_gallons": 13.47,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 42,
+      "avg": 48,
+      "max": 54
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

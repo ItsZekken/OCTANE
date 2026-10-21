@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955734,
+  "key": "vehicle_mazda-2-mhev-1.5-at",
+  "data": {
+    "id": "mazda-2-mhev-1.5-at",
+    "brand": "Mazda",
+    "model": "Mazda 2",
+    "generation_years": "2022-2026",
+    "trim_engine": "1.5L e-Skyactiv G MHEV (109 HP)",
+    "displacement_cc": 1496,
+    "transmission": "AT",
+    "fuel_type": "Híbrido (HEV/MHEV)",
+    "tank_capacity_liters": 44,
+    "tank_capacity_gallons": 11.62,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 48,
+      "avg": 54,
+      "max": 60
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

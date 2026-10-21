@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955696,
+  "key": "vehicle_chevrolet-optra-1.4-mt",
+  "data": {
+    "id": "chevrolet-optra-1.4-mt",
+    "brand": "Chevrolet",
+    "model": "Optra",
+    "generation_years": "2005-2012",
+    "trim_engine": "1.4L DOHC 16V (93 HP)",
+    "displacement_cc": 1399,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 60,
+    "tank_capacity_gallons": 15.85,
+    "reserve_liters_est": 7.5,
+    "body_type": "sedan",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 32,
+      "avg": 36,
+      "max": 41
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

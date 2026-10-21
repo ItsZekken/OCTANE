@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955779,
+  "key": "vehicle_suzuki-swift-hybrid-1.2-mt",
+  "data": {
+    "id": "suzuki-swift-hybrid-1.2-mt",
+    "brand": "Suzuki",
+    "model": "Swift Híbrido",
+    "generation_years": "2021-2026",
+    "trim_engine": "1.2L Dualjet SHVS MHEV (89 HP)",
+    "displacement_cc": 1197,
+    "transmission": "MT",
+    "fuel_type": "Híbrido (HEV/MHEV)",
+    "tank_capacity_liters": 37,
+    "tank_capacity_gallons": 9.77,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 54,
+      "avg": 62,
+      "max": 70
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

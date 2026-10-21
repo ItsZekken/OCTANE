@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955770,
+  "key": "vehicle_suzuki-celerio-1.0-mt",
+  "data": {
+    "id": "suzuki-celerio-1.0-mt",
+    "brand": "Suzuki",
+    "model": "Celerio",
+    "generation_years": "2010-2022",
+    "trim_engine": "1.0L K10B 3-Cil (67 HP)",
+    "displacement_cc": 998,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 48,
+      "avg": 55,
+      "max": 62
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

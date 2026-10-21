@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955767,
+  "key": "vehicle_suzuki-spresso-1.0-mt",
+  "data": {
+    "id": "suzuki-spresso-1.0-mt",
+    "brand": "Suzuki",
+    "model": "S-Presso",
+    "generation_years": "2020-2026",
+    "trim_engine": "1.0L K10C Dualjet 3-Cil (67 HP)",
+    "displacement_cc": 998,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 27,
+    "tank_capacity_gallons": 7.13,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 52,
+      "avg": 60,
+      "max": 68
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

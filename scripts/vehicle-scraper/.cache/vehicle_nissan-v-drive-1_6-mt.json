@@ -1,0 +1,30 @@
+{
+  "timestamp": 1792516955803,
+  "key": "vehicle_nissan-v-drive-1.6-mt",
+  "data": {
+    "id": "nissan-v-drive-1.6-mt",
+    "brand": "Nissan",
+    "model": "V-Drive",
+    "generation_years": "2020-2024",
+    "trim_engine": "1.6L HR16DE 4-Cil (106 HP)",
+    "displacement_cc": 1598,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 41,
+    "tank_capacity_gallons": 10.83,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 39,
+      "avg": 44,
+      "max": 49
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Taxi",
+      "Particular"
+    ]
+  }
+}

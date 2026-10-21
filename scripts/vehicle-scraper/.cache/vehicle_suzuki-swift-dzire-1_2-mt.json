@@ -1,0 +1,30 @@
+{
+  "timestamp": 1792516955772,
+  "key": "vehicle_suzuki-swift-dzire-1.2-mt",
+  "data": {
+    "id": "suzuki-swift-dzire-1.2-mt",
+    "brand": "Suzuki",
+    "model": "Swift Dzire",
+    "generation_years": "2012-2018",
+    "trim_engine": "1.2L K12M 4-Cil (85 HP)",
+    "displacement_cc": 1197,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 42,
+    "tank_capacity_gallons": 11.1,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 42,
+      "avg": 48,
+      "max": 54
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Taxi",
+      "Particular"
+    ]
+  }
+}

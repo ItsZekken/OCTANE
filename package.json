@@ -1,0 +1,22 @@
+{
+  "name": "octane-kinetic",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "npm run build && npx -y firebase-tools@latest deploy"
+  },
+  "dependencies": {
+    "firebase": "^10.14.1"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.19",
+    "fake-indexeddb": "^6.2.6",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "vite": "^5.3.0"
+  }
+}

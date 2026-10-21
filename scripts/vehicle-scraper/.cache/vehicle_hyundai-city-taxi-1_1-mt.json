@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955849,
+  "key": "vehicle_hyundai-city-taxi-1.1-mt",
+  "data": {
+    "id": "hyundai-city-taxi-1.1-mt",
+    "brand": "Hyundai",
+    "model": "City Taxi",
+    "generation_years": "2005-2015",
+    "trim_engine": "1.1L Epsilon G4HG 12V (63 HP)",
+    "displacement_cc": 1086,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "sight-glass",
+    "urban_consumption_ref_kmgal": {
+      "min": 45,
+      "avg": 51,
+      "max": 57
+    },
+    "platform_tags": [
+      "Taxi",
+      "Urbano"
+    ]
+  }
+}

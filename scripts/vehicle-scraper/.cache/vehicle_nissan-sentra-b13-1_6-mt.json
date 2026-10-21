@@ -1,0 +1,30 @@
+{
+  "timestamp": 1792516955810,
+  "key": "vehicle_nissan-sentra-b13-1.6-mt",
+  "data": {
+    "id": "nissan-sentra-b13-1.6-mt",
+    "brand": "Nissan",
+    "model": "Sentra B13",
+    "generation_years": "2005-2016",
+    "trim_engine": "1.6L GA16DNE 16V (105 HP)",
+    "displacement_cc": 1597,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 35,
+      "avg": 40,
+      "max": 45
+    },
+    "platform_tags": [
+      "Taxi",
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

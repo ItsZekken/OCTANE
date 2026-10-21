@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955628,
+  "key": "vehicle_renault-logan-i-1.6-16v-mt",
+  "data": {
+    "id": "renault-logan-i-1.6-16v-mt",
+    "brand": "Renault",
+    "model": "Logan Dynamique",
+    "generation_years": "2008-2015",
+    "trim_engine": "1.6L 16V K4M (105 HP)",
+    "displacement_cc": 1598,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 34,
+      "avg": 38,
+      "max": 43
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

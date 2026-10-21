@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+
+# Environment & Secrets (NEVER commit real API keys or tokens)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Firebase cache and debug logs
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# Operating System & Editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log

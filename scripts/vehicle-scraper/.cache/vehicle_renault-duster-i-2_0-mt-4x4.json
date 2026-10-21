@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955661,
+  "key": "vehicle_renault-duster-i-2.0-mt-4x4",
+  "data": {
+    "id": "renault-duster-i-2.0-mt-4x4",
+    "brand": "Renault",
+    "model": "Duster",
+    "generation_years": "2012-2020",
+    "trim_engine": "2.0L 16V F4R (138 HP)",
+    "displacement_cc": 1998,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 28,
+      "avg": 32,
+      "max": 37
+    },
+    "platform_tags": [
+      "Particular",
+      "4x4"
+    ]
+  }
+}

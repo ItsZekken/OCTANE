@@ -1,0 +1,46 @@
+<svg viewBox="0 0 800 280" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+  <!-- Ground Datum & Contact Shadow (Y=250) -->
+  <line x1="80" y1="250" x2="720" y2="250" stroke="#27272A" stroke-width="3" stroke-linecap="round"/>
+  <line x1="115" y1="250" x2="675" y2="250" stroke="#000000" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Wheel Arch Cutout Shadows -->
+  <circle cx="220" cy="199" r="54" fill="#09090B"/>
+  <circle cx="580" cy="199" r="54" fill="#09090B"/>
+
+  <!-- Body Silhouette -->
+  <path fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="6" stroke-linejoin="round" d="M 108 202 C 104 176, 114 148, 140 136 C 172 126, 224 122, 264 118 L 342 66 C 360 58, 386 56, 418 56 L 594 58 L 634 62 L 622 76 L 656 146 C 662 168, 662 194, 654 202 L 632 204 A 52 52 0 0 0 528 204 L 272 204 A 52 52 0 0 0 168 204 Z"/>
+  <!-- Heavy Duty Roof Rails & Rock Cladding -->
+  <line x1="365" y1="48" x2="590" y2="48" stroke="#09090B" stroke-width="6" stroke-linecap="round"/>
+  <path d="M 166 204 A 54 54 0 0 1 274 204" stroke="#18181B" stroke-width="9" fill="none"/>
+  <path d="M 526 204 A 54 54 0 0 1 634 204" stroke="#18181B" stroke-width="9" fill="none"/>
+  <!-- Side Step Running Board -->
+  <line x1="282" y1="210" x2="518" y2="210" stroke="#09090B" stroke-width="6" stroke-linecap="round"/>
+  <!-- Roof Highlight Line -->
+  <path d="M 142 136 C 174 126, 226 122, 266 118 L 344 68 L 592 62" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Greenhouse Glass & B-Pillar -->
+  <path fill="#111116" stroke="#09090B" stroke-width="6" stroke-linejoin="round" d="M 280 118 L 350 72 C 366 64, 390 63, 416 63 L 576 64 L 602 104 L 464 118 Z"/>
+  <line x1="446" y1="63" x2="442" y2="118" stroke="#09090B" stroke-width="12"/>
+
+  <!-- Lighting: Front Headlight & Rear Stop -->
+  <path d="M 120 152 L 172 136 L 164 156 Z" fill="#F8FAFC" stroke="#09090B" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M 636 104 L 656 144 L 658 168 L 638 164 Z" fill="#F43F5E" stroke="#09090B" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- Front Wheel (Center: 220, 199) -->
+  <g transform="translate(220, 199)">
+    <circle r="49" fill="#141418" stroke="#09090B" stroke-width="6"/>
+    <circle r="30" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="-26" y1="0" x2="26" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="0" y1="-26" x2="0" y2="26" stroke="#D4D4D8" stroke-width="5"/>
+    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+  </g>
+
+  <!-- Rear Wheel (Center: 580, 199) -->
+  <g transform="translate(580, 199)">
+    <circle r="49" fill="#141418" stroke="#09090B" stroke-width="6"/>
+    <circle r="30" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="-26" y1="0" x2="26" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="0" y1="-26" x2="0" y2="26" stroke="#D4D4D8" stroke-width="5"/>
+    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+  </g>
+</svg>

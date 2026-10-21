@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 340" width="100%" height="100%" fill="none">
+    <defs>
+        <!-- CAD Hairline Grid -->
+        <pattern id="cad-grid-hatch" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" stroke="#8A8A93" stroke-width="0.5" stroke-opacity="0.08" />
+        </pattern>
+        <pattern id="cad-major-grid-hatch" width="100" height="100" patternUnits="userSpaceOnUse">
+            <path d="M 100 0 L 0 0 0 100" stroke="#8A8A93" stroke-width="0.75" stroke-opacity="0.12" />
+        </pattern>
+        <marker id="tick-dim-hatch" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="6" markerHeight="6">
+            <circle cx="3" cy="3" r="1.5" fill="#8A8A93" fill-opacity="0.7"/>
+        </marker>
+    </defs>
+
+    <!-- Background Blueprint Grids -->
+    <rect width="800" height="340" fill="url(#cad-grid-hatch)" stroke="none" />
+    <rect width="800" height="340" fill="url(#cad-major-grid-hatch)" stroke="none" />
+
+    <!-- Technical Header Blueprint Stamp -->
+    <g font-family="'JetBrains Mono', monospace" font-size="8.5" letter-spacing="0.15em" fill="#8A8A93" fill-opacity="0.6">
+        <text x="24" y="24">OCTANE · TELEMETRÍA DE CHASIS • CAD 1:25</text>
+        <text x="776" y="24" text-anchor="end">HATCHBACK GENÉRICO • SEGMENTO B</text>
+    </g>
+
+    <!-- Ground Datum Line -->
+    <line x1="40" y1="262" x2="760" y2="262" stroke="#2E2E38" stroke-width="1" stroke-dasharray="8 4 2 4" />
+
+    <!-- Chassis Wireframe -->
+    <g id="vehicle-wireframe-generic" stroke="#8A8A93" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="
+            M 100 238
+            C 88 236, 78 226, 74 214
+            C 70 200, 76 186, 86 176
+            C 96 166, 114 160, 138 156
+            L 214 144
+            C 236 140, 254 134, 270 122
+            L 348 74
+            C 368 62, 394 58, 426 58
+            L 600 60
+            C 624 60, 642 66, 660 78
+            L 692 116
+            C 706 134, 714 158, 716 182
+            L 718 212
+            C 718 228, 708 238, 692 240
+            L 666 240
+        " stroke-opacity="0.95" fill="none" />
+
+        <path d="M 74 214 L 68 228 C 66 234, 72 240, 82 240 L 154 240" stroke-opacity="0.8" fill="none" />
+        <path d="M 148 240 C 148 210, 172 186, 202 186 C 232 186, 256 210, 256 240" stroke-opacity="0.9" fill="none" />
+        <line x1="256" y1="240" x2="532" y2="240" stroke-opacity="0.85" />
+        <line x1="256" y1="234" x2="532" y2="234" stroke-width="0.8" stroke-opacity="0.4" />
+        <path d="M 532 240 C 532 210, 556 186, 586 186 C 616 186, 640 210, 640 240" stroke-opacity="0.9" fill="none" />
+        <path d="M 640 240 L 678 240 C 688 240, 696 236, 700 228 L 702 220" stroke-opacity="0.7" fill="none" />
+
+        <!-- Greenhouse -->
+        <path d="
+            M 274 124
+            L 352 76
+            C 370 64, 396 60, 426 60
+            L 596 62
+            C 616 62, 632 68, 648 80
+            L 676 118
+            C 680 124, 676 128, 666 128
+            L 274 128
+            Z
+        " stroke-width="1.0" stroke-opacity="0.7" fill="#8A8A93" fill-opacity="0.04" />
+        <rect x="444" y="62" width="14" height="66" stroke-width="0.8" stroke-opacity="0.75" fill="#8A8A93" fill-opacity="0.12" />
+
+        <!-- Wheels -->
+        <circle cx="202" cy="240" r="38" stroke-width="1.2" stroke-opacity="0.95" />
+        <circle cx="202" cy="240" r="30" stroke-width="0.8" stroke-opacity="0.7" />
+        <circle cx="202" cy="240" r="7" stroke-width="1.0" stroke-opacity="0.9" fill="#8A8A93" fill-opacity="0.25" />
+        <circle cx="586" cy="240" r="38" stroke-width="1.2" stroke-opacity="0.95" />
+        <circle cx="586" cy="240" r="30" stroke-width="0.8" stroke-opacity="0.7" />
+        <circle cx="586" cy="240" r="7" stroke-width="1.0" stroke-opacity="0.9" fill="#8A8A93" fill-opacity="0.25" />
+    </g>
+
+    <!-- Calipers / Dimensions -->
+    <g stroke="#2E2E38" stroke-width="1">
+        <line x1="202" y1="240" x2="202" y2="295" stroke-dasharray="2 2" />
+        <line x1="586" y1="240" x2="586" y2="295" stroke-dasharray="2 2" />
+        <line x1="202" y1="290" x2="586" y2="290" marker-start="url(#tick-dim-hatch)" marker-end="url(#tick-dim-hatch)" />
+    </g>
+    <text x="394" y="286" font-family="'JetBrains Mono', monospace" font-size="8" fill="#8A8A93" text-anchor="middle" letter-spacing="0.1em">BATALLA 2,560 MM</text>
+
+    <g stroke="#2E2E38" stroke-width="1">
+        <line x1="68" y1="228" x2="68" y2="318" stroke-dasharray="2 2" />
+        <line x1="718" y1="212" x2="718" y2="318" stroke-dasharray="2 2" />
+        <line x1="68" y1="314" x2="718" y2="314" marker-start="url(#tick-dim-hatch)" marker-end="url(#tick-dim-hatch)" />
+    </g>
+    <text x="394" y="326" font-family="'JetBrains Mono', monospace" font-size="8" fill="#8A8A93" text-anchor="middle" letter-spacing="0.1em">LONGITUD 4,060 MM</text>
+
+    <!-- 3 Glowing Nodes in #FF5500 -->
+    <g id="cad-node-engine-hatch">
+        <circle cx="150" cy="170" r="7" fill="#FF5500" fill-opacity="0.25" />
+        <circle cx="150" cy="170" r="3" fill="#FF5500" stroke="#FF5500" stroke-width="1" />
+        <polyline points="150,170 135,130 65,130" stroke="#FF5500" stroke-width="1" fill="none" />
+        <text x="63" y="126" font-family="'JetBrains Mono', monospace" font-size="7.5" fill="#FF5500" text-anchor="end" letter-spacing="0.08em">MOTOR 1.2L</text>
+    </g>
+
+    <g id="cad-node-tank-hatch">
+        <circle cx="640" cy="170" r="7" fill="#FF5500" fill-opacity="0.25" />
+        <circle cx="640" cy="170" r="3" fill="#FF5500" stroke="#FF5500" stroke-width="1" />
+        <polyline points="640,170 660,130 735,130" stroke="#FF5500" stroke-width="1" fill="none" />
+        <text x="738" y="126" font-family="'JetBrains Mono', monospace" font-size="7.5" fill="#FF5500" text-anchor="start" letter-spacing="0.08em">TANQUE 40.0L</text>
+    </g>
+
+    <g id="cad-node-axle-hatch">
+        <circle cx="202" cy="240" r="7" fill="#FF5500" fill-opacity="0.25" />
+        <circle cx="202" cy="240" r="3" fill="#FF5500" stroke="#FF5500" stroke-width="1" />
+        <polyline points="202,240 180,270 115,270" stroke="#FF5500" stroke-width="1" fill="none" />
+        <text x="111" y="266" font-family="'JetBrains Mono', monospace" font-size="7.5" fill="#FF5500" text-anchor="end" letter-spacing="0.08em">EJE DELANTERO</text>
+    </g>
+</svg>

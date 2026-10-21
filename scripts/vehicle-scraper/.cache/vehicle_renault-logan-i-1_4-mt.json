@@ -1,0 +1,30 @@
+{
+  "timestamp": 1792516955624,
+  "key": "vehicle_renault-logan-i-1.4-mt",
+  "data": {
+    "id": "renault-logan-i-1.4-mt",
+    "brand": "Renault",
+    "model": "Logan",
+    "generation_years": "2005-2015",
+    "trim_engine": "1.4L 8V K7J (75 HP)",
+    "displacement_cc": 1390,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 38,
+      "avg": 42,
+      "max": 47
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Taxi",
+      "Particular"
+    ]
+  }
+}

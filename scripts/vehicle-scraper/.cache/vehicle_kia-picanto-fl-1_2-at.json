@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955587,
+  "key": "vehicle_kia-picanto-fl-1.2-at",
+  "data": {
+    "id": "kia-picanto-fl-1.2-at",
+    "brand": "Kia",
+    "model": "Picanto",
+    "generation_years": "2024-2026",
+    "trim_engine": "1.2L Smartstream MPI 4-Cil (83 HP)",
+    "displacement_cc": 1197,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 40,
+      "avg": 45,
+      "max": 50
+    },
+    "platform_tags": [
+      "Particular",
+      "Urbano"
+    ]
+  }
+}

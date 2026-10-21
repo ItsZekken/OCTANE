@@ -1,0 +1,30 @@
+{
+  "timestamp": 1792516955851,
+  "key": "vehicle_hyundai-i10-1.1-mt",
+  "data": {
+    "id": "hyundai-i10-1.1-mt",
+    "brand": "Hyundai",
+    "model": "i10",
+    "generation_years": "2008-2014",
+    "trim_engine": "1.1L Epsilon G4HG 12V (68 HP)",
+    "displacement_cc": 1086,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 44,
+      "avg": 50,
+      "max": 56
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Taxi",
+      "Urbano"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955672,
+  "key": "vehicle_renault-koleos-2.5-cvt",
+  "data": {
+    "id": "renault-koleos-2.5-cvt",
+    "brand": "Renault",
+    "model": "Koleos",
+    "generation_years": "2010-2024",
+    "trim_engine": "2.5L QR25DE (170 HP)",
+    "displacement_cc": 2488,
+    "transmission": "CVT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 60,
+    "tank_capacity_gallons": 15.85,
+    "reserve_liters_est": 7.5,
+    "body_type": "suv",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 27,
+      "avg": 31,
+      "max": 36
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

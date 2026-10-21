@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955925,
+  "key": "vehicle_jac-s2-1.5-mt",
+  "data": {
+    "id": "jac-s2-1.5-mt",
+    "brand": "JAC",
+    "model": "S2 Urban",
+    "generation_years": "2016-2022",
+    "trim_engine": "1.5L GreenJet VVT (111 HP)",
+    "displacement_cc": 1499,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 42,
+    "tank_capacity_gallons": 11.1,
+    "reserve_liters_est": 5.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 37,
+      "avg": 42,
+      "max": 47
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

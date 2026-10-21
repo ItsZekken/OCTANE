@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955869,
+  "key": "vehicle_hyundai-hb20s-accent-1.6-at",
+  "data": {
+    "id": "hyundai-hb20s-accent-1.6-at",
+    "brand": "Hyundai",
+    "model": "HB20S Accent",
+    "generation_years": "2020-2024",
+    "trim_engine": "1.6L Gamma 16V Dual CVVT (121 HP)",
+    "displacement_cc": 1591,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 34,
+      "avg": 39,
+      "max": 44
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

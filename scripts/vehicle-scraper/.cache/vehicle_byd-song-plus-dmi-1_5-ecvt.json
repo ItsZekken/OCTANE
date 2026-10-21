@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955931,
+  "key": "vehicle_byd-song-plus-dmi-1.5-ecvt",
+  "data": {
+    "id": "byd-song-plus-dmi-1.5-ecvt",
+    "brand": "BYD",
+    "model": "Song Plus DM-i",
+    "generation_years": "2022-2026",
+    "trim_engine": "1.5L Xiaoyun PHEV + Motor Eléctrico (214 HP combinado)",
+    "displacement_cc": 1498,
+    "transmission": "CVT",
+    "fuel_type": "Híbrido (HEV/MHEV)",
+    "tank_capacity_liters": 60,
+    "tank_capacity_gallons": 15.85,
+    "reserve_liters_est": 7.5,
+    "body_type": "suv",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 65,
+      "avg": 78,
+      "max": 92
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

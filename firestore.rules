@@ -1,0 +1,186 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Application: OCTANE // KINETIC (Automotive Telemetry & Horology PWA)
+//
+// Collection: users/{userId}/snapshots
+// Document ID: {snapshotId} (typically 'master' for single-document backup)
+//
+// Document Structure:
+//   - uid: string (required, 1-128 chars) - Matches authenticated user UID. Immutable.
+//   - version: number (required, 1-100) - Schema version for local store schema.
+//   - exportedAt: string/timestamp (required) - ISO-8601 timestamp string when IndexedDB was dumped.
+//   - syncedAt: string/timestamp (required) - ISO-8601 timestamp string when uploaded to Firestore.
+//   - stores: map (required) - Container map holding snapshot data for the 7 IndexedDB stores:
+//       * vehicle_profile: list (optional, max 100 items)
+//       * telemetry_logs: list (optional, max 10000 items)
+//       * maintenance_items: list (optional, max 1000 items)
+//       * free_notes: list (optional, max 2000 items)
+//       * legal_docs: list (optional, max 200 items)
+//       * ride_sessions: list (optional, max 5000 items)
+//       * platform_passes: list (optional, max 200 items)
+//   - userEmail: string (optional, nullable, max 150 chars) - Google email of the owner.
+//   - clientAgent: string (optional, max 500 chars) - User-agent string of the sync client.
+//
+// Security Constraints:
+//   - Only authenticated users (request.auth != null) may read and write their own documents.
+//   - Users may never read or write any documents under other user IDs (request.auth.uid == userId).
+//   - Unauthenticated requests are completely rejected.
+//   - All other Firestore paths/collections default to deny.
+//   - Validator pattern is strictly enforced across create and update operations.
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the request is from an authenticated user
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the authenticated user is the resource owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if the document has all required top-level fields
+    function hasRequiredSnapshotKeys(data) {
+      return data.keys().hasAll([
+        'uid',
+        'version',
+        'exportedAt',
+        'syncedAt',
+        'stores'
+      ]);
+    }
+
+    // Check that no extraneous or unexpected fields are injected
+    function hasOnlyAllowedSnapshotKeys(data) {
+      return data.keys().hasOnly([
+        'uid',
+        'version',
+        'exportedAt',
+        'syncedAt',
+        'stores',
+        'userEmail',
+        'clientAgent'
+      ]);
+    }
+
+    // Validate version number
+    function isValidVersion(data) {
+      return data.version is number &&
+             data.version >= 1 &&
+             data.version <= 100;
+    }
+
+    // Validate timestamp or ISO-8601 date string
+    function isValidTimestampOrIso(val) {
+      return (val is string && val.size() >= 10 && val.size() <= 50) ||
+             val is timestamp;
+    }
+
+    // Validate optional user email field
+    function isValidEmailField(data) {
+      return !('userEmail' in data) ||
+             data.userEmail == null ||
+             (data.userEmail is string &&
+              data.userEmail.size() <= 150 &&
+              (request.auth.token.email == null || data.userEmail == request.auth.token.email));
+    }
+
+    // Validate optional client agent string
+    function isValidClientAgent(data) {
+      return !('clientAgent' in data) ||
+             (data.clientAgent is string && data.clientAgent.size() <= 500);
+    }
+
+    // Validate store lists and bounded array lengths
+    function isValidStoreLists(stores) {
+      return (!('vehicle_profile' in stores) || (stores.vehicle_profile is list && stores.vehicle_profile.size() <= 100))
+          && (!('telemetry_logs' in stores) || (stores.telemetry_logs is list && stores.telemetry_logs.size() <= 10000))
+          && (!('maintenance_items' in stores) || (stores.maintenance_items is list && stores.maintenance_items.size() <= 1000))
+          && (!('free_notes' in stores) || (stores.free_notes is list && stores.free_notes.size() <= 2000))
+          && (!('legal_docs' in stores) || (stores.legal_docs is list && stores.legal_docs.size() <= 200))
+          && (!('ride_sessions' in stores) || (stores.ride_sessions is list && stores.ride_sessions.size() <= 5000))
+          && (!('platform_passes' in stores) || (stores.platform_passes is list && stores.platform_passes.size() <= 200));
+    }
+
+    // Validate stores map keys and contents
+    function isValidStores(data) {
+      return data.stores is map &&
+             data.stores.keys().size() <= 10 &&
+             data.stores.keys().hasOnly([
+               'vehicle_profile',
+               'telemetry_logs',
+               'maintenance_items',
+               'free_notes',
+               'legal_docs',
+               'ride_sessions',
+               'platform_passes'
+             ]) &&
+             isValidStoreLists(data.stores);
+    }
+
+    // ===============================================================
+    // Domain Validator
+    // Applied to BOTH create and update to prevent Update Bypass
+    // ===============================================================
+    function isValidSnapshot(data) {
+      return hasRequiredSnapshotKeys(data) &&
+             hasOnlyAllowedSnapshotKeys(data) &&
+             data.uid is string &&
+             data.uid.size() >= 1 &&
+             data.uid.size() <= 128 &&
+             isValidVersion(data) &&
+             isValidTimestampOrIso(data.syncedAt) &&
+             isValidTimestampOrIso(data.exportedAt) &&
+             isValidStores(data) &&
+             isValidEmailField(data) &&
+             isValidClientAgent(data);
+    }
+
+    // Ensure uid cannot be mutated on update
+    function isUidImmutable() {
+      return request.resource.data.uid == resource.data.uid &&
+             request.resource.data.uid == request.auth.uid;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // Master snapshots collection partitioned strictly by user ID
+    match /users/{userId}/snapshots/{snapshotId} {
+      // 1. Read: Only the document owner can read snapshots
+      allow read: if isOwner(userId);
+
+      // 2. Create: Only the document owner can create a snapshot, with strict schema and UID match
+      allow create: if isOwner(userId)
+                    && snapshotId.size() > 0
+                    && snapshotId.size() <= 64
+                    && request.resource.data.uid == userId
+                    && isValidSnapshot(request.resource.data);
+
+      // 3. Update: Only the document owner can update, with strict schema and immutable UID
+      allow update: if isOwner(userId)
+                    && isValidSnapshot(request.resource.data)
+                    && isUidImmutable();
+
+      // 4. Delete: Only the document owner can delete their snapshot
+      allow delete: if isOwner(userId);
+    }
+
+    // Default Deny: Reject all other collections and operations
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

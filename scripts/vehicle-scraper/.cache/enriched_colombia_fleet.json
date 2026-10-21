@@ -1,0 +1,4158 @@
+{
+  "timestamp": 1792516955957,
+  "key": "enriched_colombia_fleet",
+  "data": [
+    {
+      "id": "byd-f3-taxi-1.5-mt",
+      "brand": "BYD",
+      "model": "F3",
+      "generation_years": "2010-2018",
+      "trim_engine": "1.5L 473QE DOHC 16V (105 HP)",
+      "displacement_cc": 1488,
+      "transmission": "MT",
+      "fuel_type": "GNV/Dual",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 40,
+        "max": 45
+      },
+      "platform_tags": [
+        "Taxi",
+        "DiDi",
+        "InDrive"
+      ]
+    },
+    {
+      "id": "byd-song-plus-dmi-1.5-ecvt",
+      "brand": "BYD",
+      "model": "Song Plus DM-i",
+      "generation_years": "2022-2026",
+      "trim_engine": "1.5L Xiaoyun PHEV + Motor Eléctrico (214 HP combinado)",
+      "displacement_cc": 1498,
+      "transmission": "CVT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 60,
+      "tank_capacity_gallons": 15.85,
+      "reserve_liters_est": 7.5,
+      "body_type": "suv",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 65,
+        "avg": 78,
+        "max": 92
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "changan-alsvin-1.5-dct",
+      "brand": "Changan",
+      "model": "Alsvin",
+      "generation_years": "2022-2026",
+      "trim_engine": "1.5L BlueCore 16V (107 HP)",
+      "displacement_cc": 1480,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 40,
+      "tank_capacity_gallons": 10.57,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "changan-cs15-1.5-mt",
+      "brand": "Changan",
+      "model": "CS15",
+      "generation_years": "2017-2024",
+      "trim_engine": "1.5L EA15 BlueCore (105 HP)",
+      "displacement_cc": 1480,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 42,
+      "tank_capacity_gallons": 11.1,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chery-qq-0.8-mt",
+      "brand": "Chery",
+      "model": "QQ",
+      "generation_years": "2006-2015",
+      "trim_engine": "0.8L SQR372 3-Cil (51 HP)",
+      "displacement_cc": 812,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 50,
+        "avg": 57,
+        "max": 64
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "chery-qq-1.1-mt",
+      "brand": "Chery",
+      "model": "QQ",
+      "generation_years": "2007-2015",
+      "trim_engine": "1.1L SQR472 4-Cil (67 HP)",
+      "displacement_cc": 1083,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 46,
+        "avg": 52,
+        "max": 58
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "chevrolet-aveo-emotion-sedan-1.6-mt",
+      "brand": "Chevrolet",
+      "model": "Aveo Emotion",
+      "generation_years": "2007-2013",
+      "trim_engine": "1.6L DOHC 16V E-TEC II (103 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 33,
+        "avg": 37,
+        "max": 42
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-aveo-emotion-gt-1.6-mt",
+      "brand": "Chevrolet",
+      "model": "Aveo Emotion GT",
+      "generation_years": "2007-2013",
+      "trim_engine": "1.6L DOHC 16V E-TEC II (103 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 33,
+        "avg": 37,
+        "max": 42
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-aveo-family-1.5-mt",
+      "brand": "Chevrolet",
+      "model": "Aveo Family",
+      "generation_years": "2008-2014",
+      "trim_engine": "1.5L SOHC 8V (83 HP)",
+      "displacement_cc": 1498,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-beat-1.2-mt",
+      "brand": "Chevrolet",
+      "model": "Beat",
+      "generation_years": "2018-2022",
+      "trim_engine": "1.2L DOHC 16V S-TEC II (81 HP)",
+      "displacement_cc": 1206,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 48,
+        "max": 54
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-captiva-turbo-1.5t-cvt",
+      "brand": "Chevrolet",
+      "model": "Captiva",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.5L Turbo DOHC 16V (144 HP)",
+      "displacement_cc": 1451,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 52,
+      "tank_capacity_gallons": 13.74,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 30,
+        "avg": 34,
+        "max": 39
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-captiva-sport-2.4-at",
+      "brand": "Chevrolet",
+      "model": "Captiva Sport",
+      "generation_years": "2008-2016",
+      "trim_engine": "2.4L ECOTEC DOHC (182 HP)",
+      "displacement_cc": 2384,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 65,
+      "tank_capacity_gallons": 17.17,
+      "reserve_liters_est": 7.5,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 24,
+        "avg": 28,
+        "max": 33
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-dmax-2.5-diesel-mt",
+      "brand": "Chevrolet",
+      "model": "D-Max",
+      "generation_years": "2006-2015",
+      "trim_engine": "2.5L Turbo Diésel CRDI (134 HP)",
+      "displacement_cc": 2499,
+      "transmission": "MT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 76,
+      "tank_capacity_gallons": 20.08,
+      "reserve_liters_est": 10,
+      "body_type": "pickup",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 33,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "Trabajo",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-dmax-3.0-diesel-mt",
+      "brand": "Chevrolet",
+      "model": "D-Max",
+      "generation_years": "2015-2026",
+      "trim_engine": "3.0L Turbo Diésel Intercooler (177 HP)",
+      "displacement_cc": 2999,
+      "transmission": "MT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 76,
+      "tank_capacity_gallons": 20.08,
+      "reserve_liters_est": 10,
+      "body_type": "pickup",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 31,
+        "avg": 36,
+        "max": 41
+      },
+      "platform_tags": [
+        "Trabajo",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-onix-i-1.4-mt",
+      "brand": "Chevrolet",
+      "model": "Onix",
+      "generation_years": "2016-2020",
+      "trim_engine": "1.4L SPE/4 8V (98 HP)",
+      "displacement_cc": 1389,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 54,
+      "tank_capacity_gallons": 14.27,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-onix-turbo-rs-1.0t-at",
+      "brand": "Chevrolet",
+      "model": "Onix RS",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.0L Turbo ECOTEC 3-Cil (115 HP)",
+      "displacement_cc": 999,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 44,
+      "tank_capacity_gallons": 11.62,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 39,
+        "avg": 44,
+        "max": 49
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-onix-turbo-sedan-1.0t-mt",
+      "brand": "Chevrolet",
+      "model": "Onix Sedán",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.0L Turbo ECOTEC 3-Cil (115 HP)",
+      "displacement_cc": 999,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 44,
+      "tank_capacity_gallons": 11.62,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 48,
+        "max": 54
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-onix-turbo-sedan-1.0t-at",
+      "brand": "Chevrolet",
+      "model": "Onix Sedán",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.0L Turbo ECOTEC 3-Cil (115 HP)",
+      "displacement_cc": 999,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 44,
+      "tank_capacity_gallons": 11.62,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-optra-1.4-mt",
+      "brand": "Chevrolet",
+      "model": "Optra",
+      "generation_years": "2005-2012",
+      "trim_engine": "1.4L DOHC 16V (93 HP)",
+      "displacement_cc": 1399,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 60,
+      "tank_capacity_gallons": 15.85,
+      "reserve_liters_est": 7.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 32,
+        "avg": 36,
+        "max": 41
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-optra-1.8-mt",
+      "brand": "Chevrolet",
+      "model": "Optra",
+      "generation_years": "2005-2012",
+      "trim_engine": "1.8L DOHC 16V (121 HP)",
+      "displacement_cc": 1799,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 60,
+      "tank_capacity_gallons": 15.85,
+      "reserve_liters_est": 7.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 30,
+        "avg": 34,
+        "max": 39
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-prisma-1.4-mt",
+      "brand": "Chevrolet",
+      "model": "Prisma",
+      "generation_years": "2017-2020",
+      "trim_engine": "1.4L SPE/4 8V (98 HP)",
+      "displacement_cc": 1389,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 54,
+      "tank_capacity_gallons": 14.27,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-sail-sedan-1.4-mt",
+      "brand": "Chevrolet",
+      "model": "Sail",
+      "generation_years": "2013-2020",
+      "trim_engine": "1.4L DOHC 16V VGIS (102 HP)",
+      "displacement_cc": 1399,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 42,
+      "tank_capacity_gallons": 11.1,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-sail-hatch-1.4-mt",
+      "brand": "Chevrolet",
+      "model": "Sail Hatchback",
+      "generation_years": "2013-2020",
+      "trim_engine": "1.4L DOHC 16V VGIS (102 HP)",
+      "displacement_cc": 1399,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 42,
+      "tank_capacity_gallons": 11.1,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-spark-724-taxi-1.0-mt",
+      "brand": "Chevrolet",
+      "model": "Spark 7/24",
+      "generation_years": "2006-2018",
+      "trim_engine": "1.0L S-TEC 4-Cil (65 HP)",
+      "displacement_cc": 995,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "sight-glass",
+      "urban_consumption_ref_kmgal": {
+        "min": 45,
+        "avg": 51,
+        "max": 57
+      },
+      "platform_tags": [
+        "Taxi",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "chevrolet-spark-gt-1.2-mt",
+      "brand": "Chevrolet",
+      "model": "Spark GT",
+      "generation_years": "2011-2018",
+      "trim_engine": "1.2L DOHC 16V S-TEC II (81 HP)",
+      "displacement_cc": 1206,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 43,
+        "avg": 49,
+        "max": 55
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "chevrolet-spark-gt-activ-1.2-mt",
+      "brand": "Chevrolet",
+      "model": "Spark GT Activ",
+      "generation_years": "2018-2022",
+      "trim_engine": "1.2L DOHC 16V S-TEC II (81 HP)",
+      "displacement_cc": 1206,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 43,
+        "avg": 48,
+        "max": 54
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "chevrolet-spark-life-1.0-mt",
+      "brand": "Chevrolet",
+      "model": "Spark Life",
+      "generation_years": "2006-2018",
+      "trim_engine": "1.0L S-TEC 4-Cil (65 HP)",
+      "displacement_cc": 995,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 46,
+        "avg": 52,
+        "max": 58
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "chevrolet-tracker-i-1.8-mt",
+      "brand": "Chevrolet",
+      "model": "Tracker",
+      "generation_years": "2013-2020",
+      "trim_engine": "1.8L ECOTEC DOHC 16V (138 HP)",
+      "displacement_cc": 1796,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 53,
+      "tank_capacity_gallons": 14,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 31,
+        "avg": 35,
+        "max": 40
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "chevrolet-tracker-turbo-1.2t-at",
+      "brand": "Chevrolet",
+      "model": "Tracker",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.2L Turbo ECOTEC 3-Cil (132 HP)",
+      "displacement_cc": 1199,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 44,
+      "tank_capacity_gallons": 11.62,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "ford-ecosport-2.0-mt",
+      "brand": "Ford",
+      "model": "EcoSport",
+      "generation_years": "2005-2012",
+      "trim_engine": "2.0L Duratec 16V (143 HP)",
+      "displacement_cc": 1999,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 54,
+      "tank_capacity_gallons": 14.27,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 30,
+        "avg": 34,
+        "max": 39
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "ford-ecosport-1.5-at",
+      "brand": "Ford",
+      "model": "EcoSport",
+      "generation_years": "2018-2021",
+      "trim_engine": "1.5L Ti-VCT Dragon 3-Cil (121 HP)",
+      "displacement_cc": 1497,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 52,
+      "tank_capacity_gallons": 13.74,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 33,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "ford-escape-2.0t-at",
+      "brand": "Ford",
+      "model": "Escape",
+      "generation_years": "2013-2020",
+      "trim_engine": "2.0L EcoBoost Turbo AWD (240 HP)",
+      "displacement_cc": 1999,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Extra",
+      "tank_capacity_liters": 57,
+      "tank_capacity_gallons": 15.06,
+      "reserve_liters_est": 7.5,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 26,
+        "avg": 30,
+        "max": 35
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "ford-escape-hybrid-2.5-ecvt",
+      "brand": "Ford",
+      "model": "Escape Híbrida",
+      "generation_years": "2020-2026",
+      "trim_engine": "2.5L i-VCT Atkinson Full Hybrid (200 HP)",
+      "displacement_cc": 2488,
+      "transmission": "CVT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 54,
+      "tank_capacity_gallons": 14.27,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 58,
+        "avg": 66,
+        "max": 74
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "ford-fiesta-1.6-mt",
+      "brand": "Ford",
+      "model": "Fiesta",
+      "generation_years": "2011-2019",
+      "trim_engine": "1.6L Ti-VCT 16V (120 HP)",
+      "displacement_cc": 1596,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "ford-fiesta-sedan-1.6-at",
+      "brand": "Ford",
+      "model": "Fiesta Sedán",
+      "generation_years": "2011-2019",
+      "trim_engine": "1.6L Ti-VCT 16V Powershift (120 HP)",
+      "displacement_cc": 1596,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 33,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "ford-ranger-3.2-diesel-at",
+      "brand": "Ford",
+      "model": "Ranger",
+      "generation_years": "2012-2023",
+      "trim_engine": "3.2L Duratorq TDCi 5-Cil (197 HP)",
+      "displacement_cc": 3198,
+      "transmission": "AT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 80,
+      "tank_capacity_gallons": 21.13,
+      "reserve_liters_est": 10,
+      "body_type": "pickup",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 28,
+        "avg": 33,
+        "max": 38
+      },
+      "platform_tags": [
+        "Trabajo",
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "foton-tunland-2.8-diesel-mt",
+      "brand": "Foton",
+      "model": "Tunland",
+      "generation_years": "2013-2024",
+      "trim_engine": "2.8L Cummins ISF Turbo Diésel (161 HP)",
+      "displacement_cc": 2776,
+      "transmission": "MT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 76,
+      "tank_capacity_gallons": 20.08,
+      "reserve_liters_est": 10,
+      "body_type": "pickup",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 30,
+        "avg": 35,
+        "max": 40
+      },
+      "platform_tags": [
+        "Trabajo",
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "hyundai-accent-i25-1.4-mt",
+      "brand": "Hyundai",
+      "model": "Accent i25",
+      "generation_years": "2011-2018",
+      "trim_engine": "1.4L Gamma DOHC 16V CVVT (107 HP)",
+      "displacement_cc": 1396,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "hyundai-accent-i25-1.6-mt",
+      "brand": "Hyundai",
+      "model": "Accent i25",
+      "generation_years": "2011-2018",
+      "trim_engine": "1.6L Gamma DOHC 16V CVVT (122 HP)",
+      "displacement_cc": 1591,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "hyundai-accent-vision-1.4-mt",
+      "brand": "Hyundai",
+      "model": "Accent Vision",
+      "generation_years": "2006-2011",
+      "trim_engine": "1.4L Alpha II DOHC 16V (95 HP)",
+      "displacement_cc": 1399,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "hyundai-atos-prime-1.1-mt",
+      "brand": "Hyundai",
+      "model": "Atos Prime",
+      "generation_years": "2005-2012",
+      "trim_engine": "1.1L Epsilon G4HG 12V (63 HP)",
+      "displacement_cc": 1086,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "sight-glass",
+      "urban_consumption_ref_kmgal": {
+        "min": 46,
+        "avg": 52,
+        "max": 58
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "hyundai-city-taxi-1.1-mt",
+      "brand": "Hyundai",
+      "model": "City Taxi",
+      "generation_years": "2005-2015",
+      "trim_engine": "1.1L Epsilon G4HG 12V (63 HP)",
+      "displacement_cc": 1086,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "sight-glass",
+      "urban_consumption_ref_kmgal": {
+        "min": 45,
+        "avg": 51,
+        "max": 57
+      },
+      "platform_tags": [
+        "Taxi",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "hyundai-creta-1.6-at",
+      "brand": "Hyundai",
+      "model": "Creta",
+      "generation_years": "2016-2024",
+      "trim_engine": "1.6L Gamma MPI 4-Cil (121 HP)",
+      "displacement_cc": 1591,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 33,
+        "avg": 37,
+        "max": 42
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "hyundai-grand-i10-hb-1.25-mt",
+      "brand": "Hyundai",
+      "model": "Grand i10",
+      "generation_years": "2014-2022",
+      "trim_engine": "1.25L Kappa MPI 4-Cil (86 HP)",
+      "displacement_cc": 1248,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 47,
+        "max": 53
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "hyundai-grand-i10-sedan-1.25-mt",
+      "brand": "Hyundai",
+      "model": "Grand i10 Sedán",
+      "generation_years": "2015-2022",
+      "trim_engine": "1.25L Kappa MPI 4-Cil (86 HP)",
+      "displacement_cc": 1248,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 41,
+        "avg": 46,
+        "max": 52
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "hyundai-hb20-graviti-1.6-mt",
+      "brand": "Hyundai",
+      "model": "HB20 Graviti",
+      "generation_years": "2020-2024",
+      "trim_engine": "1.6L Gamma 16V Dual CVVT (121 HP)",
+      "displacement_cc": 1591,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "hyundai-hb20s-accent-1.6-at",
+      "brand": "Hyundai",
+      "model": "HB20S Accent",
+      "generation_years": "2020-2024",
+      "trim_engine": "1.6L Gamma 16V Dual CVVT (121 HP)",
+      "displacement_cc": 1591,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "hyundai-i10-1.1-mt",
+      "brand": "Hyundai",
+      "model": "i10",
+      "generation_years": "2008-2014",
+      "trim_engine": "1.1L Epsilon G4HG 12V (68 HP)",
+      "displacement_cc": 1086,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 44,
+        "avg": 50,
+        "max": 56
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "hyundai-super-metro-taxi-1.25-mt",
+      "brand": "Hyundai",
+      "model": "Super Metro Taxi",
+      "generation_years": "2015-2023",
+      "trim_engine": "1.25L Kappa MPI 4-Cil (86 HP)",
+      "displacement_cc": 1248,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "sight-glass",
+      "urban_consumption_ref_kmgal": {
+        "min": 40,
+        "avg": 45,
+        "max": 51
+      },
+      "platform_tags": [
+        "Taxi",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "hyundai-tucson-ix35-2.0-mt",
+      "brand": "Hyundai",
+      "model": "Tucson ix35",
+      "generation_years": "2010-2015",
+      "trim_engine": "2.0L Theta II DOHC (163 HP)",
+      "displacement_cc": 1998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 58,
+      "tank_capacity_gallons": 15.32,
+      "reserve_liters_est": 7.5,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 29,
+        "avg": 33,
+        "max": 38
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "jac-js4-1.5t-cvt",
+      "brand": "JAC",
+      "model": "JS4",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.5L Turbo 16V (147 HP)",
+      "displacement_cc": 1499,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "jac-s2-1.5-mt",
+      "brand": "JAC",
+      "model": "S2 Urban",
+      "generation_years": "2016-2022",
+      "trim_engine": "1.5L GreenJet VVT (111 HP)",
+      "displacement_cc": 1499,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 42,
+      "tank_capacity_gallons": 11.1,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "jac-taxi-star-1.3-mt",
+      "brand": "JAC",
+      "model": "Taxi Star",
+      "generation_years": "2011-2017",
+      "trim_engine": "1.3L VVT 4-Cil (98 HP)",
+      "displacement_cc": 1332,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 48,
+      "tank_capacity_gallons": 12.68,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "sight-glass",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "Taxi",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-cerato-forte-1.6-mt",
+      "brand": "Kia",
+      "model": "Cerato Forte",
+      "generation_years": "2010-2014",
+      "trim_engine": "1.6L Gamma CVVT (122 HP)",
+      "displacement_cc": 1591,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 52,
+      "tank_capacity_gallons": 13.74,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-cerato-pro-1.6-at",
+      "brand": "Kia",
+      "model": "Cerato Pro",
+      "generation_years": "2014-2019",
+      "trim_engine": "1.6L Gamma Dual CVVT (128 HP)",
+      "displacement_cc": 1591,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-ekotaxi-1.0-mt",
+      "brand": "Kia",
+      "model": "Ekotaxi",
+      "generation_years": "2011-2018",
+      "trim_engine": "1.0L MPI 3-Cil (68 HP)",
+      "displacement_cc": 998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "sight-glass",
+      "urban_consumption_ref_kmgal": {
+        "min": 45,
+        "avg": 50,
+        "max": 56
+      },
+      "platform_tags": [
+        "Taxi",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-k3-sedan-1.6-at",
+      "brand": "Kia",
+      "model": "K3",
+      "generation_years": "2024-2026",
+      "trim_engine": "1.6L Smartstream 4-Cil (121 HP)",
+      "displacement_cc": 1598,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-k3-cross-1.6-at",
+      "brand": "Kia",
+      "model": "K3 Cross",
+      "generation_years": "2024-2026",
+      "trim_engine": "1.6L Smartstream 4-Cil (121 HP)",
+      "displacement_cc": 1598,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-picanto-ion-1.0-mt",
+      "brand": "Kia",
+      "model": "Picanto",
+      "generation_years": "2011-2017",
+      "trim_engine": "1.0L MPI 3-Cil (68 HP)",
+      "displacement_cc": 998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 46,
+        "avg": 52,
+        "max": 58
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano",
+        "Taxi"
+      ]
+    },
+    {
+      "id": "kia-picanto-ion-1.25-mt",
+      "brand": "Kia",
+      "model": "Picanto",
+      "generation_years": "2011-2017",
+      "trim_engine": "1.25L Kappa MPI 4-Cil (86 HP)",
+      "displacement_cc": 1248,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 48,
+        "max": 54
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-picanto-ion-1.25-at",
+      "brand": "Kia",
+      "model": "Picanto",
+      "generation_years": "2011-2017",
+      "trim_engine": "1.25L Kappa MPI 4-Cil (86 HP)",
+      "displacement_cc": 1248,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "Particular",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-picanto-ja-1.0-mt",
+      "brand": "Kia",
+      "model": "Picanto",
+      "generation_years": "2017-2023",
+      "trim_engine": "1.0L Kappa II MPI 3-Cil (66 HP)",
+      "displacement_cc": 998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 46,
+        "avg": 51,
+        "max": 57
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-picanto-ja-1.25-mt",
+      "brand": "Kia",
+      "model": "Picanto",
+      "generation_years": "2017-2023",
+      "trim_engine": "1.25L Kappa II MPI 4-Cil (83 HP)",
+      "displacement_cc": 1248,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 47,
+        "max": 53
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-picanto-ja-1.25-at",
+      "brand": "Kia",
+      "model": "Picanto",
+      "generation_years": "2017-2023",
+      "trim_engine": "1.25L Kappa II MPI 4-Cil (83 HP)",
+      "displacement_cc": 1248,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "Particular",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-picanto-fl-1.0-mt",
+      "brand": "Kia",
+      "model": "Picanto",
+      "generation_years": "2024-2026",
+      "trim_engine": "1.0L Smartstream MPI 3-Cil (66 HP)",
+      "displacement_cc": 998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 47,
+        "avg": 52,
+        "max": 58
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-picanto-fl-1.2-at",
+      "brand": "Kia",
+      "model": "Picanto",
+      "generation_years": "2024-2026",
+      "trim_engine": "1.2L Smartstream MPI 4-Cil (83 HP)",
+      "displacement_cc": 1197,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 40,
+        "avg": 45,
+        "max": 50
+      },
+      "platform_tags": [
+        "Particular",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-picanto-gtline-1.25-at",
+      "brand": "Kia",
+      "model": "Picanto GT-Line",
+      "generation_years": "2018-2023",
+      "trim_engine": "1.25L Kappa II MPI 4-Cil (83 HP)",
+      "displacement_cc": 1248,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "Particular",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "kia-rio-allnew-1.4-mt",
+      "brand": "Kia",
+      "model": "Rio",
+      "generation_years": "2018-2023",
+      "trim_engine": "1.4L Kappa MPI 4-Cil (99 HP)",
+      "displacement_cc": 1368,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-rio-allnew-1.4-at",
+      "brand": "Kia",
+      "model": "Rio",
+      "generation_years": "2018-2023",
+      "trim_engine": "1.4L Kappa MPI 4-Cil (99 HP)",
+      "displacement_cc": 1368,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-rio-spice-1.25-mt",
+      "brand": "Kia",
+      "model": "Rio Spice",
+      "generation_years": "2012-2017",
+      "trim_engine": "1.25L Kappa MPI 4-Cil (86 HP)",
+      "displacement_cc": 1248,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 40,
+        "avg": 45,
+        "max": 50
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-rio-spice-1.4-mt",
+      "brand": "Kia",
+      "model": "Rio Spice",
+      "generation_years": "2012-2017",
+      "trim_engine": "1.4L Gamma CVVT 4-Cil (107 HP)",
+      "displacement_cc": 1396,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-rio-stylus-1.5-mt",
+      "brand": "Kia",
+      "model": "Rio Stylus",
+      "generation_years": "2005-2012",
+      "trim_engine": "1.5L SOHC 16V (97 HP)",
+      "displacement_cc": 1493,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 40,
+        "max": 45
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-seltos-1.6-at",
+      "brand": "Kia",
+      "model": "Seltos",
+      "generation_years": "2020-2024",
+      "trim_engine": "1.6L Gamma MPI 4-Cil (121 HP)",
+      "displacement_cc": 1591,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-sonet-1.5-mt",
+      "brand": "Kia",
+      "model": "Sonet",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.5L Smartstream MPI 4-Cil (113 HP)",
+      "displacement_cc": 1497,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 39,
+        "avg": 44,
+        "max": 49
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-sonet-1.5-cvt",
+      "brand": "Kia",
+      "model": "Sonet",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.5L Smartstream MPI 4-Cil (113 HP)",
+      "displacement_cc": 1497,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 45,
+      "tank_capacity_gallons": 11.89,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-sportage-ql-2.0-at",
+      "brand": "Kia",
+      "model": "Sportage",
+      "generation_years": "2016-2022",
+      "trim_engine": "2.0L Nu MPI (153 HP)",
+      "displacement_cc": 1999,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 62,
+      "tank_capacity_gallons": 16.38,
+      "reserve_liters_est": 7.5,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 28,
+        "avg": 32,
+        "max": 37
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "kia-sportage-revolution-2.0-mt",
+      "brand": "Kia",
+      "model": "Sportage Revolution",
+      "generation_years": "2011-2016",
+      "trim_engine": "2.0L Nu MPI (164 HP)",
+      "displacement_cc": 1999,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 58,
+      "tank_capacity_gallons": 15.32,
+      "reserve_liters_est": 7.5,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 30,
+        "avg": 34,
+        "max": 39
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-cx30-2.0-mt",
+      "brand": "Mazda",
+      "model": "CX-30",
+      "generation_years": "2020-2026",
+      "trim_engine": "2.0L Skyactiv-G 4x2 (153 HP)",
+      "displacement_cc": 1998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 51,
+      "tank_capacity_gallons": 13.47,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-cx30-2.0-at",
+      "brand": "Mazda",
+      "model": "CX-30",
+      "generation_years": "2020-2026",
+      "trim_engine": "2.0L Skyactiv-G 4x2 (153 HP)",
+      "displacement_cc": 1998,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 51,
+      "tank_capacity_gallons": 13.47,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-cx30-2.5-at-awd",
+      "brand": "Mazda",
+      "model": "CX-30",
+      "generation_years": "2020-2026",
+      "trim_engine": "2.5L Skyactiv-G AWD (186 HP)",
+      "displacement_cc": 2488,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 48,
+      "tank_capacity_gallons": 12.68,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 30,
+        "avg": 34,
+        "max": 39
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-cx30-mhev-2.0-at",
+      "brand": "Mazda",
+      "model": "CX-30",
+      "generation_years": "2022-2026",
+      "trim_engine": "2.0L e-Skyactiv G MHEV 4x2 (153 HP)",
+      "displacement_cc": 1998,
+      "transmission": "AT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 51,
+      "tank_capacity_gallons": 13.47,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 44,
+        "max": 50
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-cx5-2.0-at",
+      "brand": "Mazda",
+      "model": "CX-5",
+      "generation_years": "2013-2026",
+      "trim_engine": "2.0L Skyactiv-G 4x2 (153 HP)",
+      "displacement_cc": 1998,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 56,
+      "tank_capacity_gallons": 14.79,
+      "reserve_liters_est": 7.5,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 32,
+        "avg": 36,
+        "max": 41
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-cx5-2.5-at-awd",
+      "brand": "Mazda",
+      "model": "CX-5",
+      "generation_years": "2013-2026",
+      "trim_engine": "2.5L Skyactiv-G AWD (188 HP)",
+      "displacement_cc": 2488,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 58,
+      "tank_capacity_gallons": 15.32,
+      "reserve_liters_est": 7.5,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 28,
+        "avg": 32,
+        "max": 37
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-2-de-1.5-mt",
+      "brand": "Mazda",
+      "model": "Mazda 2",
+      "generation_years": "2008-2015",
+      "trim_engine": "1.5L MZR DOHC 16V (102 HP)",
+      "displacement_cc": 1498,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-2-de-1.5-at",
+      "brand": "Mazda",
+      "model": "Mazda 2",
+      "generation_years": "2008-2015",
+      "trim_engine": "1.5L MZR DOHC 16V (102 HP)",
+      "displacement_cc": 1498,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-2-skyactiv-hb-1.5-mt",
+      "brand": "Mazda",
+      "model": "Mazda 2",
+      "generation_years": "2015-2024",
+      "trim_engine": "1.5L Skyactiv-G DOHC 16V (106 HP)",
+      "displacement_cc": 1496,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 44,
+      "tank_capacity_gallons": 11.62,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 44,
+        "avg": 50,
+        "max": 56
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-2-skyactiv-hb-1.5-at",
+      "brand": "Mazda",
+      "model": "Mazda 2",
+      "generation_years": "2015-2024",
+      "trim_engine": "1.5L Skyactiv-G DOHC 16V (106 HP)",
+      "displacement_cc": 1496,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 44,
+      "tank_capacity_gallons": 11.62,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 41,
+        "avg": 46,
+        "max": 52
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-2-mhev-1.5-at",
+      "brand": "Mazda",
+      "model": "Mazda 2",
+      "generation_years": "2022-2026",
+      "trim_engine": "1.5L e-Skyactiv G MHEV (109 HP)",
+      "displacement_cc": 1496,
+      "transmission": "AT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 44,
+      "tank_capacity_gallons": 11.62,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 48,
+        "avg": 54,
+        "max": 60
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-2-skyactiv-sedan-1.5-at",
+      "brand": "Mazda",
+      "model": "Mazda 2 Sedán",
+      "generation_years": "2015-2024",
+      "trim_engine": "1.5L Skyactiv-G DOHC 16V (106 HP)",
+      "displacement_cc": 1496,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 44,
+      "tank_capacity_gallons": 11.62,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 41,
+        "avg": 46,
+        "max": 52
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-3-bk-1.6-mt",
+      "brand": "Mazda",
+      "model": "Mazda 3",
+      "generation_years": "2005-2009",
+      "trim_engine": "1.6L ZM-DE 16V (105 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 55,
+      "tank_capacity_gallons": 14.53,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-3-bk-2.0-mt",
+      "brand": "Mazda",
+      "model": "Mazda 3",
+      "generation_years": "2005-2009",
+      "trim_engine": "2.0L LF-DE 16V (148 HP)",
+      "displacement_cc": 1999,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 55,
+      "tank_capacity_gallons": 14.53,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 30,
+        "avg": 34,
+        "max": 39
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-3-skyactiv-bm-2.0-at",
+      "brand": "Mazda",
+      "model": "Mazda 3",
+      "generation_years": "2014-2019",
+      "trim_engine": "2.0L Skyactiv-G (153 HP)",
+      "displacement_cc": 1998,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 51,
+      "tank_capacity_gallons": 13.47,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-3-skyactiv-bp-2.0-at",
+      "brand": "Mazda",
+      "model": "Mazda 3",
+      "generation_years": "2019-2026",
+      "trim_engine": "2.0L Skyactiv-G (153 HP)",
+      "displacement_cc": 1998,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 51,
+      "tank_capacity_gallons": 13.47,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-3-mhev-2.0-at",
+      "brand": "Mazda",
+      "model": "Mazda 3",
+      "generation_years": "2022-2026",
+      "trim_engine": "2.0L e-Skyactiv G MHEV (153 HP)",
+      "displacement_cc": 1998,
+      "transmission": "AT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 51,
+      "tank_capacity_gallons": 13.47,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 48,
+        "max": 54
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "mazda-3-bl-2.0-at",
+      "brand": "Mazda",
+      "model": "Mazda 3 All-New",
+      "generation_years": "2010-2014",
+      "trim_engine": "2.0L LF-VE Activematic (148 HP)",
+      "displacement_cc": 1999,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 55,
+      "tank_capacity_gallons": 14.53,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 29,
+        "avg": 33,
+        "max": 38
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-frontier-np300-2.5-diesel-mt",
+      "brand": "Nissan",
+      "model": "Frontier NP300",
+      "generation_years": "2016-2026",
+      "trim_engine": "2.5L YD25DDTi Turbo Diésel (161 HP)",
+      "displacement_cc": 2488,
+      "transmission": "MT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 80,
+      "tank_capacity_gallons": 21.13,
+      "reserve_liters_est": 10,
+      "body_type": "pickup",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 32,
+        "avg": 37,
+        "max": 42
+      },
+      "platform_tags": [
+        "Trabajo",
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "nissan-kicks-1.6-mt",
+      "brand": "Nissan",
+      "model": "Kicks",
+      "generation_years": "2017-2026",
+      "trim_engine": "1.6L HR16DE (118 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 41,
+      "tank_capacity_gallons": 10.83,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-kicks-1.6-cvt",
+      "brand": "Nissan",
+      "model": "Kicks",
+      "generation_years": "2017-2026",
+      "trim_engine": "1.6L HR16DE (118 HP)",
+      "displacement_cc": 1598,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 41,
+      "tank_capacity_gallons": 10.83,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 40,
+        "max": 45
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-march-active-1.6-mt",
+      "brand": "Nissan",
+      "model": "March",
+      "generation_years": "2012-2024",
+      "trim_engine": "1.6L HR16DE 4-Cil (106 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 41,
+      "tank_capacity_gallons": 10.83,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 41,
+        "avg": 47,
+        "max": 53
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano",
+        "Taxi"
+      ]
+    },
+    {
+      "id": "nissan-march-advance-1.6-at",
+      "brand": "Nissan",
+      "model": "March",
+      "generation_years": "2012-2024",
+      "trim_engine": "1.6L HR16DE 4-Cil (106 HP)",
+      "displacement_cc": 1598,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 41,
+      "tank_capacity_gallons": 10.83,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-sentra-b17-1.8-cvt",
+      "brand": "Nissan",
+      "model": "Sentra",
+      "generation_years": "2013-2020",
+      "trim_engine": "1.8L MRA8DE 16V (129 HP)",
+      "displacement_cc": 1798,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 52,
+      "tank_capacity_gallons": 13.74,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-sentra-b18-2.0-cvt",
+      "brand": "Nissan",
+      "model": "Sentra",
+      "generation_years": "2020-2026",
+      "trim_engine": "2.0L MR20DD Direct Injection (145 HP)",
+      "displacement_cc": 1997,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 47,
+      "tank_capacity_gallons": 12.42,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 40,
+        "max": 45
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-sentra-b13-1.6-mt",
+      "brand": "Nissan",
+      "model": "Sentra B13",
+      "generation_years": "2005-2016",
+      "trim_engine": "1.6L GA16DNE 16V (105 HP)",
+      "displacement_cc": 1597,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 40,
+        "max": 45
+      },
+      "platform_tags": [
+        "Taxi",
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-tiida-sedan-1.6-mt",
+      "brand": "Nissan",
+      "model": "Tiida",
+      "generation_years": "2007-2018",
+      "trim_engine": "1.6L HR16DE DOHC 16V (106 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 52,
+      "tank_capacity_gallons": 13.74,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-tiida-miio-1.8-mt",
+      "brand": "Nissan",
+      "model": "Tiida Miio",
+      "generation_years": "2011-2017",
+      "trim_engine": "1.8L MR18DE DOHC 16V (125 HP)",
+      "displacement_cc": 1798,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 52,
+      "tank_capacity_gallons": 13.74,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 33,
+        "avg": 37,
+        "max": 42
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-v-drive-1.6-mt",
+      "brand": "Nissan",
+      "model": "V-Drive",
+      "generation_years": "2020-2024",
+      "trim_engine": "1.6L HR16DE 4-Cil (106 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 41,
+      "tank_capacity_gallons": 10.83,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 39,
+        "avg": 44,
+        "max": 49
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-versa-i-1.6-mt",
+      "brand": "Nissan",
+      "model": "Versa",
+      "generation_years": "2012-2019",
+      "trim_engine": "1.6L HR16DE 4-Cil (106 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 41,
+      "tank_capacity_gallons": 10.83,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 39,
+        "avg": 44,
+        "max": 49
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-versa-ii-1.6-mt",
+      "brand": "Nissan",
+      "model": "Versa",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.6L HR16DE Gen 3 (118 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 41,
+      "tank_capacity_gallons": 10.83,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 40,
+        "avg": 46,
+        "max": 51
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "nissan-versa-ii-1.6-cvt",
+      "brand": "Nissan",
+      "model": "Versa",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.6L HR16DE Gen 3 (118 HP)",
+      "displacement_cc": 1598,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 41,
+      "tank_capacity_gallons": 10.83,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-captur-2.0-at",
+      "brand": "Renault",
+      "model": "Captur",
+      "generation_years": "2017-2021",
+      "trim_engine": "2.0L 16V F4R (143 HP)",
+      "displacement_cc": 1998,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 28,
+        "avg": 32,
+        "max": 37
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-clio-campus-1.2-mt",
+      "brand": "Renault",
+      "model": "Clio Campus",
+      "generation_years": "2012-2016",
+      "trim_engine": "1.2L 16V D4F (75 HP)",
+      "displacement_cc": 1149,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 47,
+        "max": 52
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "renault-duster-i-1.6-mt-4x2",
+      "brand": "Renault",
+      "model": "Duster",
+      "generation_years": "2012-2020",
+      "trim_engine": "1.6L 16V K4M (105 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 32,
+        "avg": 36,
+        "max": 41
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-duster-i-2.0-mt-4x4",
+      "brand": "Renault",
+      "model": "Duster",
+      "generation_years": "2012-2020",
+      "trim_engine": "2.0L 16V F4R (138 HP)",
+      "displacement_cc": 1998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 28,
+        "avg": 32,
+        "max": 37
+      },
+      "platform_tags": [
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "renault-duster-ii-1.6-mt-4x2",
+      "brand": "Renault",
+      "model": "Duster",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.6L 16V SCe H4M (114 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-duster-ii-1.3t-cvt",
+      "brand": "Renault",
+      "model": "Duster",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.3L Turbo TCe H5Ht (154 HP)",
+      "displacement_cc": 1332,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Extra",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 33,
+        "avg": 37,
+        "max": 42
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-duster-ii-1.3t-mt-4x4",
+      "brand": "Renault",
+      "model": "Duster",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.3L Turbo TCe H5Ht (154 HP)",
+      "displacement_cc": 1332,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Extra",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 31,
+        "avg": 35,
+        "max": 40
+      },
+      "platform_tags": [
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "renault-koleos-2.5-cvt",
+      "brand": "Renault",
+      "model": "Koleos",
+      "generation_years": "2010-2024",
+      "trim_engine": "2.5L QR25DE (170 HP)",
+      "displacement_cc": 2488,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 60,
+      "tank_capacity_gallons": 15.85,
+      "reserve_liters_est": 7.5,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 27,
+        "avg": 31,
+        "max": 36
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-kwid-1.0-mt",
+      "brand": "Renault",
+      "model": "Kwid",
+      "generation_years": "2019-2022",
+      "trim_engine": "1.0L 12V SCe 3-Cil (66 HP)",
+      "displacement_cc": 999,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 38,
+      "tank_capacity_gallons": 10.04,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 48,
+        "avg": 55,
+        "max": 62
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "renault-kwid-fl-1.0-mt",
+      "brand": "Renault",
+      "model": "Kwid",
+      "generation_years": "2022-2026",
+      "trim_engine": "1.0L 12V SCe 3-Cil (66 HP)",
+      "displacement_cc": 999,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 38,
+      "tank_capacity_gallons": 10.04,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 49,
+        "avg": 56,
+        "max": 63
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "renault-logan-i-1.4-mt",
+      "brand": "Renault",
+      "model": "Logan",
+      "generation_years": "2005-2015",
+      "trim_engine": "1.4L 8V K7J (75 HP)",
+      "displacement_cc": 1390,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-logan-i-1.6-8v-mt",
+      "brand": "Renault",
+      "model": "Logan",
+      "generation_years": "2005-2015",
+      "trim_engine": "1.6L 8V K7M (90 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-logan-ii-1.6-8v-mt",
+      "brand": "Renault",
+      "model": "Logan",
+      "generation_years": "2015-2020",
+      "trim_engine": "1.6L 8V K7M (85 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 40,
+        "max": 45
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-logan-ii-1.6-16v-sce-mt",
+      "brand": "Renault",
+      "model": "Logan",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.6L 16V SCe H4M (111 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-logan-ii-1.6-16v-sce-cvt",
+      "brand": "Renault",
+      "model": "Logan",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.6L 16V SCe H4M (111 HP)",
+      "displacement_cc": 1598,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-logan-i-1.6-16v-mt",
+      "brand": "Renault",
+      "model": "Logan Dynamique",
+      "generation_years": "2008-2015",
+      "trim_engine": "1.6L 16V K4M (105 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-oroch-2.0-mt",
+      "brand": "Renault",
+      "model": "Oroch",
+      "generation_years": "2016-2022",
+      "trim_engine": "2.0L 16V F4R (143 HP)",
+      "displacement_cc": 1998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "pickup",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 29,
+        "avg": 33,
+        "max": 38
+      },
+      "platform_tags": [
+        "Trabajo",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-sandero-i-1.6-8v-mt",
+      "brand": "Renault",
+      "model": "Sandero",
+      "generation_years": "2008-2015",
+      "trim_engine": "1.6L 8V K7M (90 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-sandero-ii-1.6-8v-mt",
+      "brand": "Renault",
+      "model": "Sandero",
+      "generation_years": "2015-2020",
+      "trim_engine": "1.6L 8V K7M (85 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 40,
+        "max": 45
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-sandero-ii-1.6-16v-sce-mt",
+      "brand": "Renault",
+      "model": "Sandero",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.6L 16V SCe H4M (111 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 43,
+        "max": 48
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-sandero-rs-2.0-mt",
+      "brand": "Renault",
+      "model": "Sandero R.S.",
+      "generation_years": "2016-2021",
+      "trim_engine": "2.0L 16V F4R (145 HP)",
+      "displacement_cc": 1998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Extra",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 28,
+        "avg": 32,
+        "max": 37
+      },
+      "platform_tags": [
+        "Particular",
+        "Deportivo"
+      ]
+    },
+    {
+      "id": "renault-sandero-stepway-i-1.6-mt",
+      "brand": "Renault",
+      "model": "Sandero Stepway",
+      "generation_years": "2010-2015",
+      "trim_engine": "1.6L 16V K4M (105 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 33,
+        "avg": 37,
+        "max": 42
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-stepway-ii-1.6-16v-sce-mt",
+      "brand": "Renault",
+      "model": "Stepway",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.6L 16V SCe H4M (111 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-stepway-ii-1.6-16v-sce-cvt",
+      "brand": "Renault",
+      "model": "Stepway",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.6L 16V SCe H4M (111 HP)",
+      "displacement_cc": 1598,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "renault-twingo-1.2-16v-mt",
+      "brand": "Renault",
+      "model": "Twingo",
+      "generation_years": "2005-2013",
+      "trim_engine": "1.2L 16V D4F (75 HP)",
+      "displacement_cc": 1149,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 40,
+      "tank_capacity_gallons": 10.57,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 45,
+        "avg": 50,
+        "max": 55
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "suzuki-alto-800-0.8-mt",
+      "brand": "Suzuki",
+      "model": "Alto 800",
+      "generation_years": "2013-2021",
+      "trim_engine": "0.8L F8D 3-Cil (47 HP)",
+      "displacement_cc": 796,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "sight-glass",
+      "urban_consumption_ref_kmgal": {
+        "min": 54,
+        "avg": 62,
+        "max": 70
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "suzuki-alto-k10-1.0-mt",
+      "brand": "Suzuki",
+      "model": "Alto K10",
+      "generation_years": "2011-2020",
+      "trim_engine": "1.0L K10B 3-Cil (67 HP)",
+      "displacement_cc": 998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "sight-glass",
+      "urban_consumption_ref_kmgal": {
+        "min": 50,
+        "avg": 58,
+        "max": 65
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "suzuki-baleno-1.4-mt",
+      "brand": "Suzuki",
+      "model": "Baleno",
+      "generation_years": "2017-2022",
+      "trim_engine": "1.4L K14B 4-Cil (91 HP)",
+      "displacement_cc": 1373,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 37,
+      "tank_capacity_gallons": 9.77,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 47,
+        "max": 53
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "suzuki-celerio-1.0-mt",
+      "brand": "Suzuki",
+      "model": "Celerio",
+      "generation_years": "2010-2022",
+      "trim_engine": "1.0L K10B 3-Cil (67 HP)",
+      "displacement_cc": 998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 35,
+      "tank_capacity_gallons": 9.25,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 48,
+        "avg": 55,
+        "max": 62
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "suzuki-swift-dzire-iii-1.2-mt",
+      "brand": "Suzuki",
+      "model": "Dzire",
+      "generation_years": "2018-2024",
+      "trim_engine": "1.2L K12M 4-Cil (82 HP)",
+      "displacement_cc": 1197,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 37,
+      "tank_capacity_gallons": 9.77,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 44,
+        "avg": 50,
+        "max": 56
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "suzuki-fronx-hybrid-1.5-at",
+      "brand": "Suzuki",
+      "model": "Fronx Híbrido",
+      "generation_years": "2024-2026",
+      "trim_engine": "1.5L K15C Dualjet SHVS MHEV (101 HP)",
+      "displacement_cc": 1462,
+      "transmission": "AT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 37,
+      "tank_capacity_gallons": 9.77,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 46,
+        "avg": 53,
+        "max": 59
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "suzuki-grand-vitara-sz-2.0-mt",
+      "brand": "Suzuki",
+      "model": "Grand Vitara SZ",
+      "generation_years": "2008-2018",
+      "trim_engine": "2.0L J20A 16V (138 HP)",
+      "displacement_cc": 1995,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 66,
+      "tank_capacity_gallons": 17.44,
+      "reserve_liters_est": 10,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 28,
+        "avg": 32,
+        "max": 37
+      },
+      "platform_tags": [
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "suzuki-jimny-1.5-mt",
+      "brand": "Suzuki",
+      "model": "Jimny",
+      "generation_years": "2019-2026",
+      "trim_engine": "1.5L K15B 16V 4x4 (100 HP)",
+      "displacement_cc": 1462,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 40,
+      "tank_capacity_gallons": 10.57,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 38,
+        "max": 43
+      },
+      "platform_tags": [
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "suzuki-spresso-1.0-mt",
+      "brand": "Suzuki",
+      "model": "S-Presso",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.0L K10C Dualjet 3-Cil (67 HP)",
+      "displacement_cc": 998,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 27,
+      "tank_capacity_gallons": 7.13,
+      "reserve_liters_est": 5,
+      "body_type": "hatchback-micro",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 52,
+        "avg": 60,
+        "max": 68
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Urbano"
+      ]
+    },
+    {
+      "id": "suzuki-swift-live-1.2-mt",
+      "brand": "Suzuki",
+      "model": "Swift",
+      "generation_years": "2013-2021",
+      "trim_engine": "1.2L K12M 4-Cil (85 HP)",
+      "displacement_cc": 1197,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 42,
+      "tank_capacity_gallons": 11.1,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 43,
+        "avg": 49,
+        "max": 55
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "suzuki-swift-dzire-1.2-mt",
+      "brand": "Suzuki",
+      "model": "Swift Dzire",
+      "generation_years": "2012-2018",
+      "trim_engine": "1.2L K12M 4-Cil (85 HP)",
+      "displacement_cc": 1197,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 42,
+      "tank_capacity_gallons": 11.1,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 48,
+        "max": 54
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "suzuki-swift-hybrid-1.2-mt",
+      "brand": "Suzuki",
+      "model": "Swift Híbrido",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.2L Dualjet SHVS MHEV (89 HP)",
+      "displacement_cc": 1197,
+      "transmission": "MT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 37,
+      "tank_capacity_gallons": 9.77,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 54,
+        "avg": 62,
+        "max": 70
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "suzuki-vitara-live-1.6-at",
+      "brand": "Suzuki",
+      "model": "Vitara Live",
+      "generation_years": "2016-2024",
+      "trim_engine": "1.6L M16A VVT (118 HP)",
+      "displacement_cc": 1586,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 47,
+      "tank_capacity_gallons": 12.42,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "toyota-corolla-e170-1.8-cvt",
+      "brand": "Toyota",
+      "model": "Corolla",
+      "generation_years": "2014-2019",
+      "trim_engine": "1.8L 2ZR-FE Dual VVT-i (138 HP)",
+      "displacement_cc": 1798,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 40,
+        "max": 45
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "toyota-corolla-e210-2.0-cvt",
+      "brand": "Toyota",
+      "model": "Corolla",
+      "generation_years": "2020-2026",
+      "trim_engine": "2.0L Dynamic Force M20A-FKS (168 HP)",
+      "displacement_cc": 1987,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "toyota-corolla-cross-2.0-cvt",
+      "brand": "Toyota",
+      "model": "Corolla Cross",
+      "generation_years": "2021-2026",
+      "trim_engine": "2.0L Dynamic Force M20A-FKB (168 HP)",
+      "displacement_cc": 1987,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 47,
+      "tank_capacity_gallons": 12.42,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "toyota-corolla-cross-hybrid-1.8-ecvt",
+      "brand": "Toyota",
+      "model": "Corolla Cross Híbrida",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.8L 2ZR-FXE Atkinson Hybrid (121 HP)",
+      "displacement_cc": 1798,
+      "transmission": "CVT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 60,
+        "avg": 70,
+        "max": 80
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "toyota-corolla-hybrid-1.8-ecvt",
+      "brand": "Toyota",
+      "model": "Corolla Híbrido",
+      "generation_years": "2020-2026",
+      "trim_engine": "1.8L 2ZR-FXE Atkinson Hybrid (121 HP)",
+      "displacement_cc": 1798,
+      "transmission": "CVT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 43,
+      "tank_capacity_gallons": 11.36,
+      "reserve_liters_est": 5.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 65,
+        "avg": 75,
+        "max": 85
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "toyota-fortuner-2.4-diesel-at",
+      "brand": "Toyota",
+      "model": "Fortuner",
+      "generation_years": "2016-2026",
+      "trim_engine": "2.4L 2GD-FTV Turbo Diésel (148 HP)",
+      "displacement_cc": 2393,
+      "transmission": "AT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 80,
+      "tank_capacity_gallons": 21.13,
+      "reserve_liters_est": 10,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 31,
+        "avg": 35,
+        "max": 40
+      },
+      "platform_tags": [
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "toyota-hilux-2.4-diesel-mt",
+      "brand": "Toyota",
+      "model": "Hilux",
+      "generation_years": "2016-2026",
+      "trim_engine": "2.4L 2GD-FTV Turbo Diésel (148 HP)",
+      "displacement_cc": 2393,
+      "transmission": "MT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 80,
+      "tank_capacity_gallons": 21.13,
+      "reserve_liters_est": 10,
+      "body_type": "pickup",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 34,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "Trabajo",
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "toyota-hilux-2.8-diesel-at",
+      "brand": "Toyota",
+      "model": "Hilux",
+      "generation_years": "2016-2026",
+      "trim_engine": "2.8L 1GD-FTV Turbo Diésel (201 HP)",
+      "displacement_cc": 2755,
+      "transmission": "AT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 80,
+      "tank_capacity_gallons": 21.13,
+      "reserve_liters_est": 10,
+      "body_type": "pickup",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 31,
+        "avg": 36,
+        "max": 41
+      },
+      "platform_tags": [
+        "Trabajo",
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "toyota-prado-txl-2.8-diesel-at",
+      "brand": "Toyota",
+      "model": "Land Cruiser Prado",
+      "generation_years": "2018-2024",
+      "trim_engine": "2.8L 1GD-FTV Turbo Diésel (201 HP)",
+      "displacement_cc": 2755,
+      "transmission": "AT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 87,
+      "tank_capacity_gallons": 22.98,
+      "reserve_liters_est": 10,
+      "body_type": "suv",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 28,
+        "avg": 32,
+        "max": 37
+      },
+      "platform_tags": [
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "toyota-yaris-hatch-1.5-cvt",
+      "brand": "Toyota",
+      "model": "Yaris",
+      "generation_years": "2018-2026",
+      "trim_engine": "1.5L 2NR-FE Dual VVT-i (106 HP)",
+      "displacement_cc": 1496,
+      "transmission": "CVT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 42,
+      "tank_capacity_gallons": 11.1,
+      "reserve_liters_est": 5.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 42,
+        "avg": 48,
+        "max": 54
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "toyota-yaris-cross-hybrid-1.5-ecvt",
+      "brand": "Toyota",
+      "model": "Yaris Cross Híbrida",
+      "generation_years": "2022-2026",
+      "trim_engine": "1.5L M15A-FXE 3-Cil Hybrid (114 HP)",
+      "displacement_cc": 1490,
+      "transmission": "CVT",
+      "fuel_type": "Híbrido (HEV/MHEV)",
+      "tank_capacity_liters": 42,
+      "tank_capacity_gallons": 11.1,
+      "reserve_liters_est": 5.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 68,
+        "avg": 78,
+        "max": 88
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-amarok-2.0-bitdi-mt",
+      "brand": "Volkswagen",
+      "model": "Amarok",
+      "generation_years": "2011-2026",
+      "trim_engine": "2.0L BiTDI Diésel 4x4 (180 HP)",
+      "displacement_cc": 1968,
+      "transmission": "MT",
+      "fuel_type": "Diesel",
+      "tank_capacity_liters": 80,
+      "tank_capacity_gallons": 21.13,
+      "reserve_liters_est": 10,
+      "body_type": "pickup",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 32,
+        "avg": 37,
+        "max": 42
+      },
+      "platform_tags": [
+        "Trabajo",
+        "Particular",
+        "4x4"
+      ]
+    },
+    {
+      "id": "volkswagen-fox-1.6-mt",
+      "brand": "Volkswagen",
+      "model": "Fox",
+      "generation_years": "2005-2015",
+      "trim_engine": "1.6L EA111 8V (101 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 39,
+        "max": 44
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-gol-1.6-8v-mt",
+      "brand": "Volkswagen",
+      "model": "Gol",
+      "generation_years": "2009-2023",
+      "trim_engine": "1.6L EA111 8V (101 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 55,
+      "tank_capacity_gallons": 14.53,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-jetta-mk7-1.4-tsi-at",
+      "brand": "Volkswagen",
+      "model": "Jetta",
+      "generation_years": "2019-2026",
+      "trim_engine": "1.4L TSI Turbo 16V (150 HP)",
+      "displacement_cc": 1395,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Extra",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 43,
+        "max": 49
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-jetta-clasico-2.0-mt",
+      "brand": "Volkswagen",
+      "model": "Jetta Clásico",
+      "generation_years": "2008-2015",
+      "trim_engine": "2.0L 8V (115 HP)",
+      "displacement_cc": 1984,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 55,
+      "tank_capacity_gallons": 14.53,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 30,
+        "avg": 34,
+        "max": 39
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-nivus-1.0-tsi-at",
+      "brand": "Volkswagen",
+      "model": "Nivus",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.0L Turbo 200 TSI (114 HP)",
+      "displacement_cc": 999,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Extra",
+      "tank_capacity_liters": 52,
+      "tank_capacity_gallons": 13.74,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-polo-1.6-msi-at",
+      "brand": "Volkswagen",
+      "model": "Polo",
+      "generation_years": "2018-2023",
+      "trim_engine": "1.6L 16V MSI EA211 (110 HP)",
+      "displacement_cc": 1598,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 35,
+        "avg": 40,
+        "max": 45
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-polo-track-1.0-mt",
+      "brand": "Volkswagen",
+      "model": "Polo Track",
+      "generation_years": "2023-2026",
+      "trim_engine": "1.0L MPI EA211 3-Cil (77 HP)",
+      "displacement_cc": 999,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 52,
+      "tank_capacity_gallons": 13.74,
+      "reserve_liters_est": 6.5,
+      "body_type": "hatchback",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 46,
+        "avg": 52,
+        "max": 58
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-tcross-1.0-tsi-at",
+      "brand": "Volkswagen",
+      "model": "T-Cross",
+      "generation_years": "2021-2026",
+      "trim_engine": "1.0L Turbo 200 TSI (114 HP)",
+      "displacement_cc": 999,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Extra",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "suv-compact",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-virtus-1.6-msi-mt",
+      "brand": "Volkswagen",
+      "model": "Virtus",
+      "generation_years": "2018-2023",
+      "trim_engine": "1.6L 16V MSI EA211 (110 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 50,
+      "tank_capacity_gallons": 13.21,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "spicy-arc",
+      "urban_consumption_ref_kmgal": {
+        "min": 37,
+        "avg": 42,
+        "max": 47
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-virtus-1.0-tsi-at",
+      "brand": "Volkswagen",
+      "model": "Virtus",
+      "generation_years": "2023-2026",
+      "trim_engine": "1.0L Turbo 200 TSI 3-Cil (114 HP)",
+      "displacement_cc": 999,
+      "transmission": "AT",
+      "fuel_type": "Gasolina Extra",
+      "tank_capacity_liters": 52,
+      "tank_capacity_gallons": 13.74,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "digital-lcd",
+      "urban_consumption_ref_kmgal": {
+        "min": 38,
+        "avg": 44,
+        "max": 50
+      },
+      "platform_tags": [
+        "DiDi",
+        "Particular"
+      ]
+    },
+    {
+      "id": "volkswagen-voyage-1.6-8v-mt",
+      "brand": "Volkswagen",
+      "model": "Voyage",
+      "generation_years": "2009-2023",
+      "trim_engine": "1.6L EA111 8V (101 HP)",
+      "displacement_cc": 1598,
+      "transmission": "MT",
+      "fuel_type": "Gasolina Corriente",
+      "tank_capacity_liters": 55,
+      "tank_capacity_gallons": 14.53,
+      "reserve_liters_est": 6.5,
+      "body_type": "sedan",
+      "default_gauge_style": "analog-180",
+      "urban_consumption_ref_kmgal": {
+        "min": 36,
+        "avg": 41,
+        "max": 46
+      },
+      "platform_tags": [
+        "DiDi",
+        "InDrive",
+        "Taxi",
+        "Particular"
+      ]
+    }
+  ]
+}

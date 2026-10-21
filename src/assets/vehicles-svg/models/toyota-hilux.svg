@@ -1,0 +1,46 @@
+<svg viewBox="0 0 800 280" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+  <!-- Ground Datum & Contact Shadow (Y=250) -->
+  <line x1="80" y1="250" x2="720" y2="250" stroke="#27272A" stroke-width="3" stroke-linecap="round"/>
+  <line x1="115" y1="250" x2="690" y2="250" stroke="#000000" stroke-width="8" stroke-linecap="round"/>
+
+  <!-- Wheel Arch Cutout Shadows -->
+  <circle cx="220" cy="194" r="58" fill="#09090B"/>
+  <circle cx="600" cy="194" r="58" fill="#09090B"/>
+
+  <!-- Body Silhouette -->
+  <path fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="6" stroke-linejoin="round" d="M 106 192 C 102 166, 110 136, 134 122 C 166 112, 220 108, 260 104 L 336 58 C 354 50, 378 48, 410 48 L 526 50 C 538 56, 542 66, 542 80 L 542 128 L 682 128 L 702 134 C 708 142, 706 172, 698 190 L 656 194 A 56 56 0 0 0 544 194 L 276 194 A 56 56 0 0 0 164 194 Z"/>
+  <!-- Pickup Double-Cab / Bed Separation Seam -->
+  <line x1="538" y1="56" x2="538" y2="194" stroke="#09090B" stroke-width="6"/>
+  <!-- Bed Rail Tie-Down Top Lip -->
+  <line x1="542" y1="126" x2="688" y2="126" stroke="#09090B" stroke-width="5" stroke-linecap="round"/>
+  <!-- Heavy Duty Side Step -->
+  <line x1="284" y1="202" x2="534" y2="202" stroke="#09090B" stroke-width="6" stroke-linecap="round"/>
+  <!-- Roof Highlight Line -->
+  <path d="M 136 122 C 168 112, 222 108, 262 104 L 338 60 L 524 54" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Greenhouse Glass & B-Pillar -->
+  <path fill="#111116" stroke="#09090B" stroke-width="6" stroke-linejoin="round" d="M 276 104 L 344 64 C 358 56, 380 55, 408 55 L 512 56 L 524 104 L 444 104 Z"/>
+  <line x1="432" y1="55" x2="428" y2="104" stroke="#09090B" stroke-width="12"/>
+
+  <!-- Lighting: Front Headlight & Rear Stop -->
+  <path d="M 118 138 L 168 122 L 162 142 Z" fill="#F8FAFC" stroke="#09090B" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M 682 134 L 702 136 L 700 168 L 680 164 Z" fill="#F43F5E" stroke="#09090B" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- Front Wheel (Center: 220, 194) -->
+  <g transform="translate(220, 194)">
+    <circle r="52" fill="#141418" stroke="#09090B" stroke-width="6" stroke-dasharray="14 6"/>
+    <circle r="31" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="-27" y1="0" x2="27" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="0" y1="-27" x2="0" y2="27" stroke="#D4D4D8" stroke-width="5"/>
+    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+  </g>
+
+  <!-- Rear Wheel (Center: 600, 194) -->
+  <g transform="translate(600, 194)">
+    <circle r="52" fill="#141418" stroke="#09090B" stroke-width="6" stroke-dasharray="14 6"/>
+    <circle r="31" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="-27" y1="0" x2="27" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+    <line x1="0" y1="-27" x2="0" y2="27" stroke="#D4D4D8" stroke-width="5"/>
+    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+  </g>
+</svg>

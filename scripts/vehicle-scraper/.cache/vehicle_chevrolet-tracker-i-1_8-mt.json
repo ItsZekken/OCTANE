@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955710,
+  "key": "vehicle_chevrolet-tracker-i-1.8-mt",
+  "data": {
+    "id": "chevrolet-tracker-i-1.8-mt",
+    "brand": "Chevrolet",
+    "model": "Tracker",
+    "generation_years": "2013-2020",
+    "trim_engine": "1.8L ECOTEC DOHC 16V (138 HP)",
+    "displacement_cc": 1796,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 53,
+    "tank_capacity_gallons": 14,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 31,
+      "avg": 35,
+      "max": 40
+    },
+    "platform_tags": [
+      "DiDi",
+      "Particular"
+    ]
+  }
+}

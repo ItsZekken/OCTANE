@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955603,
+  "key": "vehicle_kia-cerato-forte-1.6-mt",
+  "data": {
+    "id": "kia-cerato-forte-1.6-mt",
+    "brand": "Kia",
+    "model": "Cerato Forte",
+    "generation_years": "2010-2014",
+    "trim_engine": "1.6L Gamma CVVT (122 HP)",
+    "displacement_cc": 1591,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 52,
+    "tank_capacity_gallons": 13.74,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 35,
+      "avg": 39,
+      "max": 44
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

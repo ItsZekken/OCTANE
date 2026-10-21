@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955573,
+  "key": "vehicle_kia-ekotaxi-1.0-mt",
+  "data": {
+    "id": "kia-ekotaxi-1.0-mt",
+    "brand": "Kia",
+    "model": "Ekotaxi",
+    "generation_years": "2011-2018",
+    "trim_engine": "1.0L MPI 3-Cil (68 HP)",
+    "displacement_cc": 998,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "sight-glass",
+    "urban_consumption_ref_kmgal": {
+      "min": 45,
+      "avg": 50,
+      "max": 56
+    },
+    "platform_tags": [
+      "Taxi",
+      "Urbano"
+    ]
+  }
+}

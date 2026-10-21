@@ -1,0 +1,30 @@
+{
+  "timestamp": 1792516955565,
+  "key": "vehicle_kia-picanto-ion-1.0-mt",
+  "data": {
+    "id": "kia-picanto-ion-1.0-mt",
+    "brand": "Kia",
+    "model": "Picanto",
+    "generation_years": "2011-2017",
+    "trim_engine": "1.0L MPI 3-Cil (68 HP)",
+    "displacement_cc": 998,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 46,
+      "avg": 52,
+      "max": 58
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano",
+      "Taxi"
+    ]
+  }
+}

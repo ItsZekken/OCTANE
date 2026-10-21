@@ -1,0 +1,30 @@
+{
+  "timestamp": 1792516955860,
+  "key": "vehicle_hyundai-accent-vision-1.4-mt",
+  "data": {
+    "id": "hyundai-accent-vision-1.4-mt",
+    "brand": "Hyundai",
+    "model": "Accent Vision",
+    "generation_years": "2006-2011",
+    "trim_engine": "1.4L Alpha II DOHC 16V (95 HP)",
+    "displacement_cc": 1399,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 45,
+    "tank_capacity_gallons": 11.89,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 36,
+      "avg": 41,
+      "max": 46
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Taxi",
+      "Particular"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955688,
+  "key": "vehicle_chevrolet-sail-hatch-1.4-mt",
+  "data": {
+    "id": "chevrolet-sail-hatch-1.4-mt",
+    "brand": "Chevrolet",
+    "model": "Sail Hatchback",
+    "generation_years": "2013-2020",
+    "trim_engine": "1.4L DOHC 16V VGIS (102 HP)",
+    "displacement_cc": 1399,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 42,
+    "tank_capacity_gallons": 11.1,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 38,
+      "avg": 43,
+      "max": 48
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

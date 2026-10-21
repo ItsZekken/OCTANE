@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955918,
+  "key": "vehicle_chery-qq-0.8-mt",
+  "data": {
+    "id": "chery-qq-0.8-mt",
+    "brand": "Chery",
+    "model": "QQ",
+    "generation_years": "2006-2015",
+    "trim_engine": "0.8L SQR372 3-Cil (51 HP)",
+    "displacement_cc": 812,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 50,
+      "avg": 57,
+      "max": 64
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

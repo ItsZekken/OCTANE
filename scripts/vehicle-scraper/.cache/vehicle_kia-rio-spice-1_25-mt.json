@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955591,
+  "key": "vehicle_kia-rio-spice-1.25-mt",
+  "data": {
+    "id": "kia-rio-spice-1.25-mt",
+    "brand": "Kia",
+    "model": "Rio Spice",
+    "generation_years": "2012-2017",
+    "trim_engine": "1.25L Kappa MPI 4-Cil (86 HP)",
+    "displacement_cc": 1248,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 43,
+    "tank_capacity_gallons": 11.36,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 40,
+      "avg": 45,
+      "max": 50
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}

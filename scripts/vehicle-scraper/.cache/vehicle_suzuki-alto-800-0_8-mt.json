@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955763,
+  "key": "vehicle_suzuki-alto-800-0.8-mt",
+  "data": {
+    "id": "suzuki-alto-800-0.8-mt",
+    "brand": "Suzuki",
+    "model": "Alto 800",
+    "generation_years": "2013-2021",
+    "trim_engine": "0.8L F8D 3-Cil (47 HP)",
+    "displacement_cc": 796,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "sight-glass",
+    "urban_consumption_ref_kmgal": {
+      "min": 54,
+      "avg": 62,
+      "max": 70
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

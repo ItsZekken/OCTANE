@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955668,
+  "key": "vehicle_renault-duster-ii-1.3t-mt-4x4",
+  "data": {
+    "id": "renault-duster-ii-1.3t-mt-4x4",
+    "brand": "Renault",
+    "model": "Duster",
+    "generation_years": "2021-2026",
+    "trim_engine": "1.3L Turbo TCe H5Ht (154 HP)",
+    "displacement_cc": 1332,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Extra",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 31,
+      "avg": 35,
+      "max": 40
+    },
+    "platform_tags": [
+      "Particular",
+      "4x4"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955739,
+  "key": "vehicle_mazda-3-bk-2.0-mt",
+  "data": {
+    "id": "mazda-3-bk-2.0-mt",
+    "brand": "Mazda",
+    "model": "Mazda 3",
+    "generation_years": "2005-2009",
+    "trim_engine": "2.0L LF-DE 16V (148 HP)",
+    "displacement_cc": 1999,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 55,
+    "tank_capacity_gallons": 14.53,
+    "reserve_liters_est": 6.5,
+    "body_type": "sedan",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 30,
+      "avg": 34,
+      "max": 39
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "timestamp": 1792516955613,
+  "key": "vehicle_kia-seltos-1.6-at",
+  "data": {
+    "id": "kia-seltos-1.6-at",
+    "brand": "Kia",
+    "model": "Seltos",
+    "generation_years": "2020-2024",
+    "trim_engine": "1.6L Gamma MPI 4-Cil (121 HP)",
+    "displacement_cc": 1591,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 50,
+    "tank_capacity_gallons": 13.21,
+    "reserve_liters_est": 6.5,
+    "body_type": "suv-compact",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 34,
+      "avg": 38,
+      "max": 43
+    },
+    "platform_tags": [
+      "Particular"
+    ]
+  }
+}

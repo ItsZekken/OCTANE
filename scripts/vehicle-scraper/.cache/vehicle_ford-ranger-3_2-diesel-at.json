@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955916,
+  "key": "vehicle_ford-ranger-3.2-diesel-at",
+  "data": {
+    "id": "ford-ranger-3.2-diesel-at",
+    "brand": "Ford",
+    "model": "Ranger",
+    "generation_years": "2012-2023",
+    "trim_engine": "3.2L Duratorq TDCi 5-Cil (197 HP)",
+    "displacement_cc": 3198,
+    "transmission": "AT",
+    "fuel_type": "Diesel",
+    "tank_capacity_liters": 80,
+    "tank_capacity_gallons": 21.13,
+    "reserve_liters_est": 10,
+    "body_type": "pickup",
+    "default_gauge_style": "analog-180",
+    "urban_consumption_ref_kmgal": {
+      "min": 28,
+      "avg": 33,
+      "max": 38
+    },
+    "platform_tags": [
+      "Trabajo",
+      "Particular",
+      "4x4"
+    ]
+  }
+}

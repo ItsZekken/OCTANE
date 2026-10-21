@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955654,
+  "key": "vehicle_renault-kwid-1.0-mt",
+  "data": {
+    "id": "renault-kwid-1.0-mt",
+    "brand": "Renault",
+    "model": "Kwid",
+    "generation_years": "2019-2022",
+    "trim_engine": "1.0L 12V SCe 3-Cil (66 HP)",
+    "displacement_cc": 999,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 38,
+    "tank_capacity_gallons": 10.04,
+    "reserve_liters_est": 5.5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "digital-lcd",
+    "urban_consumption_ref_kmgal": {
+      "min": 48,
+      "avg": 55,
+      "max": 62
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

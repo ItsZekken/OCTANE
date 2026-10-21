@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955847,
+  "key": "vehicle_hyundai-atos-prime-1.1-mt",
+  "data": {
+    "id": "hyundai-atos-prime-1.1-mt",
+    "brand": "Hyundai",
+    "model": "Atos Prime",
+    "generation_years": "2005-2012",
+    "trim_engine": "1.1L Epsilon G4HG 12V (63 HP)",
+    "displacement_cc": 1086,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "sight-glass",
+    "urban_consumption_ref_kmgal": {
+      "min": 46,
+      "avg": 52,
+      "max": 58
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Urbano"
+    ]
+  }
+}

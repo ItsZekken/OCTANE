@@ -1,0 +1,28 @@
+{
+  "timestamp": 1792516955582,
+  "key": "vehicle_kia-picanto-gtline-1.25-at",
+  "data": {
+    "id": "kia-picanto-gtline-1.25-at",
+    "brand": "Kia",
+    "model": "Picanto GT-Line",
+    "generation_years": "2018-2023",
+    "trim_engine": "1.25L Kappa II MPI 4-Cil (83 HP)",
+    "displacement_cc": 1248,
+    "transmission": "AT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 35,
+    "tank_capacity_gallons": 9.25,
+    "reserve_liters_est": 5,
+    "body_type": "hatchback-micro",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 38,
+      "avg": 43,
+      "max": 48
+    },
+    "platform_tags": [
+      "Particular",
+      "Urbano"
+    ]
+  }
+}

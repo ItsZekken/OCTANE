@@ -1,0 +1,29 @@
+{
+  "timestamp": 1792516955774,
+  "key": "vehicle_suzuki-swift-dzire-iii-1.2-mt",
+  "data": {
+    "id": "suzuki-swift-dzire-iii-1.2-mt",
+    "brand": "Suzuki",
+    "model": "Dzire",
+    "generation_years": "2018-2024",
+    "trim_engine": "1.2L K12M 4-Cil (82 HP)",
+    "displacement_cc": 1197,
+    "transmission": "MT",
+    "fuel_type": "Gasolina Corriente",
+    "tank_capacity_liters": 37,
+    "tank_capacity_gallons": 9.77,
+    "reserve_liters_est": 5.5,
+    "body_type": "sedan",
+    "default_gauge_style": "spicy-arc",
+    "urban_consumption_ref_kmgal": {
+      "min": 44,
+      "avg": 50,
+      "max": 56
+    },
+    "platform_tags": [
+      "DiDi",
+      "InDrive",
+      "Particular"
+    ]
+  }
+}
