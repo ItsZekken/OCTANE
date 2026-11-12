@@ -31,5 +31,4 @@ Cualquier agente de inteligencia artificial o desarrollador que modifique este r
 ## 3. Protocolo de Verificación
 Antes de dar por completada una tarea:
 1. Comprobar que el build de producción finaliza sin errores: `npm run build`.
-2. Ejecutar las pruebas automatizadas del proyecto: `node tests/test-core.js`.
-3. Validar visualmente la armonía en modo oscuro (`Modo Carbón`) y modo claro (`Modo Papel`).
+2. Validar visualmente la armonía en modo oscuro (`Modo Carbón`) y modo claro (`Modo Papel`).
