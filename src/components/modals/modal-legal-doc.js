@@ -13,6 +13,7 @@ import { confirmDialog } from '../dialogs/app-dialog.js';
 import { playHorologyTick, showToast } from '../../core/state.js';
 import { saveLegalDoc, deleteLegalDoc } from '../../core/db-local.js';
 import { calculateActiveAlerts } from '../../core/alerts-engine.js';
+import { triggerCloudSync } from '../../core/firebase-sync.js';
 import { parseIntegerMetric, formatThousandsLive } from '../../core/number-utils.js';
 
 let modalContainer = null;
