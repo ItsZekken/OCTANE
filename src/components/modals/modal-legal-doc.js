@@ -12,9 +12,45 @@
 import { playHorologyTick, showToast } from '../../core/state.js';
 import { saveLegalDoc, deleteLegalDoc } from '../../core/db-local.js';
 import { calculateActiveAlerts } from '../../core/alerts-engine.js';
+import { triggerCloudSync } from '../../core/firebase-sync.js';
 
 let modalContainer = null;
 let currentDoc = null;
+
+const DOC_TYPE_DEFAULT_TITLES = Object.freeze({
+  soat: 'SOAT',
+  tecnomecanica: 'Tecnomecánica',
+  impuesto: 'Impuesto Vehicular',
+  poliza: 'Póliza Todo Riesgo',
+  otro: 'Otro Documento',
+});
+
+function normalizeDocType(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function resolveCanonicalDocType(value) {
+  const norm = normalizeDocType(value);
+  if (norm === 'soat') return 'soat';
+  if (norm.includes('tecnomec')) return 'tecnomecanica';
+  if (norm.includes('impuesto')) return 'impuesto';
+  if (norm.includes('poliza')) return 'poliza';
+  if (norm === 'otro') return 'otro';
+  return 'otro';
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 /**
  * Initializes the modal root container in the DOM.
@@ -76,8 +112,8 @@ function renderModal() {
 
   const isEdit = Boolean(currentDoc && currentDoc.id && !currentDoc.id.startsWith('template_'));
   const rawType = currentDoc?.docType || currentDoc?.defaultDocType || 'soat';
-  const docType = rawType.toUpperCase();
-  const name = currentDoc?.name || currentDoc?.title || currentDoc?.defaultTitle || (isEdit ? '' : docType);
+  const canonicalType = resolveCanonicalDocType(rawType);
+  const name = currentDoc?.name || currentDoc?.title || currentDoc?.defaultTitle || (isEdit ? '' : DOC_TYPE_DEFAULT_TITLES[canonicalType]);
   const docNumber = currentDoc?.docNumber || '';
   const expiryDate = currentDoc?.expiryDate || '';
   const costCop = currentDoc?.costCop || '';
@@ -116,11 +152,11 @@ function renderModal() {
               id="legal-input-type" 
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 text-[var(--text-primary)] text-xs font-mono uppercase outline-none cursor-pointer"
             >
-              <option value="SOAT" ${docType === 'SOAT' ? 'selected' : ''}>SOAT</option>
-              <option value="TECNOMECÁNICA" ${docType === 'TECNOMECÁNICA' ? 'selected' : ''}>TECNOMECÁNICA</option>
-              <option value="IMPUESTO" ${docType.includes('IMPUESTO') ? 'selected' : ''}>IMPUESTO VEHICULAR</option>
-              <option value="POLIZA" ${docType.includes('POLIZA') || docType.includes('PÓLIZA') ? 'selected' : ''}>PÓLIZA TODO RIESGO</option>
-              <option value="OTRO" ${docType === 'OTRO' ? 'selected' : ''}>OTRO DOCUMENTO</option>
+              <option value="soat" ${canonicalType === 'soat' ? 'selected' : ''}>SOAT</option>
+              <option value="tecnomecanica" ${canonicalType === 'tecnomecanica' ? 'selected' : ''}>TECNOMECÁNICA</option>
+              <option value="impuesto" ${canonicalType === 'impuesto' ? 'selected' : ''}>IMPUESTO VEHICULAR</option>
+              <option value="poliza" ${canonicalType === 'poliza' ? 'selected' : ''}>PÓLIZA TODO RIESGO</option>
+              <option value="otro" ${canonicalType === 'otro' ? 'selected' : ''}>OTRO DOCUMENTO</option>
             </select>
           </div>
 
@@ -131,7 +167,7 @@ function renderModal() {
             <input 
               id="legal-input-name" 
               type="text" 
-              value="${name}" 
+              value="${escapeHtml(name)}" 
               placeholder="—" 
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 text-[var(--text-primary)] text-xs font-mono uppercase outline-none placeholder:text-[var(--text-muted)]"
             />
@@ -147,7 +183,7 @@ function renderModal() {
             <input 
               id="legal-input-expiry" 
               type="date" 
-              value="${expiryDate}" 
+              value="${escapeHtml(expiryDate)}" 
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-1.5 text-[var(--text-primary)] text-xs font-mono outline-none cursor-pointer"
             />
           </div>
@@ -159,7 +195,7 @@ function renderModal() {
             <input 
               id="legal-input-number" 
               type="text" 
-              value="${docNumber}" 
+              value="${escapeHtml(docNumber)}" 
               placeholder="—" 
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 text-[var(--text-primary)] text-xs font-mono uppercase outline-none placeholder:text-[var(--text-muted)] tabular-nums"
             />
@@ -175,7 +211,7 @@ function renderModal() {
             <input 
               id="legal-input-cost" 
               type="number" 
-              value="${costCop}" 
+              value="${escapeHtml(costCop)}" 
               placeholder="0" 
               step="1000"
               min="0"
@@ -190,7 +226,7 @@ function renderModal() {
             <input 
               id="legal-input-entity" 
               type="text" 
-              value="${entity}" 
+              value="${escapeHtml(entity)}" 
               placeholder="—" 
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 text-[var(--text-primary)] text-xs font-mono uppercase outline-none placeholder:text-[var(--text-muted)]"
             />
@@ -205,7 +241,7 @@ function renderModal() {
           <input 
             id="legal-input-notes" 
             type="text" 
-            value="${notes}" 
+            value="${escapeHtml(notes)}" 
             placeholder="—" 
             class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 text-[var(--text-primary)] text-xs font-mono uppercase outline-none placeholder:text-[var(--text-muted)]"
           />
@@ -249,13 +285,15 @@ function renderModal() {
     </div>
   `;
 
-  bindModalEvents();
+  bindModalEvents(isEdit, canonicalType);
 }
 
 /**
  * Binds interactive events in modal.
+ * @param {boolean} isEdit
+ * @param {string} initialType
  */
-function bindModalEvents() {
+function bindModalEvents(isEdit, initialType) {
   if (!modalContainer) return;
 
   const closeBtn = modalContainer.querySelector('#legal-close-btn');
@@ -269,11 +307,19 @@ function bindModalEvents() {
   if (closeBtn) closeBtn.onclick = close;
   if (cancelBtn) cancelBtn.onclick = close;
 
+  let lastAutoName = DOC_TYPE_DEFAULT_TITLES[initialType] || '';
+
   if (typeSelect && nameInput) {
     typeSelect.onchange = (e) => {
-      const val = e.target.value;
-      if (!nameInput.value || nameInput.value === 'SOAT' || nameInput.value === 'TECNOMECÁNICA' || nameInput.value === 'IMPUESTO' || nameInput.value === 'POLIZA' || nameInput.value === 'OTRO') {
-        nameInput.value = val === 'POLIZA' ? 'PÓLIZA TODO RIESGO' : (val === 'IMPUESTO' ? 'IMPUESTO VEHICULAR' : val);
+      const val = resolveCanonicalDocType(e.target.value);
+      const currentVal = nameInput.value.trim();
+      const isKnownDefault = Object.values(DOC_TYPE_DEFAULT_TITLES).some(
+        (t) => normalizeDocType(t) === normalizeDocType(currentVal)
+      );
+      if (!currentVal || currentVal === lastAutoName || isKnownDefault) {
+        const nextDefault = DOC_TYPE_DEFAULT_TITLES[val] || '';
+        nameInput.value = nextDefault;
+        lastAutoName = nextDefault;
       }
     };
   }
@@ -281,11 +327,12 @@ function bindModalEvents() {
   // Delete Action
   if (deleteBtn && currentDoc?.id) {
     deleteBtn.onclick = async () => {
-      const confirmed = window.confirm(`¿ELIMINAR ESTE DOCUMENTO?`);
+      const confirmed = window.confirm(`¿ELIMINAR REGISTRO DE "${(currentDoc.name || currentDoc.title || 'DOCUMENTO').toUpperCase()}"?`);
       if (!confirmed) return;
 
       try {
         await deleteLegalDoc(currentDoc.id);
+        triggerCloudSync();
         playHorologyTick(600, 0.03, 0.06);
         showToast('DOCUMENTO ELIMINADO');
         closeLegalDocModal();
@@ -301,8 +348,8 @@ function bindModalEvents() {
   // Save Action
   if (saveBtn) {
     saveBtn.onclick = async () => {
-      const type = typeSelect ? typeSelect.value : 'SOAT';
-      const name = nameInput?.value?.trim() || type;
+      const type = resolveCanonicalDocType(typeSelect ? typeSelect.value : 'soat');
+      const name = nameInput?.value?.trim() || DOC_TYPE_DEFAULT_TITLES[type] || 'Documento';
       const expiryDate = modalContainer.querySelector('#legal-input-expiry')?.value;
       const docNumber = modalContainer.querySelector('#legal-input-number')?.value?.trim() || '';
       const costCop = Number(modalContainer.querySelector('#legal-input-cost')?.value) || 0;
@@ -317,13 +364,13 @@ function bindModalEvents() {
       saveBtn.disabled = true;
       saveBtn.classList.add('opacity-70', 'pointer-events-none');
 
-      const docId = currentDoc?.id && !currentDoc.id.startsWith('template_')
+      const docId = isEdit && currentDoc?.id && !currentDoc.id.startsWith('template_')
         ? currentDoc.id
-        : `doc_${type.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        : `doc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
       const docToSave = {
         id: docId,
-        docType: type.toLowerCase(),
+        docType: type,
         name: name,
         title: name,
         docNumber: docNumber,
@@ -336,6 +383,7 @@ function bindModalEvents() {
 
       try {
         await saveLegalDoc(docToSave);
+        triggerCloudSync();
         playHorologyTick(1800, 0.02, 0.05);
         showToast('DOCUMENTO GUARDADO');
         closeLegalDocModal();

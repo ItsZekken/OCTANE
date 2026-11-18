@@ -33,7 +33,7 @@ import { openRideEntryModal, closeRideEntryModal, initRideEntryModal } from './c
 import { refreshAlerts, initAlertsEngine } from './core/alerts-engine.js';
 import { renderCockpit, destroyCockpit, refreshCockpit } from './views/view-cockpit.js';
 import { renderClusterView, destroyClusterView } from './views/view-cluster.js';
-import { renderGloveboxView } from './views/view-glovebox.js';
+import { renderGloveboxView, destroyGloveboxView } from './views/view-glovebox.js';
 import { renderRidesView } from './views/view-rides.js';
 import { renderSettingsView, destroySettingsView } from './views/view-settings.js';
 
@@ -77,6 +77,12 @@ export async function navigateTo(viewId) {
   } else if (currentActiveView === 'cluster' && viewId !== 'cluster') {
     try {
       destroyClusterView();
+    } catch (err) {
+      // Defensive cleanup
+    }
+  } else if (currentActiveView === 'glovebox' && viewId !== 'glovebox') {
+    try {
+      destroyGloveboxView();
     } catch (err) {
       // Defensive cleanup
     }

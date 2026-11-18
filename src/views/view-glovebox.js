@@ -20,11 +20,30 @@
 import { playHorologyTick, showToast } from '../core/state.js';
 import { getLegalDocs, deleteLegalDoc } from '../core/db-local.js';
 import { evaluateLegalDoc, calculateActiveAlerts } from '../core/alerts-engine.js';
+import { triggerCloudSync } from '../core/firebase-sync.js';
 import { openLegalDocModal } from '../components/modals/modal-legal-doc.js';
 
 let currentContainer = null;
 let boundListeners = [];
 let openAccordionId = null;
+let renderToken = 0;
+
+function normalizeDocType(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 const MONTH_NAMES = Object.freeze([
     'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
@@ -102,7 +121,7 @@ async function copyToClipboard(text) {
 
 /**
  * Loads documents from storage and builds the canonical list.
- * Guarantees SOAT, Tecnomecánica, and Impuesto Vehicular + Custom docs.
+ * Guarantees SOAT, Tecnomecánica, and Impuesto Vehicular + all additional/custom docs.
  * @returns {Promise<Array<Object>>}
  */
 async function loadLegalGridItems() {
@@ -120,12 +139,25 @@ async function loadLegalGridItems() {
         { docType: 'impuesto', defaultTitle: 'Impuesto Vehicular' },
     ];
 
+    const matchedIds = new Set();
+
     const matchedDefaultDocs = defaultTemplates.map((template) => {
-        const found = rawDocs.find(d => 
-            d.docType?.toLowerCase() === template.docType.toLowerCase() || 
-            d.id === `doc_${template.docType}` || 
-            d.id === template.docType
-        );
+        const targetType = normalizeDocType(template.docType);
+        const found = rawDocs.find((d) => {
+            if (matchedIds.has(d.id)) return false;
+            const dType = normalizeDocType(d.docType);
+            const dId = normalizeDocType(d.id);
+            return (
+                dType === targetType ||
+                (targetType === 'tecnomecanica' && dType.includes('tecnomec')) ||
+                dId === `doc_${targetType}` ||
+                dId === targetType ||
+                (targetType === 'tecnomecanica' && dId === 'doc_tecnomec_nica')
+            );
+        });
+        if (found?.id) {
+            matchedIds.add(found.id);
+        }
         return {
             isDefault: true,
             docType: template.docType,
@@ -135,14 +167,10 @@ async function loadLegalGridItems() {
     });
 
     const customDocs = rawDocs
-        .filter(d => !defaultTemplates.some(t => 
-            d.docType?.toLowerCase() === t.docType.toLowerCase() || 
-            d.id === `doc_${t.docType}` || 
-            d.id === t.docType
-        ))
+        .filter((d) => !matchedIds.has(d.id))
         .map((doc) => ({
             isDefault: false,
-            docType: doc.docType || 'otro',
+            docType: normalizeDocType(doc.docType) || 'otro',
             title: doc.name || doc.title || 'Documento',
             doc,
         }));
@@ -163,15 +191,10 @@ export async function renderGloveboxView(container) {
 
     await renderGlovebox();
 
-    const onSaved = () => renderGlovebox();
-    const onDeleted = () => renderGlovebox();
-    window.addEventListener('octane:legal-doc-saved', onSaved);
-    window.addEventListener('octane:legal-doc-deleted', onDeleted);
-    window.addEventListener('octane:legal-docs-updated', onSaved);
+    const onUpdated = () => renderGlovebox();
+    window.addEventListener('octane:legal-docs-updated', onUpdated);
     boundListeners.push(
-        () => window.removeEventListener('octane:legal-doc-saved', onSaved),
-        () => window.removeEventListener('octane:legal-doc-deleted', onDeleted),
-        () => window.removeEventListener('octane:legal-docs-updated', onSaved)
+        () => window.removeEventListener('octane:legal-docs-updated', onUpdated)
     );
 }
 
@@ -180,8 +203,11 @@ export async function renderGloveboxView(container) {
  */
 async function renderGlovebox() {
     if (!currentContainer) return;
+    const token = ++renderToken;
 
     const items = await loadLegalGridItems();
+    if (!currentContainer || token !== renderToken) return;
+
     const allDocs = items.map(i => i.doc).filter(Boolean);
     const alerts = calculateActiveAlerts({ legalDocs: allDocs });
 
@@ -271,9 +297,15 @@ function renderDocumentRowHtml(item) {
     const entity = doc?.entity || '';
     const formattedCost = doc ? formatCostCop(doc.costCop) : '—';
     const notes = doc?.notes || '';
+    const safeTitle = escapeHtml(item.title);
+    const safeDocId = escapeHtml(docId);
+    const safeDocType = escapeHtml(item.docType);
+    const safeDocNumber = escapeHtml(docNumber);
+    const safeEntity = escapeHtml(entity);
+    const safeNotes = escapeHtml(notes);
 
     return `
-        <div class="glovebox-card flat-cell bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)]/30 transition-all border border-[var(--line-hair)] overflow-hidden" data-id="${docId}" data-doctype="${item.docType}">
+        <div class="glovebox-card flat-cell bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)]/30 transition-all border border-[var(--line-hair)] overflow-hidden" data-id="${safeDocId}" data-doctype="${safeDocType}">
             
             <!-- Main Horizontal Row -->
             <div class="card-clickable-header p-4 sm:p-5 flex items-center justify-between gap-4 cursor-pointer">
@@ -284,10 +316,10 @@ function renderDocumentRowHtml(item) {
                     
                     <div class="flex flex-col min-w-0">
                         <span class="font-sans font-medium text-base sm:text-lg text-[var(--text-primary)] leading-tight truncate">
-                            ${item.title}
+                            ${safeTitle}
                         </span>
                         <span class="font-mono text-[11px] text-[var(--text-secondary)] mt-1 tracking-wider tabular-nums truncate">
-                            ${formattedVence}
+                            ${escapeHtml(formattedVence)}
                         </span>
                     </div>
                 </div>
@@ -313,8 +345,8 @@ function renderDocumentRowHtml(item) {
                         <button 
                             type="button" 
                             class="btn-configure-action flat-pill px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--accent-amber)] hover:border-[var(--accent-amber)] hover:bg-[var(--accent-amber)]/10 transition-colors cursor-pointer"
-                            data-doctype="${item.docType}"
-                            data-title="${item.title}"
+                            data-doctype="${safeDocType}"
+                            data-title="${safeTitle}"
                         >
                             + CONFIGURAR
                         </button>
@@ -334,12 +366,12 @@ function renderDocumentRowHtml(item) {
                         <div>
                             <span class="text-[9px] uppercase tracking-wider text-[var(--text-secondary)] block mb-1">N° PÓLIZA / REFERENCIA</span>
                             <div class="flex items-center gap-2">
-                                <span class="text-[var(--text-primary)] font-medium tabular-nums truncate">${docNumber || '—'}</span>
+                                <span class="text-[var(--text-primary)] font-medium tabular-nums truncate">${safeDocNumber || '—'}</span>
                                 ${docNumber ? `
                                     <button 
                                         type="button" 
                                         class="btn-copy-ref text-[10px] text-[var(--accent-amber)] hover:underline uppercase tracking-wider cursor-pointer shrink-0" 
-                                        data-ref="${docNumber}"
+                                        data-ref="${safeDocNumber}"
                                         title="Copiar póliza"
                                     >
                                         [COPIAR]
@@ -351,19 +383,19 @@ function renderDocumentRowHtml(item) {
                         <!-- Col 2: Aseguradora -->
                         <div>
                             <span class="text-[9px] uppercase tracking-wider text-[var(--text-secondary)] block mb-1">ENTIDAD / ASEGURADORA</span>
-                            <span class="text-[var(--text-primary)] font-medium truncate block">${entity || '—'}</span>
+                            <span class="text-[var(--text-primary)] font-medium truncate block">${safeEntity || '—'}</span>
                         </div>
 
                         <!-- Col 3: Costo -->
                         <div>
                             <span class="text-[9px] uppercase tracking-wider text-[var(--text-secondary)] block mb-1">VALOR PAGADO</span>
-                            <span class="text-[var(--text-primary)] font-medium tabular-nums block">${formattedCost}</span>
+                            <span class="text-[var(--text-primary)] font-medium tabular-nums block">${escapeHtml(formattedCost)}</span>
                         </div>
 
                         <!-- Col 4: Notas -->
                         <div>
                             <span class="text-[9px] uppercase tracking-wider text-[var(--text-secondary)] block mb-1">NOTAS</span>
-                            <span class="text-[var(--text-secondary)] truncate block" title="${notes}">${notes || '—'}</span>
+                            <span class="text-[var(--text-secondary)] truncate block" title="${safeNotes}">${safeNotes || '—'}</span>
                         </div>
 
                     </div>
@@ -373,8 +405,8 @@ function renderDocumentRowHtml(item) {
                         <button 
                             type="button" 
                             class="btn-delete-action flat-pill px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--accent-crimson)] hover:border-[var(--accent-crimson)] transition-colors cursor-pointer"
-                            data-id="${doc.id}"
-                            data-title="${item.title}"
+                            data-id="${escapeHtml(doc.id)}"
+                            data-title="${safeTitle}"
                         >
                             ELIMINAR
                         </button>
@@ -382,7 +414,7 @@ function renderDocumentRowHtml(item) {
                         <button 
                             type="button" 
                             class="btn-edit-action px-3 py-1.5 bg-[var(--text-primary)] text-[var(--bg-void)] font-mono text-[10px] uppercase tracking-wider font-semibold hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1"
-                            data-id="${doc.id}"
+                            data-id="${escapeHtml(doc.id)}"
                         >
                             <span>✎</span> EDITAR DOCUMENTO
                         </button>
@@ -493,12 +525,12 @@ function bindCardInteractions() {
 
             try {
                 await deleteLegalDoc(docId);
+                triggerCloudSync();
                 playHorologyTick(1100, 0.02, 0.03);
                 showToast('DOCUMENTO ELIMINADO');
                 if (openAccordionId === docId) openAccordionId = null;
                 window.dispatchEvent(new CustomEvent('octane:legal-doc-deleted'));
                 window.dispatchEvent(new CustomEvent('octane:legal-docs-updated'));
-                renderGlovebox();
             } catch (err) {
                 console.error('[OCTANE] Error deleting legal doc:', err);
             }
