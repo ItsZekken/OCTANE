@@ -19,6 +19,11 @@ import {
 } from './telemetry-engine.js';
 import { buildRouteGlyph, getGpsConfig } from './iopgps-sync.js';
 import { decomposeFuelCost } from './fuel-physics-engine.js';
+import {
+    detectSemanticPlaces,
+    resolvePlaceLabel,
+    computeParkingSentinel
+} from './geospatial-intelligence.js';
 
 const MONTHS_ES = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
 
@@ -758,7 +763,11 @@ export function computeCockpitGpsSummary(vehicleProfile = {}, model = null, now 
         }
     }
 
-    // Most recent cached trip with optional SVG route glyph
+    // Passive geospatial intelligence: semantic places + parking sentinel
+    const semanticPlaces = detectSemanticPlaces(tripsByDate, vehicleProfile?.learnedGasStations || []);
+    const parkingSentinel = computeParkingSentinel(live, gpsCache.voltageHistory || [], semanticPlaces, now.getTime());
+
+    // Most recent cached trip with optional SVG route glyph & resolved place labels
     let latestTrip = null;
     const tripDatesDesc = Object.keys(tripsByDate).sort().reverse();
     for (const d of tripDatesDesc) {
@@ -767,8 +776,15 @@ export function computeCockpitGpsSummary(vehicleProfile = {}, model = null, now 
             const sortedDay = [...list].sort((a, b) => (Number(b.startTimeMs) || 0) - (Number(a.startTimeMs) || 0));
             const t = sortedDay[0];
             if (t) {
+                const track = Array.isArray(t.trackPoints) ? t.trackPoints : [];
+                const startLat = t.startLat ?? track[0]?.lat;
+                const startLng = t.startLng ?? track[0]?.lng;
+                const endLat = t.endLat ?? track[track.length - 1]?.lat;
+                const endLng = t.endLng ?? track[track.length - 1]?.lng;
                 latestTrip = {
                     ...t,
+                    startLabel: resolvePlaceLabel(startLat, startLng, t.startAddress || 'Origen', semanticPlaces),
+                    endLabel: resolvePlaceLabel(endLat, endLng, t.endAddress || 'Destino', semanticPlaces),
                     dateLabel: formatDateShort(t.date || d),
                     routeGlyph: buildRouteGlyph(t.trackPoints || [], 76, 26, 3)
                 };
@@ -807,6 +823,8 @@ export function computeCockpitGpsSummary(vehicleProfile = {}, model = null, now 
         batteryTone,
         activePhys,
         physScopeLabel,
-        latestTrip
+        latestTrip,
+        semanticPlaces,
+        parkingSentinel
     };
 }

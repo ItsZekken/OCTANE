@@ -35,6 +35,7 @@ import { openRideEntryModal, closeRideEntryModal, initRideEntryModal } from './c
 import { closeMovementDetailModal, initMovementDetailModal } from './components/modals/modal-movement-detail.js';
 import { openTelemetryDetailModal, closeTelemetryDetailModal, initTelemetryDetailModal } from './components/modals/modal-telemetry-detail.js';
 import { openDiagnosticModal, closeDiagnosticModal, initDiagnosticModal } from './components/modals/modal-diagnostic.js';
+import { closeGpsIntelligenceModal, initGpsIntelligenceModal } from './components/modals/modal-gps-intelligence.js';
 import { initViewportManager } from './core/viewport-manager.js';
 import { initMicroTooltips } from './components/micro-tooltip.js';
 import { refreshAlerts, initAlertsEngine } from './core/alerts-engine.js';
@@ -255,6 +256,7 @@ async function bootstrapApp() {
   initMovementDetailModal();
   initTelemetryDetailModal();
   initDiagnosticModal();
+  initGpsIntelligenceModal();
   initAlertsEngine();
   initMicroTooltips();
   initViewportManager();
@@ -411,6 +413,7 @@ function setupGlobalListeners() {
     { id: 'octane-movement-detail-modal', close: () => closeMovementDetailModal() },
     { id: 'octane-telemetry-detail-modal', close: () => closeTelemetryDetailModal() },
     { id: 'modal-diagnostic-root', close: () => closeDiagnosticModal() },
+    { id: 'octane-gps-intelligence-modal', close: () => closeGpsIntelligenceModal() },
     { id: 'octane-maintenance-modal-container', close: () => closeMaintenanceModal() },
     { id: 'octane-legal-doc-modal-container', close: () => closeLegalDocModal() },
     { id: 'octane-onboarding-modal-container', close: () => closeOnboardingModal() },

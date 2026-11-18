@@ -36,7 +36,25 @@ import {
   calibrateVehicleFuelModel
 } from '../src/core/fuel-physics-engine.js';
 import { reconcileTripsAgainstClosedCycles, groupTripsByDay } from '../src/core/iopgps-sync.js';
-import { computeMonthlyFuelMetrics } from '../src/core/cockpit-analytics.js';
+import { computeMonthlyFuelMetrics, computeCockpitGpsSummary } from '../src/core/cockpit-analytics.js';
+import {
+  VOLTAGE_HISTORY_MAX,
+  recordVoltageSample,
+  analyzeElectricalHealth,
+  computePhysicalWear
+} from '../src/core/vehicle-health-engine.js';
+import {
+  calculateWearDialTelemetry,
+  renderWearDialCard
+} from '../src/components/cluster/wear-dial-card.js';
+import { calculateActiveAlerts } from '../src/core/alerts-engine.js';
+import {
+  detectSemanticPlaces,
+  resolvePlaceLabel,
+  computeStationHonestyIndex,
+  analyzeOptimalDeparture,
+  computeParkingSentinel
+} from '../src/core/geospatial-intelligence.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -695,3 +713,462 @@ describe('Phase 2 — Impuesto Invisible, Reconciliation & Ridge Calibration', (
     }
   });
 });
+
+describe('Phase 3 — Longitudinal Electrical Health & Physical Equivalent Mechanical Wear', () => {
+  test('recordVoltageSample deduplicates within 15min & <0.05V, caps at 180, normalizes seconds, and never mutates input', () => {
+    const baseMs = Date.parse('2026-09-15T12:00:00Z');
+    const orig = [{ ts: baseMs, v: 12.6, acc: false, speed: 0 }];
+
+    // Guard invalid snapshot -> returns cloned array unchanged
+    const guarded = recordVoltageSample(orig, { externalVoltage: 0, accStatus: false }, baseMs + 60_000);
+    assert.deepEqual(guarded, orig);
+    assert.notEqual(guarded, orig);
+
+    // Dedup within 15 min & delta < 0.05V & same ACC -> unchanged
+    const dedup = recordVoltageSample(
+      orig,
+      { gpsTime: baseMs + 10 * 60 * 1000, externalVoltage: 12.63, accStatus: false, speed: 0 },
+      baseMs + 10 * 60 * 1000
+    );
+    assert.equal(dedup.length, 1);
+
+    // Same 10 min window, but voltage delta >= 0.05V -> appended
+    const deltaJump = recordVoltageSample(
+      orig,
+      { gpsTime: baseMs + 10 * 60 * 1000, externalVoltage: 12.70, accStatus: false, speed: 0 },
+      baseMs + 10 * 60 * 1000
+    );
+    assert.equal(deltaJump.length, 2);
+    assert.equal(orig.length, 1); // original never mutated
+
+    // Seconds timestamp normalization (< 1e12 -> * 1000)
+    const secSample = recordVoltageSample(
+      [],
+      { gpsTime: Math.floor(baseMs / 1000), externalVoltage: 14.123, accStatus: true, speed: 42 },
+      baseMs
+    );
+    assert.equal(secSample[0].ts, baseMs);
+    assert.equal(secSample[0].v, 14.12);
+    assert.equal(secSample[0].acc, true);
+    assert.equal(secSample[0].speed, 42);
+
+    // Cap at VOLTAGE_HISTORY_MAX (180)
+    let bigHistory = [];
+    for (let i = 0; i < 195; i++) {
+      const ts = baseMs + i * 20 * 60 * 1000;
+      bigHistory = recordVoltageSample(bigHistory, { gpsTime: ts, externalVoltage: 12.5 + (i % 3) * 0.1, accStatus: false, speed: 0 }, ts);
+    }
+    assert.equal(bigHistory.length, VOLTAGE_HISTORY_MAX);
+    assert.equal(bigHistory[0].ts, baseMs + 15 * 20 * 60 * 1000);
+  });
+
+  test('analyzeElectricalHealth separates ACC OFF vs ACC ON, detects -0.20V/30d slope warning, <12.1V critical, and alternator SUBCARGA', () => {
+    const nowMs = Date.parse('2026-09-30T12:00:00Z');
+    const dayMs = 86400000;
+
+    // 1. Nominal resting (12.65V) + nominal alternator (14.2V) + ignitions sum
+    const nominalHistory = [
+      { ts: nowMs - 20 * dayMs, v: 12.66, acc: false, speed: 0 },
+      { ts: nowMs - 10 * dayMs, v: 12.65, acc: false, speed: 0 },
+      { ts: nowMs - 1 * dayMs, v: 12.64, acc: false, speed: 0 },
+      { ts: nowMs - 5 * dayMs, v: 14.15, acc: true, speed: 35 },
+      { ts: nowMs - 2 * dayMs, v: 14.25, acc: true, speed: 48 }
+    ];
+    const gpsDaysMap = {
+      '2026-09-05': { runNo: 10 },
+      '2026-09-20': { runNo: 14 },
+      '2026-08-01': { runNo: 99 } // outside 30d window
+    };
+    const nominal = analyzeElectricalHealth(nominalHistory, gpsDaysMap, null, nowMs);
+    assert.equal(nominal.restingStatus, 'ÓPTIMA');
+    assert.equal(nominal.restingTone, 'volt');
+    assert.equal(nominal.chargingStatus, 'NOMINAL');
+    assert.equal(nominal.chargingTone, 'volt');
+    assert.equal(nominal.ignitions30d, 24);
+    assert.equal(nominal.alerts.length, 0);
+    assert.equal(nominal.sparklineSeries.length, 3);
+
+    // 2. -0.20V/30d downward slope over 20 days -> DESGASTE warning
+    const dropHistory = [
+      { ts: nowMs - 20 * dayMs, v: 12.70, acc: false, speed: 0 },
+      { ts: nowMs - 10 * dayMs, v: 12.60, acc: false, speed: 0 },
+      { ts: nowMs - 0 * dayMs, v: 12.50, acc: false, speed: 0 }
+    ];
+    const dropping = analyzeElectricalHealth(dropHistory, null, null, nowMs);
+    assert.ok(dropping.slopeVPer30d <= -0.15, `Expected slope <= -0.15, got ${dropping.slopeVPer30d}`);
+    assert.equal(dropping.restingStatus, 'DESGASTE');
+    assert.equal(dropping.restingTone, 'amber');
+    assert.equal(dropping.alerts.length, 1);
+    assert.equal(dropping.alerts[0].severity, 'warning');
+    assert.equal(dropping.alerts[0].label, 'DESGASTE');
+
+    // 3. < 12.15V resting -> CRÍTICA + alternator < 13.4V -> SUBCARGA critical
+    const failingHistory = [
+      { ts: nowMs - 4 * dayMs, v: 12.05, acc: false, speed: 0 },
+      { ts: nowMs - 1 * dayMs, v: 12.02, acc: false, speed: 0 },
+      { ts: nowMs - 2 * dayMs, v: 13.10, acc: true, speed: 40 },
+      { ts: nowMs - 1 * dayMs, v: 13.20, acc: true, speed: 30 }
+    ];
+    const failing = analyzeElectricalHealth(failingHistory, null, null, nowMs);
+    assert.equal(failing.restingStatus, 'CRÍTICA');
+    assert.equal(failing.restingTone, 'crimson');
+    assert.equal(failing.chargingStatus, 'SUBCARGA');
+    assert.equal(failing.chargingTone, 'crimson');
+    assert.equal(failing.alerts.length, 2);
+    assert.ok(failing.alerts.some(a => a.id === 'elec_battery_resting' && a.severity === 'critical'));
+    assert.ok(failing.alerts.some(a => a.id === 'elec_alternator' && a.label === 'SUBCARGA' && a.severity === 'critical'));
+  });
+
+  test('computePhysicalWear adjusts Oil, Brakes, and Tires with GPS stress and keeps Cabin strictly linear', () => {
+    const gpsDays = {
+      '2026-08-15': { km: 50, runTimeSec: 10800, idleAccOnSec: 1800 }, // before lastServiceDate (ignored)
+      '2026-09-02': { km: 300, runTimeSec: 3600 * 35, idleAccOnSec: 3600 * 10 }, // 45h
+      '2026-09-10': { km: 700, runTimeSec: 3600 * 40, idleAccOnSec: 3600 * 10 }  // 50h -> total 95h * 31.25 = 2968.75 km
+    };
+    const tripsByDate = {
+      '2026-09-05': [
+        { distanceKm: 3.5, coldPenaltyPct: 10, brakeEnergyMj: 2.0, lateralStressEvents: 4, hardBrakes: 3 },
+        { distanceKm: 4.0, coldPenaltyPct: 9, brakeEnergyMj: 2.2, lateralStressEvents: 5, hardBrakes: 2 },
+        { distanceKm: 30.0, coldPenaltyPct: 2, brakeEnergyMj: 12.6, lateralStressEvents: 25, hardBrakes: 15 }
+      ]
+    };
+
+    // Oil: realKmUsed = 2000, engineHours = 95h -> 2968.75 + 2*4 = 2977, capped at 2000*1.60 = 3200
+    const oilItem = { id: 'maint_oil_filter', name: 'ACEITE + FILTRO', category: 'engine', intervalKm: 5000, lastServiceOdo: 90000, lastServiceDate: '2026-09-01' };
+    const oilWear = computePhysicalWear(oilItem, { currentOdo: 92000, gpsDays, tripsByDate });
+    assert.equal(oilWear.hasGpsStressData, true);
+    assert.equal(oilWear.basisLabel, 'HORAS MOTOR');
+    assert.equal(oilWear.realKmUsed, 2000);
+    assert.equal(oilWear.equivalentKmUsed, 2977);
+    assert.equal(oilWear.remainingEquivalentKm, 2023);
+    assert.ok(oilWear.stressMultiplier > 1.45);
+
+    // Brakes: tripKm = 37.5, brakeEnergyMj = 16.8 -> 0.448 MJ/km / 0.28 = 1.6 -> clamped to 1.45
+    const brakeItem = { id: 'maint_brake_fluid', name: 'LÍQUIDO FRENOS', category: 'brakes', intervalKm: 30000, lastServiceOdo: 80000, lastServiceDate: '2026-09-01' };
+    const brakeWear = computePhysicalWear(brakeItem, { currentOdo: 90000, gpsDays, tripsByDate });
+    assert.equal(brakeWear.hasGpsStressData, true);
+    assert.equal(brakeWear.basisLabel, 'FRENADO');
+    assert.equal(brakeWear.equivalentKmUsed, 14500);
+    assert.equal(brakeWear.stressMultiplier, 1.45);
+
+    // Tires: tripKm = 37.5, events = 54 -> events/100km = 144 -> 1 + 0.002*144 = 1.288
+    const tireItem = { id: 'maint_tire_rotation', name: 'ROTACIÓN LLANTAS', category: 'tires', intervalKm: 10000, lastServiceOdo: 88000, lastServiceDate: '2026-09-01' };
+    const tireWear = computePhysicalWear(tireItem, { currentOdo: 92000, gpsDays, tripsByDate });
+    assert.equal(tireWear.hasGpsStressData, true);
+    assert.equal(tireWear.basisLabel, 'CARGA LATERAL');
+    assert.ok(tireWear.equivalentKmUsed > 5000 && tireWear.stressMultiplier >= 1.25 && tireWear.stressMultiplier <= 1.30);
+
+    // Cabin: strictly linear
+    const cabinItem = { id: 'maint_cabin_filter', name: 'FILTRO CABINA A/C', category: 'cabin', intervalKm: 15000, lastServiceOdo: 85000, lastServiceDate: '2026-09-01' };
+    const cabinWear = computePhysicalWear(cabinItem, { currentOdo: 92000, gpsDays, tripsByDate });
+    assert.equal(cabinWear.hasGpsStressData, false);
+    assert.equal(cabinWear.basisLabel, 'ODÓMETRO');
+    assert.equal(cabinWear.equivalentKmUsed, 7000);
+    assert.equal(cabinWear.stressMultiplier, 1.0);
+
+    // Wear dial card backward compatibility & inline micro-tag when >= 1.10x
+    const dialNoGps = calculateWearDialTelemetry(oilItem, 92000);
+    assert.equal(dialNoGps.kmRemaining, 3000);
+    assert.equal(dialNoGps.stressMultiplier, 1.0);
+
+    const dialWithGps = calculateWearDialTelemetry(oilItem, 92000, { gpsDays, tripsByDate });
+    assert.equal(dialWithGps.kmRemaining, 2023);
+    assert.equal(dialWithGps.realKmRemaining, 3000);
+    assert.ok(dialWithGps.stressMultiplier >= 1.10);
+
+    const cardHtml = renderWearDialCard(oilItem, 92000, { gpsDays, tripsByDate });
+    assert.ok(cardHtml.includes(`· ${dialWithGps.stressMultiplier.toFixed(2)}×`));
+    assert.equal(/<p[\s>]/i.test(cardHtml), false);
+  });
+
+  test('calculateActiveAlerts integrates electrical critical/warning alerts and fuel drift warning alerts', () => {
+    const nowDate = new Date('2026-09-30T12:00:00Z');
+    const dayMs = 86400000;
+    const alerts = calculateActiveAlerts({
+      legalDocs: [],
+      maintenanceItems: [],
+      currentOdo: 92000,
+      fromDate: nowDate,
+      voltageHistory: [
+        { ts: nowDate.getTime() - 2 * dayMs, v: 12.05, acc: false, speed: 0 },
+        { ts: nowDate.getTime() - 1 * dayMs, v: 13.15, acc: true, speed: 35 }
+      ],
+      fuelAnomalyAlert: {
+        type: 'fuel_consumption_drift',
+        severity: 'warning',
+        consecutiveCount: 2,
+        avgExcessPct: 18,
+        label: 'CONSUMO ANÓMALO'
+      }
+    });
+
+    assert.equal(alerts.hasCritical, true);
+    assert.equal(alerts.criticalCount, 2);
+    assert.equal(alerts.hasWarning, true);
+    assert.equal(alerts.warningCount, 1);
+    assert.ok(alerts.criticalAlerts.some(a => a.id === 'elec_battery_resting'));
+    assert.ok(alerts.criticalAlerts.some(a => a.id === 'elec_alternator'));
+    assert.ok(alerts.warningAlerts.some(a => a.type === 'fuel_consumption_drift' && a.message === 'CONSUMO ANÓMALO · +18%'));
+  });
+
+  test('Phase 3 UI files (view-cluster.js, wear-dial-card.js) contain zero <p> HTML tags and zero technical jargon', () => {
+    const jargonRegex = /\b(Ridge|Haversine|IndexedDB|EMA|JSON|MJ)\b/i;
+    for (const relPath of [
+      'src/views/view-cluster.js',
+      'src/components/cluster/wear-dial-card.js'
+    ]) {
+      const filePath = path.join(REPO_ROOT, relPath);
+      const raw = fs.readFileSync(filePath, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/\/\/.*$/gm, '');
+      assert.equal(/<p[\s>]/i.test(raw), false, `${relPath} must not contain <p> HTML tags`);
+
+      const templateTexts = [...raw.matchAll(/`([\s\S]*?)`/g)]
+        .map(m => m[1])
+        .filter(s => s.includes('<') && s.includes('>'))
+        .map(s => s.replace(/\$\{[\s\S]*?\}/g, ' ').replace(/<[^>]+>/g, ' '))
+        .join(' ');
+      assert.equal(jargonRegex.test(templateTexts), false, `${relPath} UI text must not leak technical jargon`);
+    }
+  });
+});
+
+describe('Phase 4 — Passive Geospatial Intelligence & UX Compliance', () => {
+  test('detectSemanticPlaces identifies CASA (>= 4 overnight days) and TRABAJO (>= 4 weekday 3h+ stays > 500m away), and resolvePlaceLabel maps them', () => {
+    const HOME = { lat: 10.9878, lng: -74.7889 };
+    const WORK = { lat: 11.0155, lng: -74.8122 }; // ~4 km from home
+    const STATION = { id: 'st_terpel', name: 'Terpel Murillo', lat: 10.9960, lng: -74.7950, radiusMeters: 80, refuelCount: 4 };
+
+    // 5 weekdays (Mon 2026-09-07 .. Fri 2026-09-11)
+    const weekdays = ['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11'];
+    const tripsByDate = {};
+    weekdays.forEach((date, idx) => {
+      const jitter = idx * 0.00005; // ~5m drift within 120m cluster radius
+      tripsByDate[date] = [
+        {
+          id: `am_${idx}`,
+          date,
+          startTimeHm: '07:15',
+          endTimeHm: '07:45',
+          startLat: HOME.lat + jitter,
+          startLng: HOME.lng - jitter,
+          endLat: WORK.lat + jitter,
+          endLng: WORK.lng - jitter,
+          durationMin: 30
+        },
+        {
+          id: `pm_${idx}`,
+          date,
+          startTimeHm: '17:30',
+          endTimeHm: '18:10',
+          startLat: WORK.lat - jitter,
+          startLng: WORK.lng + jitter,
+          endLat: HOME.lat - jitter,
+          endLng: HOME.lng + jitter,
+          durationMin: 40
+        }
+      ];
+    });
+
+    const places = detectSemanticPlaces(tripsByDate, [STATION]);
+    assert.ok(places.home, 'CASA should be detected');
+    assert.equal(places.home.label, 'CASA');
+    assert.ok(places.home.daysCount >= 4);
+
+    assert.ok(places.work, 'TRABAJO should be detected');
+    assert.equal(places.work.label, 'TRABAJO');
+    assert.ok(places.work.daysCount >= 4);
+
+    assert.equal(places.stations.length, 1);
+    assert.equal(places.allPlaces.length, 3);
+
+    assert.equal(resolvePlaceLabel(HOME.lat + 0.0001, HOME.lng, 'Cl 56', places), 'CASA');
+    assert.equal(resolvePlaceLabel(WORK.lat - 0.0001, WORK.lng, 'Cra 53', places), 'TRABAJO');
+    assert.equal(resolvePlaceLabel(STATION.lat, STATION.lng, 'Av Murillo', places), 'TERPEL MURILLO');
+    assert.equal(resolvePlaceLabel(0, 0, 'Calle 80', places), 'Calle 80');
+    assert.equal(resolvePlaceLabel(10.5000, -75.0000, 'Cartagena', places), 'Cartagena');
+    assert.equal(resolvePlaceLabel(null, undefined, '', places), 'Ubicación');
+  });
+
+  test('computeStationHonestyIndex ranks stations with >= 2 valid cycles by severity-adjusted residual and excludes < 2 cycle stations', () => {
+    const closedCycles = [
+      { cycleIndex: 1, isValid: true, eff: 37.5, endDate: '2026-08-10', endOdo: 50300, physicalTelemetry: { severityFactor: 1.0 } },
+      { cycleIndex: 2, isValid: true, eff: 36.8, endDate: '2026-08-20', endOdo: 50600, physicalTelemetry: { severityFactor: 1.02 } },
+      { cycleIndex: 3, isValid: true, eff: 31.0, endDate: '2026-08-30', endOdo: 50900, physicalTelemetry: { severityFactor: 1.0 } },
+      { cycleIndex: 4, isValid: true, eff: 30.5, endDate: '2026-09-10', endOdo: 51200, physicalTelemetry: { severityFactor: 1.0 } },
+      { cycleIndex: 5, isValid: true, eff: 39.0, endDate: '2026-09-20', endOdo: 51500, physicalTelemetry: { severityFactor: 1.0 } }
+    ];
+
+    const telemetryLogs = [
+      { id: 'l1', date: '2026-08-10', odometer_reading: 50300, stationId: 'st_good', stationName: 'Primax Norte' },
+      { id: 'l2', date: '2026-08-20', odometer_reading: 50600, stationId: 'st_good', stationName: 'Primax Norte' },
+      { id: 'l3', date: '2026-08-30', odometer_reading: 50900, stationId: 'st_bad', stationName: 'EDS Genérica' },
+      { id: 'l4', date: '2026-09-10', odometer_reading: 51200, stationId: 'st_bad', stationName: 'EDS Genérica' },
+      { id: 'l5', date: '2026-09-20', odometer_reading: 51500, stationId: 'st_single', stationName: 'Una Sola' }
+    ];
+
+    const result = computeStationHonestyIndex(closedCycles, telemetryLogs, []);
+    assert.equal(result.totalQualifiedStations, 2);
+    assert.equal(result.rankedStations.length, 2);
+    assert.equal(result.rankedStations[0].stationId, 'st_good');
+    assert.equal(result.rankedStations[1].stationId, 'st_bad');
+    assert.ok(result.rankedStations[0].residualPct > 0);
+    assert.ok(result.rankedStations[1].residualPct < 0);
+    assert.equal(result.rankedStations.some(s => s.stationId === 'st_single'), false);
+  });
+
+  test('analyzeOptimalDeparture detects fastest/cheapest 15-min window on >= 6 trip corridor and exposes .primary', () => {
+    const HOME = { lat: 10.9878, lng: -74.7889 };
+    const WORK = { lat: 11.0155, lng: -74.8122 };
+    const semanticPlaces = {
+      home: { label: 'CASA', lat: HOME.lat, lng: HOME.lng },
+      work: { label: 'TRABAJO', lat: WORK.lat, lng: WORK.lng },
+      stations: []
+    };
+
+    const trips = [
+      // 3 early trips at 06:45 (fast & cheap: 18 min, $3200)
+      { date: '2026-09-01', startTimeHm: '06:46', durationMin: 18, estCostCop: 3200, startLat: HOME.lat, startLng: HOME.lng, endLat: WORK.lat, endLng: WORK.lng },
+      { date: '2026-09-02', startTimeHm: '06:50', durationMin: 17, estCostCop: 3100, startLat: HOME.lat, startLng: HOME.lng, endLat: WORK.lat, endLng: WORK.lng },
+      { date: '2026-09-03', startTimeHm: '06:48', durationMin: 19, estCostCop: 3300, startLat: HOME.lat, startLng: HOME.lng, endLat: WORK.lat, endLng: WORK.lng },
+      // 5 rush-hour trips at 07:30 (slow & expensive: 30 min, $3900)
+      { date: '2026-09-04', startTimeHm: '07:32', durationMin: 30, estCostCop: 3900, startLat: HOME.lat, startLng: HOME.lng, endLat: WORK.lat, endLng: WORK.lng },
+      { date: '2026-09-05', startTimeHm: '07:35', durationMin: 31, estCostCop: 4000, startLat: HOME.lat, startLng: HOME.lng, endLat: WORK.lat, endLng: WORK.lng },
+      { date: '2026-09-06', startTimeHm: '07:40', durationMin: 29, estCostCop: 3850, startLat: HOME.lat, startLng: HOME.lng, endLat: WORK.lat, endLng: WORK.lng },
+      { date: '2026-09-07', startTimeHm: '07:31', durationMin: 32, estCostCop: 4100, startLat: HOME.lat, startLng: HOME.lng, endLat: WORK.lat, endLng: WORK.lng },
+      { date: '2026-09-08', startTimeHm: '07:36', durationMin: 30, estCostCop: 3950, startLat: HOME.lat, startLng: HOME.lng, endLat: WORK.lat, endLng: WORK.lng }
+    ];
+
+    const corridors = analyzeOptimalDeparture(trips, { semanticPlaces });
+    assert.equal(Array.isArray(corridors), true);
+    assert.equal(corridors.length, 1);
+    assert.ok(corridors.primary);
+    assert.equal(corridors.primary.corridorLabel, 'CASA → TRABAJO');
+    assert.equal(corridors.primary.bestWindowHm, '06:45');
+    assert.equal(corridors.primary.bestDurationMin, 18);
+    assert.ok(corridors.primary.savedMin >= 10);
+    assert.ok(corridors.primary.savedCopPerTrip >= 500);
+    assert.equal(corridors.primary.sampleCount, 8);
+
+    // Fewer than 6 trips should return empty
+    const sparse = analyzeOptimalDeparture(trips.slice(0, 4), { semanticPlaces });
+    assert.equal(sparse.length, 0);
+    assert.equal(sparse.primary, null);
+  });
+
+  test('computeParkingSentinel computes parked duration, semantic place, and resting voltage drift accurately', () => {
+    const nowMs = Date.parse('2026-09-15T20:15:00Z');
+    const twoHours15Ago = nowMs - (135 * 60 * 1000);
+    const threeHoursAgo = nowMs - (180 * 60 * 1000);
+
+    const semanticPlaces = {
+      home: { label: 'CASA', lat: 10.9878, lng: -74.7889 },
+      work: null,
+      stations: []
+    };
+
+    const voltageHistory = [
+      { ts: threeHoursAgo, v: 14.1, acc: true, speed: 35 },
+      { ts: twoHours15Ago, v: 12.72, acc: false, speed: 0 },
+      { ts: nowMs - 60 * 60 * 1000, v: 12.64, acc: false, speed: 0 },
+      { ts: nowMs - 5 * 60 * 1000, v: 12.60, acc: false, speed: 0 }
+    ];
+
+    const live = {
+      accStatus: false,
+      lat: 10.98782,
+      lng: -74.78891,
+      address: 'Cl. 56 #13-13',
+      externalVoltage: 12.58,
+      speed: 0
+    };
+
+    const sentinel = computeParkingSentinel(live, voltageHistory, semanticPlaces, nowMs);
+    assert.equal(sentinel.hasData, true);
+    assert.equal(sentinel.isParked, true);
+    assert.equal(sentinel.placeLabel, 'CASA');
+    assert.equal(sentinel.parkedMinutes, 135);
+    assert.equal(sentinel.parkedDurationLabel, '2H 15M');
+    assert.equal(sentinel.currentVoltage, 12.58);
+    assert.equal(sentinel.voltageDeltaV, -0.14);
+
+    // Missing live snapshot guard
+    assert.deepEqual(computeParkingSentinel(null), { isParked: false, hasData: false });
+
+    // Driving state
+    const driving = computeParkingSentinel({ accStatus: true, lat: 10.99, lng: -74.80, speed: 42, externalVoltage: 14.15 }, voltageHistory, semanticPlaces, nowMs);
+    assert.equal(driving.isParked, false);
+    assert.equal(driving.parkedMinutes, 0);
+    assert.equal(driving.voltageDeltaV, 0);
+  });
+
+  test('computeCockpitGpsSummary exposes semanticPlaces, parkingSentinel, and resolved latestTrip labels', () => {
+    const HOME = { lat: 10.9878, lng: -74.7889 };
+    const WORK = { lat: 11.0155, lng: -74.8122 };
+    const tripsByDate = {};
+    ['2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11'].forEach((date, i) => {
+      tripsByDate[date] = [
+        { id: `a${i}`, date, startTimeHm: '07:15', endTimeHm: '07:45', startTimeMs: Date.parse(`${date}T12:15:00Z`), startLat: HOME.lat, startLng: HOME.lng, endLat: WORK.lat, endLng: WORK.lng, startAddress: 'Cl 56', endAddress: 'Cra 53', distanceKm: 6.2 },
+        { id: `b${i}`, date, startTimeHm: '17:30', endTimeHm: '18:05', startTimeMs: Date.parse(`${date}T22:30:00Z`), startLat: WORK.lat, startLng: WORK.lng, endLat: HOME.lat, endLng: HOME.lng, startAddress: 'Cra 53', endAddress: 'Cl 56', distanceKm: 6.4 }
+      ];
+    });
+
+    const summary = computeCockpitGpsSummary({
+      gpsCache: {
+        live: { accStatus: false, lat: HOME.lat, lng: HOME.lng, externalVoltage: 12.6, syncedAt: '2026-09-11T23:00:00Z' },
+        tripsByDate,
+        voltageHistory: [{ ts: Date.parse('2026-09-11T22:30:00Z'), v: 12.65, acc: false }]
+      }
+    }, null, new Date('2026-09-11T23:30:00Z'));
+
+    assert.equal(summary.parkingSentinel.isParked, true);
+    assert.equal(summary.parkingSentinel.placeLabel, 'CASA');
+    assert.equal(summary.latestTrip.startLabel, 'TRABAJO');
+    assert.equal(summary.latestTrip.endLabel, 'CASA');
+  });
+
+  test('Full codebase compliance audit: ZERO <p> tags, ZERO technical jargon in UI markup across ALL src/views/ & src/components/, ZERO hardcoded credentials', () => {
+    const uiDirs = ['src/views', 'src/components'].map(d => path.join(REPO_ROOT, d));
+    const jargonRegex = /\b(Ridge|Haversine|IndexedDB|EMA|OLS|MJ)\b/i;
+
+    for (const dir of uiDirs) {
+      for (const filePath of walkJsFiles(dir)) {
+        const rel = path.relative(REPO_ROOT, filePath);
+        const raw = fs.readFileSync(filePath, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/\/\/.*$/gm, '');
+
+        assert.equal(/<p[\s>]/i.test(raw), false, `${rel} must not contain <p> HTML tags`);
+
+        const templateTexts = [...raw.matchAll(/`([\s\S]*?)`/g)]
+          .map(m => m[1])
+          .filter(s => s.includes('<') && s.includes('>'))
+          .map(s => s.replace(/\$\{[\s\S]*?\}/g, ' ').replace(/<[^>]+>/g, ' '))
+          .join(' ');
+
+        assert.equal(jargonRegex.test(templateTexts), false, `${rel} UI markup must not leak technical jargon`);
+      }
+    }
+
+    const credDirs = ['src', 'infra', 'tests']
+      .map(d => path.join(REPO_ROOT, d))
+      .filter(d => fs.existsSync(d));
+    const forbiddenPatterns = [
+      new RegExp('JGN' + '691'),
+      new RegExp('Spicy' + '691'),
+      new RegExp('359710' + '04')
+    ];
+
+    for (const dir of credDirs) {
+      for (const filePath of walkJsFiles(dir)) {
+        if (path.resolve(filePath) === __filename) continue;
+        const content = fs.readFileSync(filePath, 'utf8');
+        for (const pat of forbiddenPatterns) {
+          assert.equal(pat.test(content), false, `Hardcoded credential detected in ${path.relative(REPO_ROOT, filePath)}`);
+        }
+      }
+    }
+  });
+});
+
+

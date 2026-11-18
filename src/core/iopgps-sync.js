@@ -17,6 +17,7 @@ import { triggerCloudSync } from './firebase-sync.js';
 import { calculateDistanceMeters, checkStopNearStation, notifyGasStationStop } from './gas-station-matcher.js';
 import { refreshAlerts } from './alerts-engine.js';
 import { reconcileClosedCycleTrips } from './fuel-physics-engine.js';
+import { recordVoltageSample } from './vehicle-health-engine.js';
 
 export const IOPGPS_INSTALL_DATE = '2026-02-01';
 export const GPS_LOCAL_CREDS_KEY = 'octane_iopgps_creds_v1';
@@ -1907,10 +1908,13 @@ export async function syncGpsTelemetry(options = {}) {
                 };
             }
 
+            const voltageHistory = recordVoltageSample(profile?.gpsCache?.voltageHistory || [], live);
+
             const gpsCache = {
                 ...(profile?.gpsCache || {}),
                 live,
                 days: existingDays,
+                voltageHistory,
                 backfillStartDate: installDate,
                 lastSyncedDate: todayStr,
                 lastSyncedAt: new Date().toISOString()

@@ -565,13 +565,20 @@ function renderCockpitGpsBand(gpsSummary) {
     }
 
     const phys = gpsSummary.activePhys;
+    const sentinel = gpsSummary.parkingSentinel || null;
     const statusDotClass = gpsSummary.accStatus
         ? 'bg-[var(--accent-volt)] animate-pulse'
         : (gpsSummary.hasLive ? 'bg-[var(--accent-volt)]' : 'bg-[var(--accent-amber)]');
 
+    const parkedHeaderText = sentinel?.isParked
+        ? (sentinel.parkedDurationLabel
+            ? `PARQUEADO · ${sentinel.parkedDurationLabel} · ${sentinel.placeLabel}`
+            : `PARQUEADO · ${sentinel.placeLabel}`)
+        : '';
+
     const headerStatusText = gpsSummary.accStatus
         ? `EN MARCHA · ${gpsSummary.liveSpeed} KM/H`
-        : (gpsSummary.address ? gpsSummary.address.toUpperCase() : (gpsSummary.syncedAgo || 'ENLAZADO'));
+        : (parkedHeaderText || (gpsSummary.address ? gpsSummary.address.toUpperCase() : (gpsSummary.syncedAgo || 'ENLAZADO')));
 
     const voltageText = gpsSummary.voltage > 0 ? `${gpsSummary.voltage.toFixed(1)} V` : '—';
     const voltageColor = gpsSummary.voltage > 0 ? getToneColorVar(gpsSummary.batteryTone) : 'var(--text-secondary)';
@@ -588,7 +595,7 @@ function renderCockpitGpsBand(gpsSummary) {
                     <span class="font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] truncate">${headerStatusText}</span>
                 </div>
 
-                <div class="flex items-center gap-1.5 shrink-0">
+                <div class="flex items-center gap-2.5 shrink-0">
                     ${gpsSummary.isConfigured ? `
                         <button id="cockpit-gps-sync-btn" type="button" title="Sincronizar GPS" class="w-7 h-7 flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">
                             <svg id="cockpit-gps-sync-icon" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
@@ -596,6 +603,10 @@ function renderCockpitGpsBand(gpsSummary) {
                             </svg>
                         </button>
                     ` : ''}
+                    <button id="cockpit-gps-intel-btn" type="button" class="font-mono text-[10px] text-[var(--text-secondary)] hover:text-[var(--accent-amber)] uppercase tracking-widest cursor-pointer transition-colors">
+                        ANÁLISIS
+                    </button>
+                    <span class="text-[var(--line-strong)] font-mono text-[10px]">·</span>
                     <button id="cockpit-gps-open-btn" type="button" class="flex items-center gap-1 font-mono text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] uppercase tracking-widest cursor-pointer transition-colors">
                         <span>VIAJES</span>
                         <span class="text-[var(--accent-amber)] font-bold">→</span>
@@ -647,7 +658,7 @@ function renderCockpitGpsBand(gpsSummary) {
                             </svg>
                         ` : ''}
                         <span class="font-mono text-[10px] text-[var(--text-secondary)] uppercase truncate">
-                            ${trip.startAddress || 'Origen'} → ${trip.endAddress || 'Destino'}
+                            ${trip.startLabel || trip.startAddress || 'Origen'} → ${trip.endLabel || trip.endAddress || 'Destino'}
                         </span>
                     </div>
                     <div class="flex items-center gap-1.5 font-mono text-[10px] tabular-nums shrink-0">
@@ -808,8 +819,8 @@ function renderActiveCockpit(container) {
                             <div id="chamber-sub-vol" class="font-mono text-[11px] font-medium tabular-nums text-[var(--text-primary)] mt-1.5">
                                 ${activeGal.toFixed(2)} GAL  ·  ${(activeGal * GAL_TO_L).toFixed(1)} L
                             </div>
-                            <div id="chamber-reserve-tag" class="font-mono text-[10px] text-[var(--text-secondary)] mt-1 tracking-widest uppercase">
-                                ${hasData ? (activeTankState?.reserveKm > 0 ? `${activeTankState.reserveKm} KM · ${activeTankState.reserveDateLabel || 'RESERVA'}` : 'EN RESERVA') : 'RESERVA 5.0L'}
+                            <div id="chamber-reserve-tag" class="font-mono text-[10px] text-[var(--text-secondary)] mt-1 tracking-widest uppercase whitespace-nowrap">
+                                ${hasData ? (activeTankState?.reserveKm > 0 ? `${activeTankState.reserveKm} KM · ${(activeTankState.reserveDateLabel ? activeTankState.reserveDateLabel.split(' ').slice(0, 2).join(' ') : 'RESERVA')}` : 'EN RESERVA') : 'RESERVA 5.0L'}
                             </div>
                             <!-- 3 Discrete Mode Indicators (• • •) -->
                             <div id="chamber-mode-dots" class="flex items-center justify-center gap-1.5 mt-2">
@@ -1352,9 +1363,12 @@ function updateSightGlassAndWarp() {
         if (heroUnit) heroUnit.innerText = 'KM';
         if (subVol) subVol.innerText = `${remGal.toFixed(2)} GAL  ·  ${(remGal * GAL_TO_L).toFixed(1)} L`;
         if (rsvTag) {
+            const compactReserveDate = activeTankState?.reserveDateLabel
+                ? activeTankState.reserveDateLabel.split(' ').slice(0, 2).join(' ')
+                : '';
             if (remReserveKm > 0) {
-                rsvTag.innerText = (warpKm === 0 && activeTankState?.reserveDateLabel)
-                    ? `${remReserveKm} KM · ${activeTankState.reserveDateLabel}`
+                rsvTag.innerText = (warpKm === 0 && compactReserveDate)
+                    ? `${remReserveKm} KM · ${compactReserveDate}`
                     : `${remReserveKm} KM A RESERVA`;
             } else {
                 rsvTag.innerText = remGal > 0 ? 'EN RESERVA' : 'RESERVA 5.0L';
@@ -1367,9 +1381,12 @@ function updateSightGlassAndWarp() {
         if (heroUnit) heroUnit.innerText = 'DÍAS';
         if (subVol) subVol.innerText = `RITMO: ${avgKmDay.toFixed(0)} KM/DÍA`;
         if (rsvTag) {
-            if (warpKm === 0 && activeTankState?.reserveDateLabel) {
+            const compactReserveDate = activeTankState?.reserveDateLabel
+                ? activeTankState.reserveDateLabel.split(' ').slice(0, 2).join(' ')
+                : '';
+            if (warpKm === 0 && compactReserveDate) {
                 rsvTag.innerText = activeTankState.reserveKm > 0
-                    ? `RESERVA · ${activeTankState.reserveDateLabel}`
+                    ? `RESERVA · ${compactReserveDate}`
                     : 'EN RESERVA';
             } else {
                 rsvTag.innerText = daysToReserve > 0
@@ -1893,82 +1910,32 @@ function renderCycleDetail() {
     const pumpSvg = `<svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22L15 22"/><path d="M4 9L14 9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5"/></svg>`;
     const needleSvg = `<svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>`;
 
-    const physStripHtml = cyclePhys ? `
-        <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-[var(--line-hair)] border-b border-[var(--line-hair)] bg-[var(--bg-surface)] font-mono text-[10px]">
-            <div class="px-3.5 py-2 flex items-center justify-between">
-                <span class="text-[var(--text-secondary)] uppercase tracking-wider">VEL. MEDIA</span>
-                <strong class="text-[var(--text-primary)] tabular-nums">${cyclePhys.avgSpeedKmh} KM/H</strong>
-            </div>
-            <div class="px-3.5 py-2 flex items-center justify-between">
-                <span class="text-[var(--text-secondary)] uppercase tracking-wider">USO MOTOR</span>
-                <strong class="text-[var(--text-primary)] tabular-nums">${cyclePhys.runTimeHours} H · ${cyclePhys.runNo} TR</strong>
-            </div>
-            <div class="px-3.5 py-2 flex items-center justify-between">
-                <span class="text-[var(--text-secondary)] uppercase tracking-wider">RALENTÍ MOTOR</span>
-                <strong class="${cyclePhys.idleAccOnMin >= 20 ? 'text-[var(--accent-amber)]' : 'text-[var(--text-primary)]'} tabular-nums">${cyclePhys.idleAccOnMin} MIN</strong>
-            </div>
-            <div class="px-3.5 py-2 flex items-center justify-between">
-                <span class="text-[var(--text-secondary)] uppercase tracking-wider">RÉGIMEN</span>
-                <strong class="${cyclePhys.severityFactor >= 1.08 ? 'text-[var(--accent-amber)]' : 'text-[var(--accent-volt)]'} tabular-nums">${cyclePhys.regimeLabel}</strong>
-            </div>
-        </div>
-    ` : '';
-
     const tax = cyclePhys?.invisibleTax?.hasData ? cyclePhys.invisibleTax : null;
-    const taxStripHtml = tax ? `
-        <div class="border-b border-[var(--line-hair)] bg-[var(--bg-void)]">
-            <div class="h-1 w-full flex overflow-hidden bg-[var(--line-hair)]">
-                <div style="width: ${tax.pctBase}%; background-color: #3F3F46;" title="Base: ${tax.pctBase}%"></div>
-                <div style="width: ${tax.pctTraffic}%; background-color: var(--accent-amber);" title="Trancón: ${tax.pctTraffic}%"></div>
-                <div style="width: ${tax.pctIdle}%; background-color: var(--accent-cyan);" title="Ralentí: ${tax.pctIdle}%"></div>
-                <div style="width: ${tax.pctDynamicsCold}%; background-color: var(--accent-crimson);" title="Frío/Dinámica: ${tax.pctDynamicsCold}%"></div>
-            </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-[var(--line-hair)] font-mono text-[10px]">
-                <div class="px-3.5 py-1.5 flex items-center justify-between gap-2">
-                    <span class="text-[var(--text-secondary)] uppercase tracking-wider">BASE</span>
-                    <strong class="text-[var(--text-primary)] tabular-nums">$${tax.baseCop.toLocaleString('es-CO')}</strong>
-                </div>
-                <div class="px-3.5 py-1.5 flex items-center justify-between gap-2">
-                    <span class="text-[var(--accent-amber)] uppercase tracking-wider">TRANCÓN</span>
-                    <strong class="text-[var(--text-primary)] tabular-nums">$${tax.trafficCop.toLocaleString('es-CO')}</strong>
-                </div>
-                <div class="px-3.5 py-1.5 flex items-center justify-between gap-2">
-                    <span class="text-[var(--accent-cyan)] uppercase tracking-wider">RALENTÍ</span>
-                    <strong class="text-[var(--text-primary)] tabular-nums">$${tax.idleCop.toLocaleString('es-CO')}</strong>
-                </div>
-                <div class="px-3.5 py-1.5 flex items-center justify-between gap-2">
-                    <span class="text-[var(--accent-crimson)] uppercase tracking-wider">FRÍO/DIN</span>
-                    <strong class="text-[var(--text-primary)] tabular-nums">$${tax.dynamicsColdCop.toLocaleString('es-CO')}</strong>
-                </div>
-            </div>
-        </div>
-    ` : '';
-
-    const latestCycleIdx = cycles.length > 0 ? cycles[cycles.length - 1].cycleIndex : null;
-    const isActiveOrRecentCycle = cockpitState.selectedCycleIdx === 'active' ||
-        cockpitState.selectedCycleIdx === null ||
-        cockpitState.selectedCycleIdx === latestCycleIdx;
-    const anomaly = model?.fuelPhysicsModel?.anomalyAlert || null;
-    const anomalyStripHtml = (anomaly && isActiveOrRecentCycle) ? `
-        <div class="px-4 py-2 border-b border-[var(--line-hair)] bg-[var(--bg-void)] flex items-center justify-between gap-2 font-mono text-[10px] text-[var(--accent-amber)] uppercase tracking-wider">
-            <span class="font-semibold">CONSUMO +${anomaly.avgExcessPct}% SOBRE LO ESPERADO</span>
-            <span class="tabular-nums text-[var(--text-secondary)]">${anomaly.consecutiveCount} CICLOS</span>
+    const taxHairlineHtml = tax ? `
+        <div class="h-0.5 w-full flex overflow-hidden bg-[var(--line-hair)]" aria-hidden="true">
+            <div style="width: ${tax.pctBase}%; background-color: var(--text-muted);"></div>
+            <div style="width: ${tax.pctTraffic}%; background-color: var(--accent-amber);"></div>
+            <div style="width: ${tax.pctIdle}%; background-color: var(--accent-cyan);"></div>
+            <div style="width: ${tax.pctDynamicsCold}%; background-color: var(--accent-crimson);"></div>
         </div>
     ` : '';
 
     container.innerHTML = `
-        <div class="px-4 py-3 border-b border-[var(--line-hair)] flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
-            <div class="flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)]"></span>
-                <span class="font-semibold text-[var(--text-primary)] uppercase tracking-wider">${cycleTitle}</span>
+        <div class="border-b border-[var(--line-hair)]">
+            <div class="px-4 py-3 flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)] shrink-0"></span>
+                    <span class="font-semibold text-[var(--text-primary)] uppercase tracking-wider truncate">${cycleTitle}</span>
+                </div>
+                <div class="flex items-center gap-3 shrink-0">
+                    <span class="text-[10px] text-[var(--text-secondary)] uppercase tracking-widest tabular-nums">${displayRows.length} ${displayRows.length === 1 ? 'REGISTRO' : 'REGISTROS'}</span>
+                    <button id="cycle-detail-open-intel" type="button" class="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent-amber)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">
+                        ANÁLISIS →
+                    </button>
+                </div>
             </div>
-            <div class="flex items-center gap-2">
-                <span class="text-[10px] text-[var(--text-secondary)] uppercase tracking-widest tabular-nums">${displayRows.length} ${displayRows.length === 1 ? 'REGISTRO' : 'REGISTROS'}</span>
-            </div>
+            ${taxHairlineHtml}
         </div>
-        ${physStripHtml}
-        ${taxStripHtml}
-        ${anomalyStripHtml}
 
         <div class="divide-y divide-[var(--line-hair)] max-h-80 overflow-y-auto font-mono text-xs">
             ${displayRows.map(r => {
@@ -2104,6 +2071,18 @@ function renderCycleDetail() {
             }).join('')}
         </div>
     `;
+
+    // Bind 1-tap fuel intelligence trigger
+    const cycleIntelBtn = container.querySelector('#cycle-detail-open-intel');
+    if (cycleIntelBtn) {
+        cycleIntelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            playHorologyTick(1200, 0.014, 0.024);
+            window.dispatchEvent(new CustomEvent('octane:open-gps-intelligence', {
+                detail: { tab: 'fuel', fuelScope: 'cycle', cycleIndex: cockpitState.selectedCycleIdx }
+            }));
+        });
+    }
 
     // Bind row tap to open Telemetry Detail Modal
     container.querySelectorAll('.cycle-tank-row').forEach(row => {
@@ -2248,6 +2227,16 @@ function bindActiveCockpitEvents() {
         const el = currentContainer.querySelector(sel);
         if (el) el.addEventListener('click', openCockpitGps);
     });
+
+    // GPS Intelligence Detail Trigger (ANÁLISIS)
+    const gpsIntelBtn = currentContainer.querySelector('#cockpit-gps-intel-btn');
+    if (gpsIntelBtn) {
+        gpsIntelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            playHorologyTick(1200, 0.014, 0.025);
+            window.dispatchEvent(new CustomEvent('octane:open-gps-intelligence', { detail: { tab: 'fuel' } }));
+        });
+    }
 
     // Quick GPS Sync button inside Cockpit GPS Panel
     const gpsSyncBtn = currentContainer.querySelector('#cockpit-gps-sync-btn');

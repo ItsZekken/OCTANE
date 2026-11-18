@@ -18,6 +18,7 @@
  */
 
 import { renderComponentIconSvg } from './icons-catalog.js';
+import { computePhysicalWear } from '../../core/vehicle-health-engine.js';
 
 export { DEFAULT_MAINTENANCE_ITEMS } from '../../core/db-local.js';
 
@@ -101,19 +102,34 @@ export function getWearStatusColor(lifePct) {
  * Calculates remaining life, percentages, and telemetry status for a maintenance item.
  * @param {Object} item
  * @param {number} [currentOdo=0]
+ * @param {Object|null} [gpsContext=null] - Optional { gpsDays, tripsByDate } for physical equivalent wear
  * @returns {Object}
  */
-export function calculateWearDialTelemetry(item, currentOdo = 0) {
+export function calculateWearDialTelemetry(item, currentOdo = 0, gpsContext = null) {
     const odo = Number(currentOdo) || 0;
-    const lastServiceOdo = Number(item.lastServiceOdo) || 0;
-    const intervalKm = Math.max(1, Number(item.intervalKm) || 5000);
+    const lastServiceOdo = Number(item?.lastServiceOdo) || 0;
+    const intervalKm = Math.max(1, Number(item?.intervalKm) || 5000);
 
-    // Strict formula: KM Restantes = Math.max(0, (lastServiceOdo + intervalKm) - currentOdo)
-    const kmRemaining = Math.max(0, (lastServiceOdo + intervalKm) - odo);
-
-    // Percentage of interval remaining (clamped between 0 and 100)
+    // Baseline linear formula: KM Restantes = Math.max(0, (lastServiceOdo + intervalKm) - currentOdo)
+    const realKmRemaining = Math.max(0, (lastServiceOdo + intervalKm) - odo);
+    let kmRemaining = realKmRemaining;
     const rawPct = (kmRemaining / intervalKm) * 100;
-    const lifePct = Math.min(100, Math.max(0, rawPct));
+    let lifePct = Math.min(100, Math.max(0, rawPct));
+    let physicalWear = null;
+    let stressMultiplier = 1.0;
+
+    if (gpsContext && (gpsContext.gpsDays || gpsContext.tripsByDate)) {
+        physicalWear = computePhysicalWear(item, {
+            currentOdo: odo,
+            gpsDays: gpsContext.gpsDays || null,
+            tripsByDate: gpsContext.tripsByDate || null,
+        });
+        if (physicalWear.hasGpsStressData) {
+            kmRemaining = physicalWear.remainingEquivalentKm;
+            lifePct = physicalWear.lifePct;
+            stressMultiplier = physicalWear.stressMultiplier;
+        }
+    }
 
     const statusMeta = getWearStatusColor(lifePct);
 
@@ -123,7 +139,10 @@ export function calculateWearDialTelemetry(item, currentOdo = 0) {
     return {
         kmRemaining,
         remainingKm: kmRemaining,
+        realKmRemaining,
         lifePct,
+        physicalWear,
+        stressMultiplier,
         status: statusMeta.status,
         statusText: isCritical ? 'CRÍTICO' : (isWarning ? 'ATENCIÓN' : 'NOMINAL'),
         colorVar: statusMeta.colorVar,
@@ -175,15 +194,17 @@ export function render240ArcSvg(lifePct = 100, strokeColor = 'var(--accent-volt)
  * 
  * @param {Object} item - Maintenance item record
  * @param {number} [currentOdo=0] - Highest current odometer from telemetry_logs
+ * @param {Object|null} [gpsContext=null] - Optional { gpsDays, tripsByDate } for physical wear calculation
  * @returns {string} HTML string
  */
-export function renderWearDialCard(item, currentOdo = 0) {
+export function renderWearDialCard(item, currentOdo = 0, gpsContext = null) {
     const {
         kmRemaining,
         lifePct,
         colorVar,
         lastServiceOdo,
-    } = calculateWearDialTelemetry(item, currentOdo);
+        stressMultiplier,
+    } = calculateWearDialTelemetry(item, currentOdo, gpsContext);
 
     // Geometry definition for 240° Arc Dial
     // Arc spans 240°, starting from 150° (bottom-left) to 390° (bottom-right)
@@ -267,7 +288,7 @@ export function renderWearDialCard(item, currentOdo = 0) {
               ${kmFormatted}
             </span>
             <span class="font-mono text-[10px] text-[var(--text-secondary)] tracking-widest uppercase mt-1">
-              KM REST.
+              KM REST.${stressMultiplier >= 1.10 ? ` · ${stressMultiplier.toFixed(2)}×` : ''}
             </span>
           </div>
         </div>

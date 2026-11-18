@@ -19,6 +19,8 @@
 import { store } from './state.js';
 import { getMaintenanceItems, getLegalDocs, getTelemetryLogs, getVehicleProfile } from './db-local.js';
 import { calculateWearDialTelemetry } from '../components/cluster/wear-dial-card.js';
+import { analyzeElectricalHealth } from './vehicle-health-engine.js';
+import { calculateTelemetryModel } from './telemetry-engine.js';
 
 export const ALERT_THRESHOLDS = Object.freeze({
     LEGAL_CRITICAL_DAYS: 15,
@@ -200,9 +202,10 @@ export function evaluateLegalDoc(doc, fromDate = new Date()) {
  * Evaluates a single maintenance item.
  * @param {Object} item
  * @param {number} [currentOdo=0]
+ * @param {Object|null} [gpsContext=null]
  * @returns {Object}
  */
-export function evaluateMaintenanceItem(item, currentOdo = 0) {
+export function evaluateMaintenanceItem(item, currentOdo = 0, gpsContext = null) {
     if (!item) {
         return {
             id: 'maint-unknown',
@@ -217,7 +220,7 @@ export function evaluateMaintenanceItem(item, currentOdo = 0) {
         };
     }
 
-    const wear = calculateWearDialTelemetry(item, currentOdo);
+    const wear = calculateWearDialTelemetry(item, currentOdo, gpsContext);
     const title = (item.name || item.title || 'COMPONENTE').toUpperCase();
 
     const isCritical = wear.status === 'critical' || wear.kmRemaining <= 0 || wear.kmRemaining < ALERT_THRESHOLDS.MAINT_CRITICAL_KM;
@@ -244,6 +247,8 @@ export function evaluateMaintenanceItem(item, currentOdo = 0) {
         type: 'maintenance',
         name: title,
         kmRemaining: wear.kmRemaining,
+        realKmRemaining: wear.realKmRemaining,
+        stressMultiplier: wear.stressMultiplier,
         lifePct: wear.lifePct,
         lastServiceOdo: wear.lastServiceOdo,
         intervalKm: wear.intervalKm,
@@ -268,13 +273,15 @@ function processAlertsData(data = {}) {
     const currentOdo = Number(data.currentOdo) || 0;
     const fromDate = data.fromDate || new Date();
 
+    const gpsContext = data.gpsContext || null;
+
     const criticalAlerts = [];
     const warningAlerts = [];
     const nominal = [];
 
-    // 1. Evaluate Maintenance Items
+    // 1. Evaluate Maintenance Items (with optional GPS physical equivalent wear context)
     for (const item of maintenanceItems) {
-        const evalItem = evaluateMaintenanceItem(item, currentOdo);
+        const evalItem = evaluateMaintenanceItem(item, currentOdo, gpsContext);
         if (evalItem.severity === 'critical') {
             criticalAlerts.push(evalItem);
         } else if (evalItem.severity === 'warning') {
@@ -302,6 +309,60 @@ function processAlertsData(data = {}) {
         } else {
             nominal.push(evalDoc);
         }
+    }
+
+    // 3. Evaluate Longitudinal Electrical Health Alerts
+    const evalNowMs = fromDate instanceof Date ? fromDate.getTime() : Date.now();
+    const electricalHealth = data.electricalHealth || (
+        (data.voltageHistory !== undefined || data.gpsDays !== undefined || data.gpsLive !== undefined)
+            ? analyzeElectricalHealth(
+                data.voltageHistory || [],
+                data.gpsDays || null,
+                data.gpsLive || null,
+                evalNowMs
+            )
+            : null
+    );
+
+    if (electricalHealth && Array.isArray(electricalHealth.alerts)) {
+        for (const elecAlert of electricalHealth.alerts) {
+            if (!elecAlert) continue;
+            const normalized = {
+                ...elecAlert,
+                type: elecAlert.type || 'electrical',
+                category: elecAlert.category || 'electrical',
+                name: elecAlert.name || elecAlert.title || 'SISTEMA ELÉCTRICO',
+            };
+            if (normalized.severity === 'critical' || normalized.isCritical) {
+                criticalAlerts.push(normalized);
+            } else if (normalized.severity === 'warning' || normalized.isWarning) {
+                warningAlerts.push(normalized);
+            }
+        }
+    }
+
+    // 4. Evaluate Fuel Consumption Drift Warning Alert
+    const fuelAnomaly = data.fuelAnomalyAlert || null;
+    if (fuelAnomaly && typeof fuelAnomaly === 'object') {
+        const excessPct = Number(fuelAnomaly.avgExcessPct);
+        const pctSuffix = Number.isFinite(excessPct) && excessPct > 0 ? ` · +${Math.round(excessPct)}%` : '';
+        const baseLabel = fuelAnomaly.label || 'CONSUMO ANÓMALO';
+        const message = fuelAnomaly.message || `${baseLabel}${pctSuffix}`;
+        warningAlerts.push({
+            id: fuelAnomaly.id || 'fuel_consumption_drift',
+            type: fuelAnomaly.type || 'fuel_consumption_drift',
+            category: 'fuel',
+            title: baseLabel,
+            name: baseLabel,
+            severity: 'warning',
+            label: baseLabel,
+            color: 'var(--accent-amber)',
+            isCritical: false,
+            isWarning: true,
+            consecutiveCount: Number(fuelAnomaly.consecutiveCount) || 2,
+            avgExcessPct: Number.isFinite(excessPct) ? Math.round(excessPct) : 0,
+            message,
+        });
     }
 
     const allAlerts = [...criticalAlerts, ...warningAlerts];
@@ -348,7 +409,17 @@ function processAlertsData(data = {}) {
  * @returns {Object|Promise<Object>}
  */
 export function calculateActiveAlerts(data) {
-    if (data && (data.legalDocs !== undefined || data.maintenanceItems !== undefined)) {
+    if (
+        data &&
+        (
+            data.legalDocs !== undefined ||
+            data.maintenanceItems !== undefined ||
+            data.electricalHealth !== undefined ||
+            data.voltageHistory !== undefined ||
+            data.gpsLive !== undefined ||
+            data.fuelAnomalyAlert !== undefined
+        )
+    ) {
         return processAlertsData(data);
     }
     return refreshAlerts();
@@ -375,11 +446,27 @@ export async function refreshAlerts() {
         const gpsOdo = Number(profile?.gpsCache?.live?.totalMile) || 0;
         const currentOdo = Math.max(logMaxOdo, profileOdo, gpsOdo, 0);
 
+        const gpsContext = {
+            gpsDays: profile?.gpsCache?.days || null,
+            tripsByDate: profile?.gpsCache?.tripsByDate || null,
+        };
+        const electricalHealth = analyzeElectricalHealth(
+            profile?.gpsCache?.voltageHistory || [],
+            profile?.gpsCache?.days || null,
+            profile?.gpsCache?.live || null
+        );
+        const fuelAnomalyAlert = Array.isArray(logs) && logs.length > 0
+            ? (calculateTelemetryModel(logs, profile || {})?.fuelPhysicsModel?.anomalyAlert || null)
+            : null;
+
         cachedAlerts = processAlertsData({
             legalDocs,
             maintenanceItems,
             currentOdo,
-            fromDate: new Date()
+            fromDate: new Date(),
+            gpsContext,
+            electricalHealth,
+            fuelAnomalyAlert,
         });
 
         // Update global state store

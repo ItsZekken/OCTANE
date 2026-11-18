@@ -15,6 +15,7 @@
 
 import { store, playHorologyTick } from '../core/state.js';
 import { getMaintenanceItems } from '../core/db-local.js';
+import { analyzeElectricalHealth } from '../core/vehicle-health-engine.js';
 import { renderWearDialCard } from '../components/cluster/wear-dial-card.js';
 import {
     openResetMaintenanceModal,
@@ -43,12 +44,75 @@ export function getCurrentOdometer(logs = [], vehicleProfile = null) {
 }
 
 /**
+ * Builds the GPS physical-wear context from vehicleProfile.
+ * @param {Object|null} vehicleProfile
+ * @returns {{ gpsDays: Object|null, tripsByDate: Object|null }|null}
+ */
+function buildClusterGpsContext(vehicleProfile) {
+    const cache = vehicleProfile?.gpsCache;
+    if (!cache || (!cache.days && !cache.tripsByDate)) return null;
+    return {
+        gpsDays: cache.days || null,
+        tripsByDate: cache.tripsByDate || null,
+    };
+}
+
+/**
+ * Formats the compact header battery trigger readout from live GPS and 30d electrical health.
+ * @param {Object|null} vehicleProfile
+ * @returns {{ visible: boolean, text: string, colorClass: string }}
+ */
+function formatClusterBatteryTrigger(vehicleProfile) {
+    const cache = vehicleProfile?.gpsCache || {};
+    const live = cache.live || null;
+    const health = analyzeElectricalHealth(cache.voltageHistory || [], cache.days || null, live);
+    const liveV = Number(live?.externalVoltage) || 0;
+    const accOn = Boolean(live?.accStatus);
+    const displayV = liveV > 0 ? liveV : (accOn ? health.chargingAvgV : health.restingAvgV);
+
+    if (!(displayV > 0)) {
+        return { visible: false, text: '', colorClass: 'text-[var(--text-secondary)]' };
+    }
+
+    let statusLabel = 'ÓPTIMA';
+    let tone = 'volt';
+    if (accOn && health.chargingStatus !== 'SIN DATO') {
+        statusLabel = health.chargingStatus;
+        tone = health.chargingTone;
+    } else if (health.restingStatus !== 'SIN DATO') {
+        statusLabel = health.restingStatus;
+        tone = health.restingTone;
+    } else if (displayV < 12.15) {
+        statusLabel = 'CRÍTICA';
+        tone = 'crimson';
+    } else if (displayV < 12.45) {
+        statusLabel = 'DESGASTE';
+        tone = 'amber';
+    }
+
+    const colorClass = tone === 'crimson'
+        ? 'text-[var(--accent-crimson)]'
+        : tone === 'amber'
+            ? 'text-[var(--accent-amber)]'
+            : tone === 'volt'
+                ? 'text-[var(--accent-volt)]'
+                : 'text-[var(--text-secondary)]';
+
+    return {
+        visible: true,
+        text: `BATERÍA: ${displayV.toFixed(1)}V · ${statusLabel} →`,
+        colorClass,
+    };
+}
+
+/**
  * Renders the Wear Dial Matrix inside container.
  * @param {HTMLElement} gridContainer
  * @param {Array<Object>} items
  * @param {number} currentOdo
+ * @param {Object|null} [gpsContext=null]
  */
-function renderDialsGrid(gridContainer, items, currentOdo) {
+function renderDialsGrid(gridContainer, items, currentOdo, gpsContext = null) {
     if (!gridContainer) return;
 
     if (!items || items.length === 0) {
@@ -61,7 +125,7 @@ function renderDialsGrid(gridContainer, items, currentOdo) {
     }
 
     gridContainer.innerHTML = items
-        .map(item => renderWearDialCard(item, currentOdo))
+        .map(item => renderWearDialCard(item, currentOdo, gpsContext))
         .join('');
 }
 
@@ -107,10 +171,9 @@ export async function renderClusterView(container) {
     // 1. Fetch telemetry logs and calculate current vehicle odometer
     const state = store.getState();
     const logs = state.telemetryLogs || [];
-    const gpsLive = state.vehicleProfile?.gpsCache?.live || null;
     let currentOdo = getCurrentOdometer(logs, state.vehicleProfile);
-    const extVoltage = Number(gpsLive?.externalVoltage) || 0;
-    const accStatus = Boolean(gpsLive?.accStatus);
+    let gpsContext = buildClusterGpsContext(state.vehicleProfile);
+    const batteryTrigger = formatClusterBatteryTrigger(state.vehicleProfile);
 
     // 2. Fetch or auto-seed maintenance items from IndexedDB
     let items = [];
@@ -135,12 +198,13 @@ export async function renderClusterView(container) {
             <span class="font-mono text-xs uppercase tracking-widest text-[var(--text-primary)] font-semibold">CLÚSTER</span>
           </div>
           <div class="flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">
-            ${extVoltage > 0 ? `
-              <span id="cluster-top-voltage-readout" class="tabular-nums ${extVoltage < 12.1 ? 'text-[var(--accent-crimson)]' : 'text-[var(--accent-volt)]'}">
-                BATERÍA: ${extVoltage.toFixed(2)}V · ${accStatus ? 'ACC ON' : 'ACC OFF'}
-              </span>
-              <span class="text-[var(--line-strong)]">·</span>
-            ` : ''}
+            <button
+              id="cluster-top-voltage-readout"
+              type="button"
+              class="${batteryTrigger.visible ? '' : 'hidden '}tabular-nums cursor-pointer hover:opacity-80 transition-opacity ${batteryTrigger.colorClass}"
+              title="Abrir salud eléctrica y desgaste físico"
+            >${batteryTrigger.text}</button>
+            <span id="cluster-top-voltage-sep" class="${batteryTrigger.visible ? '' : 'hidden '}text-[var(--line-strong)]">·</span>
             <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-volt)]"></span>
             <span id="cluster-top-odo-readout" class="tabular-nums">ODÓMETRO: ${currentOdo.toLocaleString('en-US')} KM</span>
           </div>
@@ -185,9 +249,15 @@ export async function renderClusterView(container) {
     const dialsGrid = container.querySelector('#cluster-dials-grid');
     const addCompBtn = container.querySelector('#cluster-add-component-btn');
     const topOdoReadout = container.querySelector('#cluster-top-odo-readout');
+    const topVoltageBtn = container.querySelector('#cluster-top-voltage-readout');
+
+    topVoltageBtn?.addEventListener('click', () => {
+        playHorologyTick(1200, 0.012, 0.02);
+        window.dispatchEvent(new CustomEvent('octane:open-gps-intelligence', { detail: { tab: 'health' } }));
+    });
 
     // Initial render of dials
-    renderDialsGrid(dialsGrid, items, currentOdo);
+    renderDialsGrid(dialsGrid, items, currentOdo, gpsContext);
 
     // 4. Grid Event Delegation (Edit, Reset & History Buttons)
     dialsGrid?.addEventListener('click', (e) => {
@@ -201,11 +271,11 @@ export async function renderClusterView(container) {
                     item: targetItem,
                     onSave: async () => {
                         items = await getMaintenanceItems();
-                        renderDialsGrid(dialsGrid, items, currentOdo);
+                        renderDialsGrid(dialsGrid, items, currentOdo, gpsContext);
                     },
                     onDelete: async () => {
                         items = await getMaintenanceItems();
-                        renderDialsGrid(dialsGrid, items, currentOdo);
+                        renderDialsGrid(dialsGrid, items, currentOdo, gpsContext);
                     }
                 });
             }
@@ -223,7 +293,7 @@ export async function renderClusterView(container) {
                     currentOdo,
                     onSave: async () => {
                         items = await getMaintenanceItems();
-                        renderDialsGrid(dialsGrid, items, currentOdo);
+                        renderDialsGrid(dialsGrid, items, currentOdo, gpsContext);
                     }
                 });
             }
@@ -245,17 +315,17 @@ export async function renderClusterView(container) {
                             currentOdo,
                             onSave: async () => {
                                 items = await getMaintenanceItems();
-                                renderDialsGrid(dialsGrid, items, currentOdo);
+                                renderDialsGrid(dialsGrid, items, currentOdo, gpsContext);
                             }
                         });
                     },
                     onDelete: async () => {
                         items = await getMaintenanceItems();
-                        renderDialsGrid(dialsGrid, items, currentOdo);
+                        renderDialsGrid(dialsGrid, items, currentOdo, gpsContext);
                     },
                     onSave: async () => {
                         items = await getMaintenanceItems();
-                        renderDialsGrid(dialsGrid, items, currentOdo);
+                        renderDialsGrid(dialsGrid, items, currentOdo, gpsContext);
                     }
                 });
             }
@@ -268,7 +338,7 @@ export async function renderClusterView(container) {
             currentOdo,
             onSave: async () => {
                 items = await getMaintenanceItems();
-                renderDialsGrid(dialsGrid, items, currentOdo);
+                renderDialsGrid(dialsGrid, items, currentOdo, gpsContext);
             }
         });
     });
@@ -279,6 +349,7 @@ export async function renderClusterView(container) {
 
         let odoChanged = false;
         let itemsChanged = false;
+        let profileChanged = false;
 
         if (newState.telemetryLogs !== prevState.telemetryLogs || newState.vehicleProfile !== prevState.vehicleProfile) {
             const newOdo = getCurrentOdometer(newState.telemetryLogs || [], newState.vehicleProfile);
@@ -286,10 +357,19 @@ export async function renderClusterView(container) {
                 currentOdo = newOdo;
                 odoChanged = true;
             }
+            if (newState.vehicleProfile !== prevState.vehicleProfile) {
+                gpsContext = buildClusterGpsContext(newState.vehicleProfile);
+                profileChanged = true;
+            }
             const voltEl = container.querySelector('#cluster-top-voltage-readout');
-            const liveSnap = newState.vehicleProfile?.gpsCache?.live;
-            if (voltEl && liveSnap && Number(liveSnap.externalVoltage) > 0) {
-                voltEl.textContent = `BATERÍA: ${Number(liveSnap.externalVoltage).toFixed(2)}V · ${liveSnap.accStatus ? 'ACC ON' : 'ACC OFF'}`;
+            const voltSep = container.querySelector('#cluster-top-voltage-sep');
+            const nextTrigger = formatClusterBatteryTrigger(newState.vehicleProfile);
+            if (voltEl) {
+                voltEl.textContent = nextTrigger.text;
+                voltEl.className = `${nextTrigger.visible ? '' : 'hidden '}tabular-nums cursor-pointer hover:opacity-80 transition-opacity ${nextTrigger.colorClass}`;
+            }
+            if (voltSep) {
+                voltSep.className = `${nextTrigger.visible ? '' : 'hidden '}text-[var(--line-strong)]`;
             }
         }
 
@@ -298,11 +378,11 @@ export async function renderClusterView(container) {
             itemsChanged = true;
         }
 
-        if (odoChanged || itemsChanged) {
+        if (odoChanged || itemsChanged || profileChanged) {
             if (topOdoReadout) {
                 topOdoReadout.textContent = `ODÓMETRO: ${currentOdo.toLocaleString('en-US')} KM`;
             }
-            renderDialsGrid(dialsGrid, items, currentOdo);
+            renderDialsGrid(dialsGrid, items, currentOdo, gpsContext);
         }
     });
 

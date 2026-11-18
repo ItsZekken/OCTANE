@@ -24,6 +24,11 @@ import {
     IOPGPS_INSTALL_DATE
 } from '../../core/iopgps-sync.js';
 import { createRouteMap } from '../gps/gps-route-map.js';
+import {
+    detectSemanticPlaces,
+    resolvePlaceLabel,
+    analyzeOptimalDeparture
+} from '../../core/geospatial-intelligence.js';
 
 let modalRootEl = null;
 let currentScope = 'cycle'; // 'cycle' | '7days' | 'all'
@@ -32,6 +37,8 @@ let scopeCycleEnd = '';
 let currentTrips = [];
 let currentDays = [];
 let currentSummary = null;
+let currentSemanticPlaces = null;
+let currentOptimalDeparture = [];
 let routeMapController = null;
 
 // Navigation state: 'days' (0) | 'day' (1) | 'trip' (2)
@@ -41,6 +48,31 @@ let activeTrip = null;
 
 let isRefreshing = false;
 let isLoading = false;
+
+function resolveTripPlaceLabel(trip, endType = 'start', preferRaw = false) {
+    if (!trip) return endType === 'start' ? 'Origen' : 'Destino';
+    const track = Array.isArray(trip.trackPoints) ? trip.trackPoints : [];
+    const lat = endType === 'start'
+        ? (trip.startLat ?? track[0]?.lat)
+        : (trip.endLat ?? track[track.length - 1]?.lat);
+    const lng = endType === 'start'
+        ? (trip.startLng ?? track[0]?.lng)
+        : (trip.endLng ?? track[track.length - 1]?.lng);
+    const fallback = endType === 'start'
+        ? ((preferRaw ? trip.rawStartAddress : null) || trip.startAddress || 'Origen')
+        : ((preferRaw ? trip.rawEndAddress : null) || trip.endAddress || 'Destino');
+    return resolvePlaceLabel(lat, lng, fallback, currentSemanticPlaces);
+}
+
+function refreshGeospatialContext(profile, fallbackTrips = []) {
+    const tripsByDate = profile?.gpsCache?.tripsByDate || null;
+    const stations = Array.isArray(profile?.learnedGasStations) ? profile.learnedGasStations : [];
+    const hasMap = tripsByDate && Object.keys(tripsByDate).length > 0;
+    currentSemanticPlaces = detectSemanticPlaces(hasMap ? tripsByDate : {}, stations);
+    currentOptimalDeparture = analyzeOptimalDeparture(hasMap ? tripsByDate : fallbackTrips, {
+        semanticPlaces: currentSemanticPlaces
+    });
+}
 
 /**
  * Resolves start and end YYYY-MM-DD dates for a given scope.
@@ -183,6 +215,7 @@ export async function openGpsTripsModal(options = {}) {
     currentTrips = cached;
     currentDays = groupTripsByDay(cached, { fuelPriceCop, baseEff });
     currentSummary = computeTripsSummary(cached, [], { fuelPriceCop, baseEff });
+    refreshGeospatialContext(profile, cached);
 
     renderView();
 
@@ -235,6 +268,7 @@ async function loadTripsData(opts = {}) {
         currentTrips = trips;
         currentDays = groupTripsByDay(trips, { fuelPriceCop, baseEff });
         currentSummary = res?.summary || computeTripsSummary(trips, [], { fuelPriceCop, baseEff });
+        refreshGeospatialContext(profile, trips);
 
         // If currently viewing a specific day, update it
         if (activeDay) {
@@ -324,6 +358,15 @@ function renderLevelDays() {
                 </div>
             </div>
 
+            ${currentOptimalDeparture?.primary && currentOptimalDeparture.primary.savedMin >= 2 ? `
+                <button id="gps-optimal-departure-ribbon" type="button" class="w-full px-5 py-2.5 border-b border-[var(--line-hair)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)]/40 transition-colors cursor-pointer flex items-center justify-between gap-3 shrink-0 font-mono text-[10px] uppercase tracking-wider">
+                    <span class="text-[var(--accent-volt)] font-semibold truncate tabular-nums">
+                        MEJOR SALIDA · ${currentOptimalDeparture.primary.bestWindowHm} · -${currentOptimalDeparture.primary.savedMin} MIN
+                    </span>
+                    <span class="text-[var(--text-secondary)] shrink-0">RUTAS →</span>
+                </button>
+            ` : ''}
+
             <!-- Lista de Días con Glifo Cartográfico (Mobile First) -->
             <div class="flex-1 overflow-y-auto divide-y divide-[var(--line-hair)] overscroll-contain">
                 ${currentDays.length === 0 ? `
@@ -402,6 +445,14 @@ function bindLevelDaysEvents() {
         });
 
         document.addEventListener('click', () => scopeDropdown.classList.add('hidden'), { once: true });
+    }
+
+    const optRibbon = modalRootEl.querySelector('#gps-optimal-departure-ribbon');
+    if (optRibbon) {
+        optRibbon.addEventListener('click', () => {
+            closeGpsTripsModal();
+            window.dispatchEvent(new CustomEvent('octane:open-gps-intelligence', { detail: { tab: 'routes' } }));
+        });
     }
 
     // Row click -> Level 1 (Día)
@@ -512,9 +563,9 @@ function renderLevelDay() {
                             <div class="flex items-center gap-1.5 text-xs font-mono font-medium text-[var(--text-primary)] truncate">
                                 <span>${t.startTimeHm}</span>
                                 <span class="text-[var(--text-muted)]">·</span>
-                                <span class="truncate">${t.startAddress || 'Origen'}</span>
+                                <span class="truncate">${resolveTripPlaceLabel(t, 'start', false)}</span>
                                 <span class="text-[var(--accent-amber)]">→</span>
-                                <span class="truncate">${t.endAddress || 'Destino'}</span>
+                                <span class="truncate">${resolveTripPlaceLabel(t, 'end', false)}</span>
                             </div>
                         </div>
 
@@ -573,8 +624,8 @@ function renderLevelTrip() {
         const tripCostCop = Number(activeTrip.reconciledCostCop ?? activeTrip.estCostCop) || 0;
         const tripGallons = Number(activeTrip.reconciledGallons ?? activeTrip.estGallons) || 0;
         const coldPct = Math.max(0, Math.round(Number(activeTrip.coldPenaltyPct) || 0));
-        const accelCount = Number(activeTrip.hardAccels ?? activeTrip.hardAccelCount) || 0;
-        const brakeCount = Number(activeTrip.hardBrakes) || 0;
+        const startPlace = resolveTripPlaceLabel(activeTrip, 'start', true);
+        const endPlace = resolveTripPlaceLabel(activeTrip, 'end', true);
 
         bottomPane.innerHTML = `
             <div class="flex-1 overflow-y-auto px-5 py-4 flex flex-col justify-between overscroll-contain bg-[var(--bg-void)]">
@@ -583,11 +634,11 @@ function renderLevelTrip() {
                     <div class="space-y-2 border-b border-[var(--line-hair)] pb-3">
                         <div class="flex items-start gap-2.5">
                             <span class="w-3.5 h-3.5 rounded-full bg-[var(--accent-volt)] text-[#09090b] font-mono text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">A</span>
-                            <span class="font-mono text-xs text-[var(--text-primary)] leading-snug">${activeTrip.rawStartAddress || activeTrip.startAddress || 'Origen'}</span>
+                            <span class="font-mono text-xs text-[var(--text-primary)] leading-snug">${startPlace}</span>
                         </div>
                         <div class="flex items-start gap-2.5">
                             <span class="w-3.5 h-3.5 rounded-full bg-[#EF4444] text-[#FFFFFF] font-mono text-[9px] font-bold flex items-center justify-center shrink-0 mt-0.5">B</span>
-                            <span class="font-mono text-xs text-[var(--text-primary)] leading-snug">${activeTrip.rawEndAddress || activeTrip.endAddress || 'Destino'}</span>
+                            <span class="font-mono text-xs text-[var(--text-primary)] leading-snug">${endPlace}</span>
                         </div>
                     </div>
 
@@ -610,31 +661,24 @@ function renderLevelTrip() {
                         </div>
                     </div>
 
-                    <!-- Métricas Secundarias Limpias: Velocidades, Movimiento y Carga Térmica/Dinámica -->
-                    <div class="grid grid-cols-3 gap-y-2.5 gap-x-2 text-xs font-mono text-[var(--text-secondary)] pt-1">
+                    <!-- Métricas Secundarias Limpias (1 fila aireada de 3 columnas) -->
+                    <div class="grid grid-cols-3 gap-2 text-xs font-mono text-[var(--text-secondary)] pt-1">
                         <div>
                             <span class="uppercase tracking-wider text-[10px]">MEDIA:</span>
                             <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${activeTrip.avgSpeedKmh} KM/H</span>
                         </div>
-                        <div>
+                        <div class="text-center">
                             <span class="uppercase tracking-wider text-[10px]">MÁX:</span>
                             <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${activeTrip.speedMax} KM/H</span>
                         </div>
                         <div class="text-right">
-                            <span class="uppercase tracking-wider text-[10px]">MOV:</span>
-                            <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${activeTrip.movingTimeMin} MIN</span>
-                        </div>
-                        <div>
-                            <span class="uppercase tracking-wider text-[10px]">FRÍO:</span>
-                            <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${coldPct}%</span>
-                        </div>
-                        <div>
-                            <span class="uppercase tracking-wider text-[10px]">ACEL:</span>
-                            <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${accelCount}</span>
-                        </div>
-                        <div class="text-right">
-                            <span class="uppercase tracking-wider text-[10px]">FREN:</span>
-                            <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${brakeCount}</span>
+                            ${coldPct > 0 ? `
+                                <span class="uppercase tracking-wider text-[10px]">FRÍO:</span>
+                                <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${coldPct}%</span>
+                            ` : `
+                                <span class="uppercase tracking-wider text-[10px]">MOV:</span>
+                                <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${activeTrip.movingTimeMin} MIN</span>
+                            `}
                         </div>
                     </div>
                 </div>
