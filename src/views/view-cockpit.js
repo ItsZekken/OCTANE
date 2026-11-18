@@ -553,13 +553,12 @@ function renderCockpitGpsBand(gpsSummary) {
     if (!gpsSummary || !gpsSummary.isConnected) {
         return `
             <section class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] px-4 py-3 flex items-center justify-between gap-4">
-                <div class="flex items-center gap-3 min-w-0">
-                    <span class="w-2 h-2 rounded-full bg-[var(--text-muted)] shrink-0"></span>
-                    <span class="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-primary)]">GPS DATA</span>
-                    <span class="font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)] truncate hidden sm:inline">SIN TELEMETRÍA ENLAZADA</span>
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[var(--text-muted)] shrink-0"></span>
+                    <span class="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-primary)]">GPS DATA</span>
                 </div>
                 <button id="cockpit-gps-settings-btn" type="button" class="font-mono text-[10px] uppercase tracking-widest text-[var(--accent-amber)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shrink-0">
-                    CONECTAR EN AJUSTES →
+                    CONECTAR →
                 </button>
             </section>
         `;
@@ -572,7 +571,7 @@ function renderCockpitGpsBand(gpsSummary) {
 
     const headerStatusText = gpsSummary.accStatus
         ? `EN MARCHA · ${gpsSummary.liveSpeed} KM/H`
-        : (gpsSummary.address ? gpsSummary.address.toUpperCase() : (gpsSummary.syncedAgo || 'CACHÉ GPS'));
+        : (gpsSummary.address ? gpsSummary.address.toUpperCase() : (gpsSummary.syncedAgo || 'ENLAZADO'));
 
     const voltageText = gpsSummary.voltage > 0 ? `${gpsSummary.voltage.toFixed(1)} V` : '—';
     const voltageColor = gpsSummary.voltage > 0 ? getToneColorVar(gpsSummary.batteryTone) : 'var(--text-secondary)';
@@ -580,106 +579,85 @@ function renderCockpitGpsBand(gpsSummary) {
 
     return `
         <section id="cockpit-gps-panel" class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] divide-y divide-[var(--line-hair)] overflow-hidden">
-            <!-- Header Row: Live Status + Location + Quick Sync & Bitácora Trigger -->
-            <div class="px-3.5 sm:px-4 py-2.5 bg-[var(--bg-void)] flex items-center justify-between gap-3">
-                <div id="cockpit-gps-data-trigger" class="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
-                    <span class="w-2 h-2 rounded-full shrink-0 ${statusDotClass}"></span>
-                    <span class="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-primary)] shrink-0">GPS DATA</span>
-                    <span class="text-[var(--line-strong)] hidden sm:inline">·</span>
+            <!-- Header Row -->
+            <div class="px-3.5 sm:px-4 py-2 bg-[var(--bg-void)] flex items-center justify-between gap-3">
+                <div id="cockpit-gps-data-trigger" class="flex items-center gap-2 min-w-0 flex-1 cursor-pointer">
+                    <span class="w-1.5 h-1.5 rounded-full shrink-0 ${statusDotClass}"></span>
+                    <span class="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-primary)] shrink-0">GPS DATA</span>
+                    <span class="text-[var(--line-strong)]">·</span>
                     <span class="font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] truncate">${headerStatusText}</span>
-                    ${gpsSummary.syncedAgo ? `<span class="font-mono text-[9px] text-[var(--text-muted)] uppercase shrink-0 hidden md:inline">· ${gpsSummary.syncedAgo}</span>` : ''}
                 </div>
 
-                <div class="flex items-center gap-2 shrink-0">
+                <div class="flex items-center gap-1.5 shrink-0">
                     ${gpsSummary.isConfigured ? `
-                        <button id="cockpit-gps-sync-btn" type="button" title="Sincronizar GPS" class="w-7 h-7 flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-elevated)] transition-colors cursor-pointer">
+                        <button id="cockpit-gps-sync-btn" type="button" title="Sincronizar GPS" class="w-7 h-7 flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer">
                             <svg id="cockpit-gps-sync-icon" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
                         </button>
                     ` : ''}
-                    <button id="cockpit-gps-open-btn" type="button" class="flex items-center gap-1.5 font-mono text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] uppercase tracking-widest cursor-pointer transition-colors">
-                        <span class="hidden sm:inline">BITÁCORA CINEMÁTICA</span>
-                        <span class="sm:hidden">VIAJES</span>
+                    <button id="cockpit-gps-open-btn" type="button" class="flex items-center gap-1 font-mono text-[10px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] uppercase tracking-widest cursor-pointer transition-colors">
+                        <span>VIAJES</span>
                         <span class="text-[var(--accent-amber)] font-bold">→</span>
                     </button>
                 </div>
             </div>
 
-            <!-- 4-Column Real Telemetry Strip -->
+            <!-- 4 Minimal Telemetry Cells -->
             <div id="cockpit-gps-body" class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-[var(--line-hair)] cursor-pointer hover:bg-[var(--bg-elevated)]/30 transition-colors">
-                <div class="px-3.5 py-2.5 sm:py-3 min-w-0">
-                    <span class="block font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--text-secondary)] truncate">RECORRIDO HOY</span>
-                    <div class="flex items-baseline gap-1 mt-1">
-                        <strong class="font-sans font-light text-xl sm:text-2xl tracking-tight tabular-nums text-[var(--text-primary)]">${gpsSummary.todayKm}</strong>
-                        <span class="font-mono text-[10px] text-[var(--accent-amber)]">KM</span>
+                <div class="px-3.5 py-2.5 min-w-0">
+                    <span class="block font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-secondary)] truncate">HOY</span>
+                    <div class="flex items-baseline gap-1 mt-0.5">
+                        <strong class="font-sans font-light text-lg sm:text-xl tracking-tight tabular-nums text-[var(--text-primary)]">${gpsSummary.todayKm}</strong>
+                        <span class="font-mono text-[9px] text-[var(--accent-amber)]">KM</span>
                     </div>
-                    <span class="block font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)] tabular-nums mt-0.5 truncate">
-                        ${gpsSummary.todayTripsCount > 0 ? `${gpsSummary.todayTripsCount} TRAYECTOS` : (gpsSummary.todayRunMin > 0 ? `${gpsSummary.todayRunMin} MIN EN RUTA` : 'SIN MOVIMIENTO')}
-                    </span>
                 </div>
 
-                <div class="px-3.5 py-2.5 sm:py-3 min-w-0">
-                    <span class="block font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--text-secondary)] truncate">VEL. MEDIA · ${gpsSummary.physScopeLabel}</span>
-                    <div class="flex items-baseline gap-1 mt-1">
-                        <strong class="font-sans font-light text-xl sm:text-2xl tracking-tight tabular-nums text-[var(--text-primary)]">${phys ? phys.avgSpeedKmh : '—'}</strong>
-                        <span class="font-mono text-[10px] text-[var(--text-secondary)]">${phys ? 'KM/H' : ''}</span>
+                <div class="px-3.5 py-2.5 min-w-0">
+                    <span class="block font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-secondary)] truncate">VEL. MEDIA</span>
+                    <div class="flex items-baseline gap-1 mt-0.5">
+                        <strong class="font-sans font-light text-lg sm:text-xl tracking-tight tabular-nums text-[var(--text-primary)]">${phys ? phys.avgSpeedKmh : '—'}</strong>
+                        <span class="font-mono text-[9px] text-[var(--text-secondary)]">${phys ? 'KM/H' : ''}</span>
                     </div>
-                    <span class="block font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)] tabular-nums mt-0.5 truncate">
-                        ${phys ? `${phys.runTimeHours} H · ${phys.runNo} VIAJES` : 'SIN VENTANA'}
-                    </span>
                 </div>
 
-                <div class="px-3.5 py-2.5 sm:py-3 min-w-0">
-                    <span class="block font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--text-secondary)] truncate">RALENTÍ ENCENDIDO</span>
-                    <div class="flex items-baseline gap-1 mt-1">
-                        <strong class="font-sans font-light text-xl sm:text-2xl tracking-tight tabular-nums ${phys && phys.idleAccOnMin >= 20 ? 'text-[var(--accent-amber)]' : 'text-[var(--text-primary)]'}">${phys ? phys.idleAccOnMin : '0'}</strong>
-                        <span class="font-mono text-[10px] text-[var(--text-secondary)]">MIN</span>
+                <div class="px-3.5 py-2.5 min-w-0">
+                    <span class="block font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-secondary)] truncate">RALENTÍ</span>
+                    <div class="flex items-baseline gap-1 mt-0.5">
+                        <strong class="font-sans font-light text-lg sm:text-xl tracking-tight tabular-nums ${phys && phys.idleAccOnMin >= 20 ? 'text-[var(--accent-amber)]' : 'text-[var(--text-primary)]'}">${phys ? phys.idleAccOnMin : '0'}</strong>
+                        <span class="font-mono text-[9px] text-[var(--text-secondary)]">MIN</span>
                     </div>
-                    <span class="block font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)] truncate mt-0.5">
-                        ${phys ? phys.regimeLabel : 'SIN RALENTÍ'}
-                    </span>
                 </div>
 
-                <div class="px-3.5 py-2.5 sm:py-3 min-w-0">
-                    <span class="block font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--text-secondary)] truncate">BATERÍA GPS</span>
-                    <div class="flex items-baseline gap-1.5 mt-1">
-                        <strong class="font-sans font-light text-xl sm:text-2xl tracking-tight tabular-nums" style="color: ${voltageColor}">${voltageText}</strong>
+                <div class="px-3.5 py-2.5 min-w-0">
+                    <span class="block font-mono text-[9px] uppercase tracking-[0.16em] text-[var(--text-secondary)] truncate">BATERÍA</span>
+                    <div class="flex items-baseline gap-1 mt-0.5">
+                        <strong class="font-sans font-light text-lg sm:text-xl tracking-tight tabular-nums" style="color: ${voltageColor}">${voltageText}</strong>
                     </div>
-                    <span class="block font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)] tabular-nums mt-0.5 truncate">
-                        ${gpsSummary.voltage > 0 ? gpsSummary.batteryLabel : `${gpsSummary.cachedTripsCount} TRAYECTOS`}
-                    </span>
                 </div>
             </div>
 
-            <!-- Last Cached Trip Preview Ribbon (Route Glyph + Origin -> Destination) -->
-            <div id="cockpit-gps-trip-row" class="px-3.5 sm:px-4 py-2.5 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)]/40 transition-colors cursor-pointer flex items-center justify-between gap-3">
-                ${trip ? `
-                    <div class="flex items-center gap-3 min-w-0 flex-1">
+            ${trip ? `
+                <!-- Compact Latest Trip Ribbon -->
+                <div id="cockpit-gps-trip-row" class="px-3.5 sm:px-4 py-2 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)]/40 transition-colors cursor-pointer flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5 min-w-0 flex-1">
                         ${trip.routeGlyph ? `
-                            <svg viewBox="0 0 76 26" class="w-16 h-6 shrink-0" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                            <svg viewBox="0 0 76 26" class="w-12 h-5 shrink-0" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
                                 <path d="${trip.routeGlyph}" fill="none" stroke="var(--accent-amber)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
-                        ` : `<span class="w-2 h-2 bg-[var(--accent-amber)] shrink-0"></span>`}
-                        <div class="min-w-0 flex-1">
-                            <div class="font-mono text-[10px] font-semibold text-[var(--text-primary)] uppercase truncate">
-                                ${trip.dateLabel} · ${trip.startTimeHm} · ${trip.startAddress || 'Origen'} → ${trip.endAddress || 'Destino'}
-                            </div>
-                        </div>
+                        ` : ''}
+                        <span class="font-mono text-[10px] text-[var(--text-secondary)] uppercase truncate">
+                            ${trip.startAddress || 'Origen'} → ${trip.endAddress || 'Destino'}
+                        </span>
                     </div>
-                    <div class="flex items-center gap-2 font-mono text-[10px] tabular-nums shrink-0">
+                    <div class="flex items-center gap-1.5 font-mono text-[10px] tabular-nums shrink-0">
                         <span class="font-semibold text-[var(--text-primary)]">${trip.distanceKm} KM</span>
-                        <span class="text-[var(--text-secondary)] hidden sm:inline">· ${trip.durationMin} MIN</span>
-                        ${trip.estCostCop > 0 ? `<span class="text-[var(--accent-amber)]">$${Math.round(trip.estCostCop).toLocaleString('es-CO')}</span>` : ''}
                         <span class="text-[var(--text-secondary)]">›</span>
                     </div>
-                ` : `
-                    <span class="font-mono text-[10px] uppercase tracking-wider text-[var(--text-secondary)] truncate">
-                        INSPECCIONAR TRAYECTOS Y MAPAS DE VELOCIDAD
-                    </span>
-                    <span class="font-mono text-[10px] text-[var(--accent-amber)] shrink-0">ABRIR ›</span>
-                `}
-            </div>
+                </div>
+            ` : `
+                <div id="cockpit-gps-trip-row" class="hidden"></div>
+            `}
         </section>
     `;
 }
@@ -857,116 +835,105 @@ function renderActiveCockpit(container) {
                     </div>
                 </div>
 
-                <!-- RIGHT (6 COLS LG): 2x2 CONTEXTUAL & INTERACTIVE KPI MATRIX -->
+                <!-- RIGHT (6 COLS LG): 2x2 MINIMAL INTERACTIVE KPI MATRIX -->
                 <div class="lg:col-span-6 xl:col-span-6 grid grid-cols-2 divide-x divide-y divide-[var(--line-hair)]">
 
-                    <!-- KPI 1: RENDIMIENTO (Último Ciclo + Delta vs Anterior + Sparkline) -->
-                    <div data-kpi-card="efficiency" role="button" tabindex="0" class="flat-cell p-3 sm:p-4 lg:p-4 xl:p-5 flex flex-col justify-between min-h-[138px] sm:min-h-[155px] lg:min-h-[160px] xl:min-h-[175px] overflow-hidden cursor-pointer hover:bg-[var(--bg-elevated)]/40 active:bg-[var(--bg-elevated)]/70 transition-colors group">
+                    <!-- KPI 1: RENDIMIENTO -->
+                    <div data-kpi-card="efficiency" role="button" tabindex="0" class="flat-cell p-3 sm:p-4 lg:p-5 flex flex-col justify-between min-h-[126px] sm:min-h-[145px] lg:min-h-[160px] overflow-hidden cursor-pointer hover:bg-[var(--bg-elevated)]/40 active:bg-[var(--bg-elevated)]/70 transition-colors group">
                         <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
                             <span class="truncate">RENDIMIENTO</span>
-                            <span class="flex items-center gap-1 font-semibold tabular-nums shrink-0" style="color: ${hasData ? getToneColorVar(effTrend.delta.tone) : 'var(--text-secondary)'}">
-                                <span>${hasData && effTrend.delta.text !== '—' ? effTrend.delta.text : '—'}</span>
-                                <span class="text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors">›</span>
+                            <span class="font-semibold tabular-nums shrink-0" style="color: ${hasData ? getToneColorVar(effTrend.delta.tone) : 'var(--text-secondary)'}">
+                                ${hasData && effTrend.delta.text !== '—' ? effTrend.delta.text : '›'}
                             </span>
                         </div>
-                        <div class="my-2 sm:my-3 min-w-0">
+                        <div class="my-2 min-w-0">
                             <div class="flex items-center justify-between gap-2">
                                 <div id="kpi-eff-num" class="font-sans font-light text-2xl sm:text-3xl lg:text-4xl xl:text-5xl tracking-tighter tabular-nums text-[var(--text-primary)] leading-none truncate">
                                     ${hasData ? effTrend.heroFormatted : '—'}
                                 </div>
                                 ${effSparkHtml}
                             </div>
-                            <div id="kpi-eff-unit" class="font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--accent-volt)] uppercase tracking-widest mt-1.5 sm:mt-2 truncate">
-                                ${effTrend.unitLabel} · ${effTrend.hasCycles ? 'ÚLT. CICLO' : 'BASE'}
+                            <div id="kpi-eff-unit" class="font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--accent-volt)] uppercase tracking-widest mt-1.5 truncate">
+                                ${effTrend.unitLabel}
                             </div>
                         </div>
-                        <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--text-secondary)] pt-2 border-t border-[var(--line-hair)]">
-                            <span id="kpi-eff-alt1" class="truncate">MEDIA ${hasData ? effTrend.avgFormatted : '—'}</span>
-                            <span id="kpi-eff-alt2" class="text-[var(--text-primary)] shrink-0">${hasData && effTrend.prevFormatted ? `ANT ${effTrend.prevFormatted}` : 'VER HISTORIAL'}</span>
+                        <div class="font-mono text-[9px] sm:text-[10px] tabular-nums text-[var(--text-secondary)] pt-2 border-t border-[var(--line-hair)] truncate">
+                            <span id="kpi-eff-alt1">MEDIA ${hasData ? effTrend.avgFormatted : '—'}</span>
                         </div>
                     </div>
 
-                    <!-- KPI 2: COSTO POR KM (Último Ciclo + Delta vs Anterior + Galón) -->
-                    <div data-kpi-card="cost" role="button" tabindex="0" class="flat-cell p-3 sm:p-4 lg:p-4 xl:p-5 flex flex-col justify-between min-h-[138px] sm:min-h-[155px] lg:min-h-[160px] xl:min-h-[175px] overflow-hidden cursor-pointer hover:bg-[var(--bg-elevated)]/40 active:bg-[var(--bg-elevated)]/70 transition-colors group">
+                    <!-- KPI 2: COSTO POR KM -->
+                    <div data-kpi-card="cost" role="button" tabindex="0" class="flat-cell p-3 sm:p-4 lg:p-5 flex flex-col justify-between min-h-[126px] sm:min-h-[145px] lg:min-h-[160px] overflow-hidden cursor-pointer hover:bg-[var(--bg-elevated)]/40 active:bg-[var(--bg-elevated)]/70 transition-colors group">
                         <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
-                            <span class="truncate">COSTO POR KM</span>
-                            <span class="flex items-center gap-1 font-semibold tabular-nums shrink-0" style="color: ${hasData ? getToneColorVar(costTrend.delta.tone) : 'var(--text-secondary)'}">
-                                <span>${hasData && costTrend.delta.text !== '—' ? costTrend.delta.text : '—'}</span>
-                                <span class="text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors">›</span>
+                            <span class="truncate">COSTO / KM</span>
+                            <span class="font-semibold tabular-nums shrink-0" style="color: ${hasData ? getToneColorVar(costTrend.delta.tone) : 'var(--text-secondary)'}">
+                                ${hasData && costTrend.delta.text !== '—' ? costTrend.delta.text : '›'}
                             </span>
                         </div>
-                        <div class="my-2 sm:my-3 min-w-0">
+                        <div class="my-2 min-w-0">
                             <div class="flex items-center justify-between gap-2">
                                 <div id="kpi-cost-km" class="font-sans font-light text-2xl sm:text-3xl lg:text-4xl xl:text-5xl tracking-tighter tabular-nums text-[var(--text-primary)] leading-none truncate">
                                     ${hasData && costTrend.currentCostPerKm > 0 ? '$' + costTrend.currentCostPerKm.toLocaleString('es-CO') : '—'}
                                 </div>
                                 ${costSparkHtml}
                             </div>
-                            <div class="font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--accent-amber)] uppercase tracking-widest mt-1.5 sm:mt-2 truncate">
-                                COP / KM · ${costTrend.hasCycles ? 'ÚLT. CICLO' : 'ESTIMADO'}
+                            <div class="font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--accent-amber)] uppercase tracking-widest mt-1.5 truncate">
+                                COP / KM
                             </div>
                         </div>
-                        <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--text-secondary)] pt-2 border-t border-[var(--line-hair)]">
-                            <span class="truncate">GAL $${Math.round(costTrend.lastRefuelPrice / 1000).toLocaleString('es-CO')}K</span>
-                            <strong id="kpi-full-price" class="font-mono font-medium tabular-nums text-[var(--text-primary)] shrink-0">
-                                ${hasData && costTrend.avgCostPerKm > 0 ? `PROM $${costTrend.avgCostPerKm}` : 'VER CURVA'}
-                            </strong>
+                        <div class="font-mono text-[9px] sm:text-[10px] tabular-nums text-[var(--text-secondary)] pt-2 border-t border-[var(--line-hair)] truncate">
+                            <span id="kpi-full-price">GAL $${Math.round(costTrend.lastRefuelPrice / 1000).toLocaleString('es-CO')}K</span>
                         </div>
                     </div>
 
-                    <!-- KPI 3: GASTO MES (Clarificado: Llevado a hoy VS Proyectado cierre de mes) -->
-                    <div data-kpi-card="monthly" role="button" tabindex="0" class="flat-cell p-3 sm:p-4 lg:p-4 xl:p-5 flex flex-col justify-between min-h-[138px] sm:min-h-[155px] lg:min-h-[160px] xl:min-h-[175px] overflow-hidden cursor-pointer hover:bg-[var(--bg-elevated)]/40 active:bg-[var(--bg-elevated)]/70 transition-colors group">
+                    <!-- KPI 3: GASTO MES -->
+                    <div data-kpi-card="monthly" role="button" tabindex="0" class="flat-cell p-3 sm:p-4 lg:p-5 flex flex-col justify-between min-h-[126px] sm:min-h-[145px] lg:min-h-[160px] overflow-hidden cursor-pointer hover:bg-[var(--bg-elevated)]/40 active:bg-[var(--bg-elevated)]/70 transition-colors group">
                         <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
                             <span class="truncate">GASTO MES</span>
-                            <span class="flex items-center gap-1 font-semibold tabular-nums shrink-0" style="color: ${hasData ? getToneColorVar(monthlyTrend.delta.tone) : 'var(--text-secondary)'}">
-                                <span>${hasData && monthlyTrend.delta.text !== '—' ? monthlyTrend.delta.text : '—'}</span>
-                                <span class="text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors">›</span>
+                            <span class="font-semibold tabular-nums shrink-0" style="color: ${hasData ? getToneColorVar(monthlyTrend.delta.tone) : 'var(--text-secondary)'}">
+                                ${hasData && monthlyTrend.delta.text !== '—' ? monthlyTrend.delta.text : '›'}
                             </span>
                         </div>
-                        <div class="my-2 sm:my-3 min-w-0">
+                        <div class="my-2 min-w-0">
                             <div class="flex items-center justify-between gap-2">
                                 <div id="kpi-monthly-spent" class="font-sans font-light text-2xl sm:text-3xl lg:text-4xl xl:text-5xl tracking-tighter tabular-nums text-[var(--text-primary)] leading-none truncate">
                                     ${hasData ? '$' + Math.round(monthlyTrend.currentMonthSpent / 1000).toLocaleString('es-CO') + 'K' : '—'}
                                 </div>
                                 ${monthlySparkHtml}
                             </div>
-                            <div class="font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--accent-volt)] uppercase tracking-widest mt-1.5 sm:mt-2 truncate">
-                                LLEVADO · DÍA ${monthlyTrend.dayOfMonth}/${monthlyTrend.daysInMonth}
+                            <div class="font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--accent-volt)] uppercase tracking-widest mt-1.5 truncate">
+                                LLEVADO
                             </div>
                         </div>
-                        <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--text-secondary)] pt-2 border-t border-[var(--line-hair)]">
-                            <span class="truncate">PROY. CIERRE</span>
+                        <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px] tabular-nums text-[var(--text-secondary)] pt-2 border-t border-[var(--line-hair)]">
+                            <span class="truncate">PROY.</span>
                             <strong id="kpi-month-diff" class="font-mono font-semibold tabular-nums text-[var(--accent-amber)] shrink-0">
                                 ${hasData && monthlyTrend.projectedMonthSpent > 0 ? `~$${Math.round(monthlyTrend.projectedMonthSpent / 1000).toLocaleString('es-CO')}K` : '—'}
                             </strong>
                         </div>
                     </div>
 
-                    <!-- KPI 4: RITMO DE USO (Reemplaza Autonomía Full — KM/DÍA últimos 7D vs Media) -->
-                    <div data-kpi-card="usage" role="button" tabindex="0" class="flat-cell p-3 sm:p-4 lg:p-4 xl:p-5 flex flex-col justify-between min-h-[138px] sm:min-h-[155px] lg:min-h-[160px] xl:min-h-[175px] overflow-hidden cursor-pointer hover:bg-[var(--bg-elevated)]/40 active:bg-[var(--bg-elevated)]/70 transition-colors group">
+                    <!-- KPI 4: RITMO DE USO -->
+                    <div data-kpi-card="usage" role="button" tabindex="0" class="flat-cell p-3 sm:p-4 lg:p-5 flex flex-col justify-between min-h-[126px] sm:min-h-[145px] lg:min-h-[160px] overflow-hidden cursor-pointer hover:bg-[var(--bg-elevated)]/40 active:bg-[var(--bg-elevated)]/70 transition-colors group">
                         <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
-                            <span class="truncate">RITMO DE USO</span>
-                            <span class="flex items-center gap-1 font-semibold tabular-nums shrink-0" style="color: ${usageTrend.hasUsageData ? getToneColorVar(usageTrend.delta.tone) : 'var(--text-secondary)'}">
-                                <span>${usageTrend.hasUsageData && usageTrend.delta.text !== '—' ? usageTrend.delta.text : '—'}</span>
-                                <span class="text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors">›</span>
+                            <span class="truncate">RITMO USO</span>
+                            <span class="font-semibold tabular-nums shrink-0" style="color: ${usageTrend.hasUsageData ? getToneColorVar(usageTrend.delta.tone) : 'var(--text-secondary)'}">
+                                ${usageTrend.hasUsageData && usageTrend.delta.text !== '—' ? usageTrend.delta.text : '›'}
                             </span>
                         </div>
-                        <div class="my-2 sm:my-3 min-w-0">
+                        <div class="my-2 min-w-0">
                             <div class="flex items-center justify-between gap-2">
                                 <div id="kpi-usage-rate" class="font-sans font-light text-2xl sm:text-3xl lg:text-4xl xl:text-5xl tracking-tighter tabular-nums text-[var(--text-primary)] leading-none truncate">
                                     ${usageTrend.hasUsageData ? usageTrend.displayKmDay : '—'}
                                 </div>
                                 ${usageSparkHtml}
                             </div>
-                            <div class="font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--accent-cyan)] uppercase tracking-widest mt-1.5 sm:mt-2 truncate">
-                                KM / DÍA · ÚLT. 7D
+                            <div class="font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--accent-cyan)] uppercase tracking-widest mt-1.5 truncate">
+                                KM / DÍA · 7D
                             </div>
                         </div>
-                        <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px] font-medium tabular-nums text-[var(--text-secondary)] pt-2 border-t border-[var(--line-hair)]">
-                            <span class="truncate">MES ${usageTrend.kmThisMonth} KM</span>
-                            <strong class="font-mono font-medium tabular-nums text-[var(--text-primary)] shrink-0">
-                                MEDIA ${usageTrend.baselineKmDay}
-                            </strong>
+                        <div class="font-mono text-[9px] sm:text-[10px] tabular-nums text-[var(--text-secondary)] pt-2 border-t border-[var(--line-hair)] truncate">
+                            <span>MES ${usageTrend.kmThisMonth} KM</span>
                         </div>
                     </div>
 
@@ -979,7 +946,7 @@ function renderActiveCockpit(container) {
             ${renderCockpitGpsBand(gpsSummary)}
 
             <!-- =================================================================
-                 STAGE 02: THE MONOLITHS (CICLOS DE CONSUMO)
+                 STAGE 02: THE MONOLITHS (CICLOS DE CONSUMO — 3 ANTERIORES + 1 ACTUAL)
                  ================================================================= -->
             <section id="stage-monoliths" class="flat-frame p-3.5 sm:p-6 lg:p-6 space-y-3.5 sm:space-y-4">
                 <div class="flex flex-wrap items-end justify-between gap-3 pb-4 border-b border-[var(--line-hair)]">
@@ -999,8 +966,8 @@ function renderActiveCockpit(container) {
                     </div>
                 </div>
 
-                <!-- Architectural Columns Grid -->
-                <div id="monoliths-container" class="grid grid-cols-4 sm:grid-cols-8 gap-2 lg:gap-2.5">
+                <!-- Architectural Columns Grid (Single Row: 3 Closed + 1 Active) -->
+                <div id="monoliths-container" class="grid grid-cols-4 gap-2 lg:gap-2.5">
                     <!-- Populated dynamically -->
                 </div>
 
@@ -1446,16 +1413,17 @@ function renderMonolithsStage() {
     container.innerHTML = '';
 
     const { model, unit } = cockpitState;
-    const cycles = model?.fullEraCycles || [];
+    const allCycles = model?.fullEraCycles || [];
+    const cycles = allCycles.slice(-3);
     const activeState = model?.activeTankState;
 
-    if (cycles.length === 0) {
-        // Render 8 silent placeholder columns
-        for (let i = 1; i <= 8; i++) {
+    if (allCycles.length === 0) {
+        // Render 4 silent placeholder columns (single row)
+        for (let i = 1; i <= 4; i++) {
             const col = document.createElement('div');
-            col.className = 'monolith-bar rounded-sm p-3 h-44 flex flex-col justify-between opacity-40';
+            col.className = 'monolith-bar rounded-sm p-2.5 sm:p-3 h-40 sm:h-44 flex flex-col justify-between opacity-40';
             col.innerHTML = `
-                <div class="flex items-center justify-between font-mono text-[10px]">
+                <div class="flex items-center justify-between font-mono text-[9px] sm:text-[10px]">
                     <span class="font-medium text-[var(--text-secondary)]">—</span>
                     <span class="text-[9px] text-[var(--text-muted)]">—</span>
                 </div>
@@ -1463,7 +1431,7 @@ function renderMonolithsStage() {
                     <div class="w-full bg-[var(--line-strong)]" style="height: 4%"></div>
                 </div>
                 <div class="leading-tight">
-                    <div class="font-sans font-light text-base tracking-tight tabular-nums">—</div>
+                    <div class="font-sans font-light text-sm sm:text-base tracking-tight tabular-nums">—</div>
                     <div class="font-mono text-[9px] text-[var(--text-secondary)] tabular-nums mt-0.5">0 KM</div>
                 </div>
             `;
@@ -1487,7 +1455,7 @@ function renderMonolithsStage() {
         const daysLabel = `${c.days || 1}D`;
 
         const col = document.createElement('div');
-        col.className = `monolith-bar rounded-sm p-3 h-44 flex flex-col justify-between cursor-pointer ${isSelected ? 'active' : ''}`;
+        col.className = `monolith-bar rounded-sm p-2.5 sm:p-3 h-40 sm:h-44 flex flex-col justify-between cursor-pointer ${isSelected ? 'active' : ''}`;
         col.setAttribute('data-tip', `${formatDateShort(c.startDate)} AL ${formatDateShort(c.endDate)} · ${formatEff(c.eff, unit, true)} · +${c.dist} KM`);
         col.onclick = () => {
             playHorologyTick(1100, 0.016, 0.03);
@@ -1503,7 +1471,7 @@ function renderMonolithsStage() {
         col.innerHTML = `
             <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px]">
                 <span class="font-medium text-[var(--text-primary)] truncate tabular-nums">${rangeLabel}</span>
-                <span class="text-[9px] text-[var(--text-muted)] shrink-0 tabular-nums">${daysLabel}</span>
+                <span class="text-[9px] text-[var(--text-muted)] shrink-0 tabular-nums hidden sm:inline">${daysLabel}</span>
             </div>
 
             <div class="relative flex-1 flex items-end my-2 bg-[var(--bg-void)] p-1">
@@ -1511,9 +1479,9 @@ function renderMonolithsStage() {
             </div>
 
             <div class="leading-tight">
-                <div class="font-sans font-normal text-base sm:text-lg tracking-tight tabular-nums flex items-baseline justify-between">
+                <div class="font-sans font-normal text-sm sm:text-lg tracking-tight tabular-nums flex items-baseline justify-between">
                     <span>${formatEff(c.eff, unit, false)}</span>
-                    <span class="font-mono text-[9px] text-[var(--text-secondary)] ml-1">${effUnitLabel}</span>
+                    <span class="font-mono text-[8px] sm:text-[9px] text-[var(--text-secondary)] ml-0.5">${effUnitLabel}</span>
                 </div>
                 <div class="font-mono text-[9px] text-[var(--text-secondary)] tabular-nums mt-0.5">+${c.dist} KM</div>
             </div>
@@ -1529,7 +1497,7 @@ function renderMonolithsStage() {
         const isLiveSelected = cockpitState.selectedCycleIdx === 'active';
 
         const liveCol = document.createElement('div');
-        liveCol.className = `monolith-bar rounded-sm p-3 h-44 flex flex-col justify-between cursor-pointer ${
+        liveCol.className = `monolith-bar rounded-sm p-2.5 sm:p-3 h-40 sm:h-44 flex flex-col justify-between cursor-pointer ${
             isLiveSelected
                 ? 'active border border-[var(--accent-amber)] ring-1 ring-[var(--accent-amber)] bg-[var(--bg-elevated)]/30'
                 : 'border-dashed border-[var(--line-strong)]'
@@ -1544,30 +1512,30 @@ function renderMonolithsStage() {
         };
         liveCol.innerHTML = `
             <div class="flex items-center justify-between gap-1 font-mono text-[9px] sm:text-[10px]">
-                <span class="font-medium text-[var(--accent-amber)] truncate tabular-nums">DESDE ${activeStartShort}</span>
+                <span class="font-medium text-[var(--accent-amber)] truncate tabular-nums">${activeStartShort}</span>
                 <span class="w-1.5 h-1.5 shrink-0 rounded-full bg-[var(--accent-amber)] animate-pulse"></span>
             </div>
             <div class="relative flex-1 flex items-end my-2 bg-[var(--bg-void)] p-1">
                 <div class="w-full bg-[var(--accent-amber)] ${isLiveSelected ? 'opacity-90' : 'opacity-60'}" style="height: ${activeState.activePct}%"></div>
             </div>
             <div class="leading-tight">
-                <div class="font-sans font-normal text-base sm:text-lg text-[var(--accent-amber)] tracking-tight tabular-nums flex items-baseline justify-between">
+                <div class="font-sans font-normal text-sm sm:text-lg text-[var(--accent-amber)] tracking-tight tabular-nums flex items-baseline justify-between">
                     <span>+${activeState.kmDriven}</span>
-                    <span class="font-mono text-[9px] text-[var(--accent-amber)] ml-1">KM</span>
+                    <span class="font-mono text-[8px] sm:text-[9px] text-[var(--accent-amber)] ml-0.5">KM</span>
                 </div>
-                <div class="font-mono text-[9px] text-[var(--text-secondary)] uppercase mt-0.5">${isLiveSelected ? 'SELECCIONADO' : 'ACTIVO'}</div>
+                <div class="font-mono text-[9px] text-[var(--text-secondary)] uppercase mt-0.5">${isLiveSelected ? 'SEL.' : 'ACTIVO'}</div>
             </div>
         `;
         container.appendChild(liveCol);
     }
 
-    // Fill remaining slots up to 8 with silent hairline columns (8-column Swiss chassis balance)
+    // Fill remaining slots up to 4 (single 4-column Swiss row)
     const currentCols = cycles.length + (activeState && cockpitState.logs.length > 0 ? 1 : 0);
-    for (let i = currentCols + 1; i <= 8; i++) {
+    for (let i = currentCols + 1; i <= 4; i++) {
         const col = document.createElement('div');
-        col.className = 'monolith-bar rounded-sm p-3 h-44 flex flex-col justify-between opacity-20 hidden sm:flex';
+        col.className = 'monolith-bar rounded-sm p-2.5 sm:p-3 h-40 sm:h-44 flex flex-col justify-between opacity-20';
         col.innerHTML = `
-            <div class="flex items-center justify-between font-mono text-[10px]">
+            <div class="flex items-center justify-between font-mono text-[9px] sm:text-[10px]">
                 <span class="font-medium text-[var(--text-secondary)]">—</span>
                 <span class="text-[9px] text-[var(--text-muted)]">—</span>
             </div>
@@ -1575,16 +1543,16 @@ function renderMonolithsStage() {
                 <div class="w-full bg-[var(--line-strong)]" style="height: 4%"></div>
             </div>
             <div class="leading-tight">
-                <div class="font-sans font-light text-base tracking-tight tabular-nums text-[var(--text-secondary)]">—</div>
-                <div class="font-mono text-[9px] text-[var(--text-secondary)] tabular-nums mt-0.5">STANDBY</div>
+                <div class="font-sans font-light text-sm sm:text-base tracking-tight tabular-nums text-[var(--text-secondary)]">—</div>
+                <div class="font-mono text-[9px] text-[var(--text-secondary)] tabular-nums mt-0.5">—</div>
             </div>
         `;
         container.appendChild(col);
     }
 
-    // Benchmark hairlines
-    if (cycles.length > 0) {
-        const effs = cycles.map(x => x.eff);
+    // Benchmark hairlines (computed across fullEraCycles for accuracy)
+    if (allCycles.length > 0) {
+        const effs = allCycles.map(x => x.eff);
         const minEl = document.getElementById('bench-min');
         const avgEl = document.getElementById('bench-avg');
         const maxEl = document.getElementById('bench-max');

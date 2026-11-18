@@ -308,8 +308,8 @@ function renderLevelDays() {
                 <div class="font-sans font-light text-5xl sm:text-6xl tracking-tighter tabular-nums text-[var(--text-primary)] leading-none">
                     ${totalKm.toLocaleString('es-CO')} <span class="text-sm font-mono tracking-widest text-[var(--accent-amber)] font-normal uppercase">KM</span>
                 </div>
-                <!-- Menú Selector de Alcance Discreto (Dropdown) & Ghost Race Launcher -->
-                <div class="mt-3 flex items-center justify-center gap-2">
+                <!-- Menú Selector de Alcance Discreto (Dropdown) -->
+                <div class="mt-3 flex items-center justify-center">
                     <div class="relative inline-block">
                         <button id="gps-scope-trigger" type="button" class="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--line-hair)] rounded-full bg-[var(--bg-elevated)]/30 active:scale-95 transition-all cursor-pointer">
                             <span>${activeScopeText}</span>
@@ -321,10 +321,6 @@ function renderLevelDays() {
                             <button data-scope-opt="all" class="w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-white/5 ${currentScope === 'all' ? 'text-[var(--accent-amber)] font-bold' : 'text-[var(--text-secondary)]'}">Historial Completo</button>
                         </div>
                     </div>
-
-                    <a href="/ghost-race.html" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-[var(--accent-amber)] hover:text-white border border-[var(--accent-amber)]/40 hover:border-[var(--accent-amber)] rounded-full bg-[var(--accent-amber)]/10 active:scale-95 transition-all cursor-pointer">
-                        <span>🏁 GHOST RACE</span>
-                    </a>
                 </div>
             </div>
 
