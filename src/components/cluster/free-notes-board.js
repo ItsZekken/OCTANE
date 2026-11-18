@@ -12,6 +12,8 @@
  * - Silencio Verbal Absoluto: Strict zero <p> tags, purely micro-labels, macro-numbers, and hairline borders.
  */
 
+import { confirmDialog, promptDialog } from '../dialogs/app-dialog.js';
+import { todayLocalYmd } from '../../core/date-utils.js';
 import { playHorologyTick, showToast } from '../../core/state.js';
 import {
   CATEGORY_THEMES,
@@ -57,7 +59,7 @@ let boardState = {
   selectedComposerCategory: 'GENERAL',
   categories: loadUserCategories(),
   isDated: true,
-  selectedDate: new Date().toISOString().slice(0, 10),
+  selectedDate: todayLocalYmd(),
   isOdoSealed: true,
   customOdo: null,
   currentOdo: 0,
@@ -84,7 +86,7 @@ function escapeHtml(str) {
  */
 function formatComposerDateLabel(dateStr) {
   if (!dateStr) return 'SIN FECHA';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocalYmd();
   const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const parts = dateStr.split('-');
   if (parts.length === 3) {
@@ -508,9 +510,9 @@ function attachEventListeners(container) {
 
   // Edit Mileage manually
   if (editOdoBtn) {
-    editOdoBtn.addEventListener('click', () => {
+    editOdoBtn.addEventListener('click', async () => {
       const current = boardState.customOdo !== null ? boardState.customOdo : boardState.currentOdo;
-      const userPrompt = window.prompt('INGRESAR KILOMETRAJE PARA LA NOTA (KM):', current || '');
+      const userPrompt = await promptDialog({ label: 'Kilometraje de la nota (KM)', initial: current || '', inputMode: 'numeric', maxLength: 7 });
       if (userPrompt !== null) {
         const parsed = parseInt(userPrompt.replace(/[^0-9]/g, ''), 10);
         if (!isNaN(parsed) && parsed >= 0) {
@@ -528,7 +530,7 @@ function attachEventListeners(container) {
   }
 
   // Categories delegation: select, add, and remove
-  container.addEventListener('click', (e) => {
+  container.addEventListener('click', async (e) => {
     // 1. Delete Category
     const delBtn = e.target.closest('[data-delete-cat]');
     if (delBtn) {
@@ -565,7 +567,7 @@ function attachEventListeners(container) {
     // 3. Add Category
     const addCatBtn = e.target.closest('#btn-add-category');
     if (addCatBtn) {
-      const newCat = window.prompt('NUEVA CATEGORÍA (MÁX 15 CARACTERES):');
+      const newCat = await promptDialog({ label: 'Nueva categoría', maxLength: 15 });
       if (newCat) {
         const cleanCat = newCat.toUpperCase().trim().slice(0, 15);
         if (cleanCat && !boardState.categories.includes(cleanCat)) {
@@ -656,7 +658,7 @@ function attachEventListeners(container) {
       const delBtn = e.target.closest('[data-action="delete"]');
       if (delBtn) {
         const id = delBtn.getAttribute('data-id');
-        const confirmed = window.confirm('¿ELIMINAR ESTA NOTA?');
+        const confirmed = await confirmDialog({ title: '¿ELIMINAR ESTA NOTA?', confirmLabel: 'Eliminar', danger: true });
         if (confirmed) {
           try {
             await removeNote(id);

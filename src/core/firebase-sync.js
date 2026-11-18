@@ -26,6 +26,9 @@ let auth = null;
 let firestore = null;
 let googleProvider = null;
 let debounceSyncTimer = null;
+let retryTimer = null;
+let retryAttempt = 0;
+const RETRY_DELAYS_MS = [5000, 30000, 120000];
 const SYNC_DEBOUNCE_MS = 1500;
 
 /**
@@ -73,7 +76,7 @@ export function initFirebase() {
                         email: user.email,
                         photoURL: user.photoURL,
                     },
-                    syncStatus: 'synced',
+                    syncStatus: 'syncing',
                 });
                 // Attempt initial cloud sync on login
                 try {
@@ -86,17 +89,7 @@ export function initFirebase() {
             }
         });
 
-        // Listen for online/offline events
-        if (typeof window !== 'undefined') {
-            window.addEventListener('online', () => {
-                showToast('CONEXIÓN RESTAURADA');
-                triggerCloudSync();
-            });
-            window.addEventListener('offline', () => {
-                store.setState({ syncStatus: 'offline' });
-                showToast('MODO SIN CONEXIÓN');
-            });
-        }
+        // Los avisos de conexión online/offline viven solo en main.js (antes se mostraban duplicados)
 
         return true;
     } catch (err) {
@@ -213,8 +206,20 @@ export async function syncToCloud() {
     try {
         store.setState({ syncStatus: 'syncing' });
 
-        const snapshot = await exportAllStores();
         const docRef = doc(firestore, 'users', user.uid, 'snapshots', 'master');
+
+        // Fusionar primero lo que haya en la nube (p. ej. registros del celular) para no pisarlo con datos viejos
+        try {
+            const cloudSnap = await getDoc(docRef);
+            if (cloudSnap.exists() && cloudSnap.data()?.stores) {
+                await importAllStores(cloudSnap.data(), { merge: true });
+                await refreshFromLocal();
+            }
+        } catch (mergeErr) {
+            console.warn('[OCTANE SYNC] Pre-push merge skipped:', mergeErr.message);
+        }
+
+        const snapshot = await exportAllStores();
 
         await setDoc(docRef, {
             ...snapshot,
@@ -225,6 +230,8 @@ export async function syncToCloud() {
         }, { merge: true });
 
         const now = Date.now();
+        retryAttempt = 0;
+        if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
         store.setState({
             syncStatus: 'synced',
             lastSyncTimestamp: now,
@@ -234,19 +241,60 @@ export async function syncToCloud() {
     } catch (err) {
         console.warn('[OCTANE SYNC] Cloud sync failed:', err.message);
         store.setState({ syncStatus: 'error' });
+        // Reintento automático con espera creciente (5 s, 30 s, 2 min); luego queda el reintento manual
+        if (!retryTimer && retryAttempt < RETRY_DELAYS_MS.length) {
+            const delay = RETRY_DELAYS_MS[retryAttempt++];
+            retryTimer = setTimeout(() => { retryTimer = null; syncToCloud(); }, delay);
+        }
         return false;
     }
+}
+
+/**
+ * Relee IndexedDB, actualiza el store y avisa a las vistas abiertas para que se repinten.
+ * @returns {Promise<Array>} logs actuales
+ */
+async function refreshFromLocal() {
+    const [profile, logs] = await Promise.all([getVehicleProfile(), getTelemetryLogs()]);
+    store.setState({
+        vehicleProfile: profile,
+        telemetryLogs: logs,
+        fuelPriceCop: profile.fuelPriceCop || store.getState().fuelPriceCop,
+    });
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('octane:logs-updated', { detail: { logs } }));
+        window.dispatchEvent(new CustomEvent('octane:rides-updated'));
+        window.dispatchEvent(new CustomEvent('octane:profile-updated'));
+    }
+    return logs;
+}
+
+let lastAutoPull = 0;
+function autoPull() {
+    const now = Date.now();
+    if (now - lastAutoPull < 10000 || document.visibilityState === 'hidden') return;
+    lastAutoPull = now;
+    pullFromCloud({ silent: true });
+}
+
+if (typeof window !== 'undefined') {
+    // Traer cambios de otros dispositivos al volver a la pestaña, recuperar conexión o cada 60 s
+    document.addEventListener('visibilitychange', autoPull);
+    window.addEventListener('focus', autoPull);
+    window.addEventListener('online', autoPull);
+    setInterval(autoPull, 60000);
 }
 
 /**
  * Pulls the latest snapshot from Cloud Firestore and updates local IndexedDB & store state.
  * @returns {Promise<boolean>}
  */
-export async function pullFromCloud() {
+export async function pullFromCloud({ silent = false } = {}) {
     const user = store.getState().user;
     if (!user || !user.uid || !isFirebaseConfigured() || !firestore) {
         return false;
     }
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
 
     try {
         store.setState({ syncStatus: 'syncing' });
@@ -262,23 +310,14 @@ export async function pullFromCloud() {
 
         const cloudData = docSnap.data();
         if (cloudData && cloudData.stores) {
+            const before = JSON.stringify((store.getState().telemetryLogs || []).map(l => l.updatedAt));
             await importAllStores(cloudData, { merge: true });
+            const logs = await refreshFromLocal();
+            const changed = before !== JSON.stringify(logs.map(l => l.updatedAt));
 
-            // Refresh store state with imported values
-            const [profile, logs] = await Promise.all([
-                getVehicleProfile(),
-                getTelemetryLogs(),
-            ]);
-
-            store.setState({
-                vehicleProfile: profile,
-                telemetryLogs: logs,
-                fuelPriceCop: profile.fuelPriceCop || store.getState().fuelPriceCop,
-                syncStatus: 'synced',
-                lastSyncTimestamp: Date.now(),
-            });
-
-            showToast('NUBE SINCRONIZADA');
+            // En pulls automáticos solo avisar cuando realmente llegaron datos nuevos
+            store.setState({ syncStatus: 'synced', lastSyncTimestamp: Date.now() });
+            if (changed || !silent) showToast('NUBE SINCRONIZADA');
             return true;
         }
 

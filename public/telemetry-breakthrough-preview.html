@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>OCTANE // KINETIC — GPS Breakthrough Telemetry Showcase</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+    :root {
+      --bg-void: #09090B;
+      --bg-surface: #0E0E11;
+      --bg-elevated: #141418;
+      --line-hair: #1E1E24;
+      --line-strong: #2E2E38;
+      --text-primary: #F4F4F6;
+      --text-secondary: #8A8A93;
+      --text-muted: #52525B;
+      --accent-amber: #F59E0B;
+      --accent-volt: #10B981;
+      --accent-cyan: #38BDF8;
+      --accent-crimson: #EF4444;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg-void);
+      color: var(--text-primary);
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; font-feature-settings: 'tnum' 1, 'zero' 1; }
+    .flat-frame { border: 1px solid var(--line-hair); background: var(--bg-surface); }
+    .hairline-b { border-bottom: 1px solid var(--line-hair); }
+    .hairline-t { border-top: 1px solid var(--line-hair); }
+    .hairline-r { border-right: 1px solid var(--line-hair); }
+    .hairline-l { border-left: 1px solid var(--line-hair); }
+
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.96); }
+    }
+    .animate-pulse-subtle { animation: pulse-subtle 2s infinite ease-in-out; }
+
+    @keyframes toast-slide-down {
+      0% { transform: translateY(-100%); opacity: 0; }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+    .animate-toast-down { animation: toast-slide-down 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+  </style>
+</head>
+<body class="p-3 sm:p-6 md:p-8 max-w-5xl mx-auto space-y-6">
+
+  <!-- TOP STATUS BAR -->
+  <header class="flex items-center justify-between pb-4 hairline-b">
+    <div class="space-y-0.5">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-[var(--accent-amber)] animate-pulse-subtle"></span>
+        <span class="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--accent-amber)] font-bold">OCTANE TELEMETRY LABS</span>
+      </div>
+      <h1 class="text-xl sm:text-2xl font-light tracking-tight text-[var(--text-primary)]">Laboratorio de Telemetría Dinámica GPS</h1>
+    </div>
+    <div class="text-right font-mono text-[11px] text-[var(--text-secondary)]">
+      <span>KINETIC · ENGINE v2</span>
+      <span class="block text-[9px] text-[var(--text-muted)]">3 MÓDULOS DE INNOVACIÓN</span>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       MÓDULO 1: APRENDIZAJE HISTÓRICO DE EDS & PWA NOTIFICATION
+       ========================================================================= -->
+  <section class="flat-frame p-4 sm:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-2 hairline-b pb-3">
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-xs font-bold text-[var(--accent-amber)]">01 //</span>
+        <span class="font-mono text-xs uppercase tracking-wider text-[var(--text-primary)]">Geocerca EDS Dinámica & Notificación PWA</span>
+      </div>
+      <span class="font-mono text-[10px] text-[var(--accent-volt)] border border-[var(--accent-volt)]/30 px-2 py-0.5 bg-[var(--accent-volt)]/5">APRENDIZAJE AUTOMÁTICO</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+      <!-- Panel de Aprendizaje Histórico -->
+      <div class="md:col-span-6 space-y-3">
+        <div class="font-mono text-[10px] text-[var(--text-secondary)] uppercase tracking-wider flex justify-between">
+          <span>Estaciones Aprendidas en Historial</span>
+          <span class="text-[var(--accent-amber)]">3 COORDENADAS</span>
+        </div>
+
+        <div class="space-y-1.5 font-mono text-xs">
+          <div class="p-2.5 bg-[var(--bg-elevated)] border border-[var(--line-hair)] flex items-center justify-between">
+            <div>
+              <div class="font-bold text-[var(--text-primary)]">TERPEL | EDS MALLORQUÍN</div>
+              <div class="text-[9px] text-[var(--text-muted)]">10.9634° N, -74.8105° W · 14 Tanqueadas</div>
+            </div>
+            <span class="text-[9px] text-[var(--accent-volt)]">R = 60m</span>
+          </div>
+
+          <div class="p-2.5 bg-[var(--bg-elevated)] border border-[var(--line-hair)] flex items-center justify-between">
+            <div>
+              <div class="font-bold text-[var(--text-primary)]">TEXACO | CL 84 CON CRA 51B</div>
+              <div class="text-[9px] text-[var(--text-muted)]">11.0024° N, -74.8188° W · 6 Tanqueadas</div>
+            </div>
+            <span class="text-[9px] text-[var(--accent-volt)]">R = 60m</span>
+          </div>
+
+          <div class="p-2.5 bg-[var(--bg-elevated)] border border-[var(--line-hair)] flex items-center justify-between opacity-60">
+            <div>
+              <div class="font-bold text-[var(--text-primary)]">PRIMAX | OLAYA HERRERA</div>
+              <div class="text-[9px] text-[var(--text-muted)]">10.9902° N, -74.7951° W · 2 Tanqueadas</div>
+            </div>
+            <span class="text-[9px] text-[var(--accent-volt)]">R = 60m</span>
+          </div>
+        </div>
+
+        <div class="pt-2 flex flex-wrap gap-2">
+          <button onclick="simulateArrivalAtGasStation()" class="h-9 px-4 bg-[var(--accent-amber)] text-[#09090B] font-mono font-bold text-xs uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all cursor-pointer">
+            SIMULAR PARADA EN EDS MALLORQUÍN (3 MIN)
+          </button>
+          <button onclick="requestRealNotificationPermission()" class="h-9 px-3 bg-[var(--bg-elevated)] border border-[var(--line-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-mono text-xs uppercase tracking-wider cursor-pointer">
+            HABILITAR WEB NOTIFICATIONS
+          </button>
+        </div>
+      </div>
+
+      <!-- Simulador de Notificación Móvil -->
+      <div class="md:col-span-6 p-4 bg-[var(--bg-void)] border border-[var(--line-hair)] flex flex-col justify-between min-h-[220px]">
+        <div class="font-mono text-[10px] text-[var(--text-secondary)] uppercase tracking-wider flex justify-between">
+          <span>Receptor de Notificaciones PWA</span>
+          <span id="notif-perm-status" class="text-[var(--text-muted)]">ESTADO: LOCAL</span>
+        </div>
+
+        <!-- Banner de Notificación Simulado -->
+        <div id="simulated-push-notif" class="hidden animate-toast-down my-auto p-3.5 bg-[var(--bg-elevated)] border-l-2 border-l-[var(--accent-amber)] border border-[var(--line-strong)] shadow-2xl space-y-2">
+          <div class="flex items-center justify-between font-mono text-[9px] text-[var(--text-secondary)]">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)]"></span>
+              <span class="font-bold text-[var(--text-primary)] uppercase">OCTANE // KINETIC</span>
+              <span>· AHORA</span>
+            </div>
+            <button onclick="dismissSimulatedNotif()" class="text-[var(--text-muted)] hover:text-[var(--text-primary)]">✕</button>
+          </div>
+          <div>
+            <div class="font-mono text-xs font-bold text-[var(--text-primary)]">Parada en gasolinera detectada (4 min)</div>
+            <div class="font-mono text-[11px] text-[var(--text-secondary)] mt-0.5">¿Tanqueaste en TERPEL | EDS Mallorquín?</div>
+          </div>
+          <div class="pt-1 flex items-center justify-end gap-2 font-mono text-[10px]">
+            <button onclick="dismissSimulatedNotif()" class="px-2.5 py-1 text-[var(--text-muted)] hover:text-[var(--text-primary)] uppercase">Ignorar</button>
+            <button onclick="triggerPrefilledModal()" class="px-3 py-1 bg-[var(--accent-amber)] text-[#09090B] font-bold uppercase hover:brightness-110">Registrar Lleno</button>
+          </div>
+        </div>
+
+        <div id="notif-idle-hint" class="my-auto text-center font-mono text-xs text-[var(--text-muted)]">
+          Presiona "SIMULAR PARADA EN EDS" para disparar el evento de parada dentro de la geocerca aprendida.
+        </div>
+
+        <div class="font-mono text-[9px] text-[var(--text-muted)] hairline-t pt-2">
+          Al tocar la notificación, se abre el modal prellenado con Odómetro actual y Modo Tanque Lleno.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       MÓDULO 2: MODELO TÉRMICO DISIPATIVO & ARRANQUE EN FRÍO
+       ========================================================================= -->
+  <section class="flat-frame p-4 sm:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-2 hairline-b pb-3">
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-xs font-bold text-[var(--accent-amber)]">02 //</span>
+        <span class="font-mono text-xs uppercase tracking-wider text-[var(--text-primary)]">Modelo Térmico Disipativo (Ley de Enfriamiento de Newton)</span>
+      </div>
+      <span class="font-mono text-[10px] text-[var(--accent-volt)] border border-[var(--accent-volt)]/30 px-2 py-0.5 bg-[var(--accent-volt)]/5">IMPACTO EN CONSUMO</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+      <!-- Controles Dinámicos -->
+      <div class="md:col-span-6 space-y-4">
+        <div>
+          <div class="flex justify-between font-mono text-xs mb-1.5">
+            <span class="text-[var(--text-secondary)] uppercase">Tiempo con motor apagado (Δt off):</span>
+            <span id="slider-time-label" class="text-[var(--accent-amber)] font-bold tabular-nums">45 MIN</span>
+          </div>
+          <input type="range" id="cooldown-slider" min="0" max="300" step="5" value="45" oninput="updateThermalModel()" class="w-full h-1.5 bg-[var(--line-strong)] rounded-lg appearance-none cursor-pointer accent-[var(--accent-amber)]">
+          <div class="flex justify-between font-mono text-[9px] text-[var(--text-muted)] mt-1">
+            <span>0 MIN (REINICIO INMEDIATO)</span>
+            <span>60 MIN (TIBIO)</span>
+            <span>180+ MIN (FRÍO TOTAL)</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex justify-between font-mono text-xs mb-1.5">
+            <span class="text-[var(--text-secondary)] uppercase">Distancia del nuevo trayecto:</span>
+            <span id="slider-dist-label" class="text-[var(--accent-cyan)] font-bold tabular-nums">2.8 KM</span>
+          </div>
+          <input type="range" id="dist-slider" min="0.5" max="25" step="0.5" value="2.8" oninput="updateThermalModel()" class="w-full h-1.5 bg-[var(--line-strong)] rounded-lg appearance-none cursor-pointer accent-[var(--accent-cyan)]">
+          <div class="flex justify-between font-mono text-[9px] text-[var(--text-muted)] mt-1">
+            <span>0.5 KM (VECINDARIO)</span>
+            <span>5 KM (URBANO)</span>
+            <span>25 KM (CARRETERA)</span>
+          </div>
+        </div>
+
+        <div class="p-3 bg-[var(--bg-elevated)] border border-[var(--line-hair)] font-mono text-xs space-y-1">
+          <div class="text-[10px] uppercase text-[var(--text-secondary)]">Ecuación de Retención Térmica:</div>
+          <div class="text-[var(--accent-amber)]">R = e^(-0.015 · Δt_off)</div>
+          <div class="text-[9px] text-[var(--text-muted)]">
+            Si Δt < 15 min: R > 80% (Motor caliente, 0% penalización de combustible).<br>
+            Si Δt > 180 min y distancia < 3 km: Motor frío enriquece mezcla (+18% consumo).
+          </div>
+        </div>
+      </div>
+
+      <!-- Métricas Físicas Calculadas -->
+      <div class="md:col-span-6 grid grid-cols-2 gap-3">
+        <div class="p-3.5 bg-[var(--bg-void)] border border-[var(--line-hair)] flex flex-col justify-between">
+          <span class="font-mono text-[10px] uppercase text-[var(--text-secondary)]">RETENCIÓN TÉRMICA</span>
+          <div class="my-2">
+            <span id="thermal-retention-display" class="font-sans font-light text-3xl tabular-nums text-[var(--text-primary)]">51%</span>
+            <span id="thermal-state-tag" class="block font-mono text-[10px] uppercase text-[var(--accent-amber)] font-semibold mt-0.5">MOTOR TIBIO</span>
+          </div>
+          <div class="w-full bg-[var(--line-hair)] h-1 rounded-full overflow-hidden">
+            <div id="thermal-bar" class="bg-[var(--accent-amber)] h-full transition-all duration-300" style="width: 51%;"></div>
+          </div>
+        </div>
+
+        <div class="p-3.5 bg-[var(--bg-void)] border border-[var(--line-hair)] flex flex-col justify-between">
+          <span class="font-mono text-[10px] uppercase text-[var(--text-secondary)]">PENALIZACIÓN MEZCLA</span>
+          <div class="my-2">
+            <span id="cold-penalty-display" class="font-sans font-light text-3xl tabular-nums text-[var(--accent-crimson)]">+4.1%</span>
+            <span class="block font-mono text-[10px] uppercase text-[var(--text-muted)] mt-0.5">ENRIQUECIMIENTO ECU</span>
+          </div>
+          <span class="font-mono text-[9px] text-[var(--text-muted)]">Impacto amortizado en distancia</span>
+        </div>
+
+        <div class="p-3.5 bg-[var(--bg-void)] border border-[var(--line-hair)] flex flex-col justify-between col-span-2">
+          <div class="flex items-center justify-between font-mono text-[10px] uppercase text-[var(--text-secondary)]">
+            <span>CONSUMO ESTIMADO DEL TRAYECTO</span>
+            <span id="trip-efficiency-display" class="text-[var(--accent-volt)]">43.2 KM/GAL EFECTIVO</span>
+          </div>
+          <div class="flex items-baseline gap-3 my-1">
+            <span id="est-fuel-gal" class="font-sans font-light text-3xl tabular-nums text-[var(--text-primary)]">0.065 GAL</span>
+            <span class="font-mono text-sm text-[var(--text-muted)]">·</span>
+            <span id="est-fuel-cop" class="font-mono text-lg font-bold tabular-nums text-[var(--accent-amber)]">$ 1.037 COP</span>
+          </div>
+          <div class="font-mono text-[9px] text-[var(--text-muted)] flex justify-between">
+            <span>Consumo base sin penalización: $ 996 COP</span>
+            <span id="cost-delta-display" class="text-[var(--accent-crimson)]">+$ 41 COP por enfriamiento</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       MÓDULO 3: GHOST RACE EASTER EGG (5 TAPS EN EL CAD DEL CHASIS)
+       ========================================================================= -->
+  <section class="flat-frame p-4 sm:p-6 space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-2 hairline-b pb-3">
+      <div class="flex items-center gap-2">
+        <span class="font-mono text-xs font-bold text-[var(--accent-amber)]">03 //</span>
+        <span class="font-mono text-xs uppercase tracking-wider text-[var(--text-primary)]">Easter Egg: Telemetría Fantasma en Chasis CAD</span>
+      </div>
+      <span class="font-mono text-[10px] text-[var(--accent-amber)] border border-[var(--accent-amber)]/30 px-2 py-0.5 bg-[var(--accent-amber)]/5">5 TOQUES RÁPIDOS</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+      <!-- Simulador de Toques en Chasis -->
+      <div class="md:col-span-6 space-y-2">
+        <div class="flex items-center justify-between font-mono text-xs text-[var(--text-secondary)]">
+          <span>Toca el vehículo 5 veces consecutivas:</span>
+          <span id="tap-progress-counter" class="font-bold text-[var(--accent-amber)]">0 / 5 TOQUES</span>
+        </div>
+
+        <div id="cad-interactive-box" onclick="handleChassisTap()" class="p-6 bg-[var(--bg-void)] border border-[var(--line-hair)] hover:border-[var(--line-strong)] cursor-pointer select-none transition-all active:scale-98 relative overflow-hidden group flex flex-col items-center justify-center min-h-[160px]">
+          <!-- SVG Silueta CAD -->
+          <svg class="w-48 h-20 transition-transform duration-200 group-hover:scale-105" viewBox="0 0 200 80" fill="none">
+            <path d="M20 55 L35 55 L45 35 L75 25 L135 25 L165 40 L185 45 L185 55 L170 55 M50 55 A15 15 0 0 1 80 55 M130 55 A15 15 0 0 1 160 55" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="65" cy="55" r="9" stroke="#52525B" stroke-width="3" fill="#141418"/>
+            <circle cx="145" cy="55" r="9" stroke="#52525B" stroke-width="3" fill="#141418"/>
+          </svg>
+          <span class="font-mono text-[10px] text-[var(--text-muted)] mt-2 uppercase tracking-widest">TOCA PARA ACELERAR / 5 TAPS PARA EASTER EGG</span>
+
+          <!-- Overlay de lanzamiento cuando se completan 5 toques -->
+          <div id="easter-egg-flash" class="absolute inset-0 bg-[var(--accent-amber)] text-[#09090B] font-mono font-bold text-xs uppercase flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-150">
+            ⚡ INICIANDO GHOST RACE TELEMETRY...
+          </div>
+        </div>
+
+        <div class="font-mono text-[9px] text-[var(--text-muted)]">
+          En producción: 5 toques rápidos en `#chassis-cad-stage` del Cockpit abren el visor full-screen integrado sin salir de la app PWA.
+        </div>
+      </div>
+
+      <!-- Explicación del Detector de Rutas Recurrentes -->
+      <div class="md:col-span-6 p-4 bg-[var(--bg-elevated)] border border-[var(--line-hair)] space-y-3 font-mono text-xs">
+        <div class="flex items-center justify-between text-[10px] uppercase text-[var(--text-secondary)] hairline-b pb-2">
+          <span>Algoritmo de Detección de Ruta Recurrente</span>
+          <span class="text-[var(--accent-volt)]">AUTOMÁTICO</span>
+        </div>
+        <div class="space-y-1.5 text-[11px] text-[var(--text-secondary)]">
+          <div><span class="text-[var(--accent-amber)]">1. Agrupamiento O/D:</span> Distancia inicio/fin ≤ 300m.</div>
+          <div><span class="text-[var(--accent-amber)]">2. Ventana Horaria:</span> Salidas dentro de ±45 min de la hora habitual.</div>
+          <div><span class="text-[var(--accent-amber)]">3. Ruta Ganadora:</span> Mayor frecuencia histórica (ej: 84 viajes La Ceiba ➔ Uninorte).</div>
+          <div><span class="text-[var(--accent-amber)]">4. Normalización t=0..T:</span> Convierte coordenadas GPS en simulación multiauto a escala temporal.</div>
+        </div>
+        <div class="pt-2">
+          <button onclick="openGhostRacePreviewModal()" class="w-full h-9 bg-[var(--bg-void)] border border-[var(--accent-amber)] text-[var(--accent-amber)] hover:bg-[var(--accent-amber)] hover:text-[#09090B] font-mono font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer">
+            ABRIR VISOR GHOST RACE COMPLETO (MODAL FULLSCREEN)
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       MODAL FULL-SCREEN GHOST RACE (EMBEBIDO NATIVO)
+       ========================================================================= -->
+  <div id="ghost-race-fullscreen-modal" class="fixed inset-0 z-50 bg-[#09090B] hidden flex flex-col select-none">
+    <!-- Barra Superior del Modal -->
+    <div class="h-12 bg-[#0E0E11] hairline-b px-4 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-[var(--accent-amber)] shadow-[0_0_8px_rgba(245,158,11,0.6)]"></span>
+        <span class="font-mono text-xs font-bold text-[var(--text-primary)] tracking-wider">OCTANE // GHOST RACE TELEMETRY</span>
+        <span class="font-mono text-[10px] text-[var(--text-muted)] hidden sm:inline">· LA CEIBA ➔ UNINORTE</span>
+      </div>
+      <div class="flex items-center gap-3 font-mono text-xs">
+        <span class="text-[var(--accent-volt)] hidden sm:inline">84 VIAJES HISTÓRICOS IDENTIFICADOS</span>
+        <button onclick="closeGhostRacePreviewModal()" class="px-3 py-1 bg-[var(--bg-elevated)] border border-[var(--line-strong)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--accent-amber)] font-bold text-xs uppercase transition-colors cursor-pointer">
+          CERRAR [ESC]
+        </button>
+      </div>
+    </div>
+
+    <!-- Contenedor del Iframe Embebido -->
+    <div class="flex-1 w-full min-h-0 bg-[#09090B] relative">
+      <iframe id="ghost-race-iframe" class="w-full h-full border-0 block" src="/ghost-race.html"></iframe>
+    </div>
+  </div>
+
+  <script>
+    // -------------------------------------------------------------------------
+    // Módulo 1: Geocerca y Notificación
+    // -------------------------------------------------------------------------
+    function simulateArrivalAtGasStation() {
+      const hint = document.getElementById('notif-idle-hint');
+      const banner = document.getElementById('simulated-push-notif');
+      hint.classList.add('hidden');
+      banner.classList.remove('hidden');
+
+      // Si el navegador tiene permiso real de notificación concedido, disparar también
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('OCTANE // KINETIC', {
+          body: 'Parada en TERPEL | EDS Mallorquín detectada (4 min). ¿Registrar tanqueada a full?',
+          icon: '/favicon.png'
+        });
+      }
+    }
+
+    function dismissSimulatedNotif() {
+      const banner = document.getElementById('simulated-push-notif');
+      const hint = document.getElementById('notif-idle-hint');
+      banner.classList.add('hidden');
+      hint.classList.remove('hidden');
+    }
+
+    function triggerPrefilledModal() {
+      dismissSimulatedNotif();
+      alert("✅ Disparado openRefuelModal con:\n• initialOdo: 98.240 KM (GPS Stop)\n• defaultFull: true\n• gasStation: TERPEL | EDS Mallorquín");
+    }
+
+    async function requestRealNotificationPermission() {
+      if (!('Notification' in window)) {
+        alert("Este navegador no soporta Web Notifications API.");
+        return;
+      }
+      const perm = await Notification.requestPermission();
+      const statusEl = document.getElementById('notif-perm-status');
+      statusEl.textContent = `ESTADO: ${perm.toUpperCase()}`;
+      if (perm === 'granted') {
+        statusEl.className = "text-[var(--accent-volt)]";
+        alert("✅ Permiso de notificaciones concedido para OCTANE.");
+      } else {
+        statusEl.className = "text-[var(--accent-crimson)]";
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Módulo 2: Modelo Térmico Disipativo
+    // -------------------------------------------------------------------------
+    function updateThermalModel() {
+      const timeMin = Number(document.getElementById('cooldown-slider').value);
+      const distKm = Number(document.getElementById('dist-slider').value);
+
+      document.getElementById('slider-time-label').textContent = `${timeMin} MIN`;
+      document.getElementById('slider-dist-label').textContent = `${distKm.toFixed(1)} KM`;
+
+      // Ley de enfriamiento de Newton: R = e^(-k * t)
+      const k = 0.015;
+      const R = Math.exp(-k * timeMin);
+      const retentionPct = Math.round(R * 100);
+
+      // Penalización por motor frío durante la fase de calentamiento (< 5 km)
+      const coldPenaltyFraction = (1 - R) * Math.max(0, 1 - (distKm / 5.0)) * 0.18;
+      const coldPenaltyPct = (coldPenaltyFraction * 100).toFixed(1);
+
+      // Consumo
+      const baseEff = 45.0; // km/gal nominal
+      const effectiveEff = baseEff / (1 + coldPenaltyFraction);
+      const estGallons = distKm / effectiveEff;
+      const fuelPriceCop = 16000;
+      const estCostCop = Math.round(estGallons * fuelPriceCop);
+
+      const baseCostCop = Math.round((distKm / baseEff) * fuelPriceCop);
+      const costDelta = estCostCop - baseCostCop;
+
+      // Actualizar UI
+      document.getElementById('thermal-retention-display').textContent = `${retentionPct}%`;
+      document.getElementById('thermal-bar').style.width = `${retentionPct}%`;
+
+      const tagEl = document.getElementById('thermal-state-tag');
+      if (retentionPct > 75) {
+        tagEl.textContent = "MOTOR CALIENTE (REINICIO INMEDIATO)";
+        tagEl.className = "block font-mono text-[10px] uppercase text-[var(--accent-volt)] font-semibold mt-0.5";
+      } else if (retentionPct > 35) {
+        tagEl.textContent = "MOTOR TIBIO";
+        tagEl.className = "block font-mono text-[10px] uppercase text-[var(--accent-amber)] font-semibold mt-0.5";
+      } else {
+        tagEl.textContent = "MOTOR FRÍO (ARRANQUE EN FRÍO)";
+        tagEl.className = "block font-mono text-[10px] uppercase text-[var(--accent-crimson)] font-semibold mt-0.5";
+      }
+
+      document.getElementById('cold-penalty-display').textContent = `+${coldPenaltyPct}%`;
+      document.getElementById('trip-efficiency-display').textContent = `${effectiveEff.toFixed(1)} KM/GAL EFECTIVO`;
+      document.getElementById('est-fuel-gal').textContent = `${estGallons.toFixed(3)} GAL`;
+      document.getElementById('est-fuel-cop').textContent = `$ ${estCostCop.toLocaleString('es-CO')} COP`;
+      document.getElementById('cost-delta-display').textContent = costDelta > 0 
+        ? `+$ ${costDelta.toLocaleString('es-CO')} COP por enfriamiento`
+        : `Sin penalización térmica ($0 COP)`;
+    }
+
+    // -------------------------------------------------------------------------
+    // Módulo 3: Easter Egg 5-Taps & Modal Fullscreen
+    // -------------------------------------------------------------------------
+    let tapCount = 0;
+    let tapTimer = null;
+
+    function handleChassisTap() {
+      tapCount++;
+      const counterEl = document.getElementById('tap-progress-counter');
+      const flashEl = document.getElementById('easter-egg-flash');
+      counterEl.textContent = `${tapCount} / 5 TOQUES`;
+
+      if (navigator.vibrate) {
+        navigator.vibrate(30 + tapCount * 10);
+      }
+
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => {
+        tapCount = 0;
+        counterEl.textContent = `0 / 5 TOQUES`;
+      }, 2000);
+
+      if (tapCount >= 5) {
+        tapCount = 0;
+        counterEl.textContent = `5 / 5 TOQUES`;
+        flashEl.style.opacity = '1';
+        setTimeout(() => {
+          flashEl.style.opacity = '0';
+          openGhostRacePreviewModal();
+        }, 300);
+      }
+    }
+
+    function openGhostRacePreviewModal() {
+      const modal = document.getElementById('ghost-race-fullscreen-modal');
+      modal.classList.remove('hidden');
+    }
+
+    function closeGhostRacePreviewModal() {
+      const modal = document.getElementById('ghost-race-fullscreen-modal');
+      modal.classList.add('hidden');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeGhostRacePreviewModal();
+    });
+
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'OCTANE_CLOSE_GHOST_RACE') {
+        closeGhostRacePreviewModal();
+      }
+    });
+
+    // Inicializar modelo térmico al cargar
+    updateThermalModel();
+  </script>
+</body>
+</html>

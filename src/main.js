@@ -4,6 +4,7 @@
  * Zero dummy data, 5 architectural views, precision Web Audio, and modal coordination.
  */
 
+import { closeAppDialog } from './components/dialogs/app-dialog.js';
 import './style/tokens.css';
 import { store, playHorologyTick, showToast } from './core/state.js';
 import {
@@ -21,6 +22,7 @@ import {
   syncToCloud
 } from './core/firebase-sync.js';
 import { calculateTelemetryModel } from './core/telemetry-engine.js';
+import { syncGpsTelemetry } from './core/iopgps-sync.js';
 import { renderHeader, setHeaderUser, setHeaderVehicleTag } from './components/header-bar.js';
 import { renderNavDock, setActiveNavTab } from './components/nav-dock.js';
 import { renderFabContextual, updateFabContext } from './components/fab-contextual.js';
@@ -30,11 +32,16 @@ import { openOnboardingModal, closeOnboardingModal, initOnboardingModal } from '
 import { openMaintenanceModal, closeMaintenanceModal, initMaintenanceModal } from './components/modals/modal-maintenance.js';
 import { openLegalDocModal, closeLegalDocModal, initLegalDocModal } from './components/modals/modal-legal-doc.js';
 import { openRideEntryModal, closeRideEntryModal, initRideEntryModal } from './components/modals/modal-ride-entry.js';
+import { closeMovementDetailModal, initMovementDetailModal } from './components/modals/modal-movement-detail.js';
+import { openTelemetryDetailModal, closeTelemetryDetailModal, initTelemetryDetailModal } from './components/modals/modal-telemetry-detail.js';
+import { openDiagnosticModal, closeDiagnosticModal, initDiagnosticModal } from './components/modals/modal-diagnostic.js';
+import { initViewportManager } from './core/viewport-manager.js';
+import { initMicroTooltips } from './components/micro-tooltip.js';
 import { refreshAlerts, initAlertsEngine } from './core/alerts-engine.js';
 import { renderCockpit, destroyCockpit, refreshCockpit } from './views/view-cockpit.js';
 import { renderClusterView, destroyClusterView } from './views/view-cluster.js';
 import { renderGloveboxView, destroyGloveboxView } from './views/view-glovebox.js';
-import { renderRidesView } from './views/view-rides.js';
+import { renderRidesView, destroyRidesView } from './views/view-rides.js';
 import { renderSettingsView, destroySettingsView } from './views/view-settings.js';
 
 let appRoot = null;
@@ -86,15 +93,23 @@ export async function navigateTo(viewId) {
     } catch (err) {
       // Defensive cleanup
     }
+  } else if (currentActiveView === 'rides' && viewId !== 'rides') {
+    try {
+      destroyRidesView();
+    } catch (err) {
+      // Defensive cleanup
+    }
   }
 
   currentActiveView = viewId;
 
-  // Update store and hash
+  // Update store without pushing page history or persisting tab in URL hash
   store.setState({ currentView: viewId });
-  if (window.location.hash !== `#${viewId}`) {
-    window.location.hash = `#${viewId}`;
-  }
+  try {
+    if (typeof window !== 'undefined' && window.history && typeof window.history.replaceState === 'function') {
+      window.history.replaceState({ view: viewId }, '', window.location.pathname + window.location.search);
+    }
+  } catch (_) {}
 
   // Update navigation dock active tab indicator
   setActiveNavTab(viewId);
@@ -139,13 +154,16 @@ async function bootstrapApp() {
     return;
   }
 
+  // Ensure strict viewport containment on root
+  appRoot.classList.add('overflow-x-hidden', 'w-full', 'max-w-full');
+
   // Build Shell Layout
   appRoot.innerHTML = `
     <!-- Sticky Architectural Header Container -->
     <div id="header-container" class="sticky top-0 z-40"></div>
 
     <!-- Dynamic Router Content Mount -->
-    <main id="main-content" class="flex-1 max-w-5xl w-full mx-auto px-4 pt-4 pb-28 md:pb-20"></main>
+    <main id="main-content" class="flex-1 w-full max-w-full sm:max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4 pb-28 sm:pb-32 overflow-x-hidden"></main>
 
     <!-- Fixed Bottom Navigation Dock Container -->
     <div id="nav-dock-container"></div>
@@ -227,14 +245,19 @@ async function bootstrapApp() {
   renderFabContextual();
   updateFabContext(currentActiveView);
 
-  // 8. Initialize Modals Overlay (Reading, Refuel, Onboarding, Maintenance, Legal Doc, Ride Entry)
+  // 8. Initialize Modals Overlay (Reading, Refuel, Onboarding, Maintenance, Legal Doc, Ride Entry, Details)
   initReadingModal();
   initRefuelModal();
   initOnboardingModal();
   initMaintenanceModal();
   initLegalDocModal();
   initRideEntryModal();
+  initMovementDetailModal();
+  initTelemetryDetailModal();
+  initDiagnosticModal();
   initAlertsEngine();
+  initMicroTooltips();
+  initViewportManager();
 
   // Evaluate initial legal and maintenance alerts
   try {
@@ -260,10 +283,13 @@ async function bootstrapApp() {
   // 10. Bind Global Event Listeners
   setupGlobalListeners();
 
-  // 11. Initial Route Resolution
-  const hashView = window.location.hash.replace('#', '').trim();
-  const initialView = VALID_VIEWS.includes(hashView) ? hashView : 'cockpit';
-  await navigateTo(initialView);
+  // 11. Initial Route Resolution: Always start in Cockpit
+  try {
+    if (window.location.hash) {
+      window.history.replaceState({ view: 'cockpit' }, '', window.location.pathname + window.location.search);
+    }
+  } catch (_) {}
+  await navigateTo('cockpit');
 
   // 12. Check first-time calibration / onboarding
   const hasTelemetry = Array.isArray(telemetryLogs) && telemetryLogs.length > 0;
@@ -278,6 +304,13 @@ async function bootstrapApp() {
     vehicleProfile.onboardingCompleted = true;
     saveVehicleProfile(vehicleProfile).catch(() => {});
   }
+
+  // 13. Background IOPGPS Telemetry Sync (live odometer, voltage & incremental daily backfill from 2026-02-01)
+  setTimeout(() => {
+    syncGpsTelemetry({ silent: true }).catch((err) => {
+      console.warn('[OCTANE GPS] Background sync skipped:', err);
+    });
+  }, 600);
 }
 
 /**
@@ -291,13 +324,24 @@ function setupGlobalListeners() {
     }
   });
 
-  // Modal open events (from Split Launcher or legacy triggers)
-  window.addEventListener('octane:open-reading', () => {
-    openReadingModal();
+  // Modal open events (from Split Launcher, FAB or edit triggers)
+  window.addEventListener('octane:open-reading', (e) => {
+    openReadingModal(e.detail || {});
   });
 
-  window.addEventListener('octane:open-refuel', () => {
-    openRefuelModal();
+  window.addEventListener('octane:open-refuel', (e) => {
+    openRefuelModal(e.detail || {});
+  });
+
+  // Geofence gas station refuel suggestion or notification click
+  window.addEventListener('octane:suggest-refuel', (e) => {
+    const detail = e.detail || {};
+    openRefuelModal({
+      initialOdo: detail.initialOdo,
+      defaultFull: detail.defaultFull !== undefined ? detail.defaultFull : true,
+      stop: detail.stop,
+      coords: detail.coords || detail.stop?.coords
+    });
   });
 
   window.addEventListener('octane:open-onboarding', () => {
@@ -316,12 +360,16 @@ function setupGlobalListeners() {
     openRideEntryModal(e.detail || {});
   });
 
+  window.addEventListener('octane:open-diagnostic', (e) => {
+    openDiagnosticModal(e.detail?.periodFilter || 'month');
+  });
+
   window.addEventListener('octane:open-modal', (e) => {
     if (!e.detail) return;
     if (e.detail.modal === 'reading') {
-      openReadingModal();
+      openReadingModal(e.detail.options || e.detail || {});
     } else if (e.detail.modal === 'refuel') {
-      openRefuelModal();
+      openRefuelModal(e.detail.options || e.detail || {});
     } else if (e.detail.modal === 'onboarding') {
       openOnboardingModal();
     } else if (e.detail.modal === 'legal-doc' || e.detail.modal === 'legal') {
@@ -354,12 +402,69 @@ function setupGlobalListeners() {
     }
   });
 
-  // URL Hash change router
-  window.addEventListener('hashchange', () => {
-    const hashView = window.location.hash.replace('#', '').trim();
-    if (VALID_VIEWS.includes(hashView) && hashView !== currentActiveView) {
-      navigateTo(hashView);
+  // Modal Back-Button Interception (Hardware/Browser Back closes open modal instead of changing page)
+  const MODAL_SELECTORS_AND_CLOSERS = [
+    { id: 'octane-app-dialog', close: () => closeAppDialog() },
+    { id: 'octane-reading-modal-container', close: () => closeReadingModal() },
+    { id: 'octane-refuel-modal-container', close: () => closeRefuelModal() },
+    { id: 'octane-ride-entry-modal-container', close: () => closeRideEntryModal() },
+    { id: 'octane-movement-detail-modal', close: () => closeMovementDetailModal() },
+    { id: 'octane-telemetry-detail-modal', close: () => closeTelemetryDetailModal() },
+    { id: 'modal-diagnostic-root', close: () => closeDiagnosticModal() },
+    { id: 'octane-maintenance-modal-container', close: () => closeMaintenanceModal() },
+    { id: 'octane-legal-doc-modal-container', close: () => closeLegalDocModal() },
+    { id: 'octane-onboarding-modal-container', close: () => closeOnboardingModal() },
+    { id: 'modal-change-vehicle', close: (el) => el.classList.add('hidden') },
+    { id: 'modal-change-gauge', close: (el) => el.classList.add('hidden') }
+  ];
+
+  function isAnyModalOpen() {
+    for (const m of MODAL_SELECTORS_AND_CLOSERS) {
+      const el = document.getElementById(m.id);
+      if (el && !el.classList.contains('hidden')) {
+        return true;
+      }
     }
+    return false;
+  }
+
+  function closeTopmostOpenModal() {
+    for (const m of MODAL_SELECTORS_AND_CLOSERS) {
+      const el = document.getElementById(m.id);
+      if (el && !el.classList.contains('hidden')) {
+        m.close(el);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (typeof MutationObserver !== 'undefined' && document.body) {
+    const modalObserver = new MutationObserver(() => {
+      if (isAnyModalOpen()) {
+        try {
+          if (!window.history.state || !window.history.state.octaneModal) {
+            window.history.pushState({ octaneModal: true, view: currentActiveView }, '');
+          }
+        } catch (_) {}
+      }
+    });
+    modalObserver.observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
+  }
+
+  window.addEventListener('popstate', () => {
+    if (closeTopmostOpenModal()) {
+      return;
+    }
+    try {
+      if (window.location.hash) {
+        window.history.replaceState({ view: currentActiveView }, '', window.location.pathname + window.location.search);
+      }
+    } catch (_) {}
   });
 
   // Network Online / Offline Detection
@@ -426,6 +531,21 @@ function setupGlobalListeners() {
       }).catch((err) => {
         console.warn('[OCTANE PWA] Service worker registration issue:', err);
       });
+    });
+
+    // Listen for notificationclick messages forwarded by Service Worker
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      const msg = event.data;
+      if (!msg) return;
+      if (msg.type === 'octane:suggest-refuel' || msg.action === 'suggest-refuel' || msg.type === 'notificationclick') {
+        const payload = msg.data || msg;
+        openRefuelModal({
+          initialOdo: payload.initialOdo,
+          defaultFull: payload.defaultFull !== undefined ? payload.defaultFull : true,
+          stop: payload.stop,
+          coords: payload.coords
+        });
+      }
     });
 
     window.addEventListener('beforeinstallprompt', (e) => {

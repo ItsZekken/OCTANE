@@ -10,7 +10,10 @@
  * - Human language for cloud & backup: "Guardado en este dispositivo", "Exportar copia de seguridad", "Importar copia de seguridad", "Borrar todos los datos".
  */
 
+import { confirmDialog } from '../components/dialogs/app-dialog.js';
+import { todayLocalYmd } from '../core/date-utils.js';
 import { store } from '../core/state.js';
+import { isSoundEnabled, setSoundEnabled } from '../core/telemetry-engine.js';
 import {
   getVehicleProfile,
   saveVehicleProfile,
@@ -25,6 +28,7 @@ import {
   getCurrentUser
 } from '../core/firebase-sync.js';
 import { exportMasterBackup, importJSONFile } from '../core/json-io.js';
+import { syncGpsTelemetry, DEFAULT_GPS_CONFIG, getGpsConfig, saveRememberedGpsCreds } from '../core/iopgps-sync.js';
 import { CAR_COLORS } from '../components/modals/modal-onboarding.js';
 import { playHorologyTick } from '../components/fuel-gauges/gauge-controller.js';
 import { renderSpicyArcGauge } from '../components/fuel-gauges/gauge-spicy-arc.js';
@@ -181,6 +185,9 @@ export async function renderSettingsView(container) {
 
   let currentUser = null;
   const currentUnit = (store && typeof store.getState === 'function') ? (store.getState().currentUnit || 'gal') : 'gal';
+  const currentTheme = (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme'))
+    || ((store && typeof store.getState === 'function') ? (store.getState().theme || 'dark') : 'dark');
+  const currentSound = isSoundEnabled();
   try {
     if (typeof getCurrentUser === 'function') {
       currentUser = getCurrentUser();
@@ -190,7 +197,7 @@ export async function renderSettingsView(container) {
   } catch (e) {}
 
   container.innerHTML = `
-    <div class="view-settings max-w-5xl mx-auto space-y-6 pb-20 select-none">
+    <div class="view-settings w-full space-y-6 pb-20 select-none">
       
       <!-- Top Title Header -->
       <div class="border-b border-[var(--line-hair)] pb-3 flex items-center justify-between">
@@ -239,7 +246,7 @@ export async function renderSettingsView(container) {
 
           <!-- Right vehicle CAD preview strictly contained (5 cols) -->
           <div class="md:col-span-5 bg-[var(--bg-void)] border border-[var(--line-hair)] p-3 h-28 flex items-center justify-center overflow-hidden">
-            <div class="max-h-24 w-auto mx-auto object-contain overflow-hidden flex items-center justify-center [&>svg]:max-h-20 [&>svg]:w-auto [&>svg]:object-contain" style="--car-paint: ${profile.vehicleColor || '#FF5500'}">
+            <div class="vehicle-cad-preview max-h-24 h-full w-full mx-auto object-contain overflow-hidden flex items-center justify-center" style="--car-paint: ${profile.vehicleColor || '#FF5500'}">
               ${getInlineVehicleSvg(profile.svgModel || 'kia-picanto', profile.vehicleColor || '#FF5500')}
             </div>
           </div>
@@ -321,6 +328,31 @@ export async function renderSettingsView(container) {
             </div>
           </div>
 
+          <!-- Tema de Interfaz (Brillo / Modo) y Sonido Táctil -->
+          <div class="space-y-1 pt-2 border-t border-[var(--line-hair)]">
+            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)] mb-2">TEMA DE INTERFAZ</label>
+            <div class="grid grid-cols-2 gap-2 font-mono text-xs" id="set-theme-selector">
+              <button type="button" data-theme-opt="dark" class="theme-opt-btn h-9 border ${currentTheme !== 'light' ? 'border-[var(--accent-amber)] bg-[var(--bg-elevated)] text-[var(--accent-amber)] font-bold' : 'border-[var(--line-hair)] text-[var(--text-secondary)] hover:border-[var(--line-strong)]'} transition-all cursor-pointer">
+                MODO CARBÓN
+              </button>
+              <button type="button" data-theme-opt="light" class="theme-opt-btn h-9 border ${currentTheme === 'light' ? 'border-[var(--accent-amber)] bg-[var(--bg-elevated)] text-[var(--accent-amber)] font-bold' : 'border-[var(--line-hair)] text-[var(--text-secondary)] hover:border-[var(--line-strong)]'} transition-all cursor-pointer">
+                MODO PAPEL
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-1 pt-2 border-t border-[var(--line-hair)]">
+            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)] mb-2">SONIDO TÁCTIL</label>
+            <div class="grid grid-cols-2 gap-2 font-mono text-xs" id="set-sound-selector">
+              <button type="button" data-sound-opt="on" class="sound-opt-btn h-9 border ${currentSound ? 'border-[var(--accent-amber)] bg-[var(--bg-elevated)] text-[var(--accent-amber)] font-bold' : 'border-[var(--line-hair)] text-[var(--text-secondary)] hover:border-[var(--line-strong)]'} transition-all cursor-pointer">
+                ACTIVADO
+              </button>
+              <button type="button" data-sound-opt="off" class="sound-opt-btn h-9 border ${!currentSound ? 'border-[var(--accent-amber)] bg-[var(--bg-elevated)] text-[var(--accent-amber)] font-bold' : 'border-[var(--line-hair)] text-[var(--text-secondary)] hover:border-[var(--line-strong)]'} transition-all cursor-pointer">
+                SILENCIADO
+              </button>
+            </div>
+          </div>
+
           <!-- Módulo Carreras -->
           <div class="sm:col-span-2 pt-2 border-t border-[var(--line-hair)] flex items-center justify-between font-mono">
             <div>
@@ -334,6 +366,74 @@ export async function renderSettingsView(container) {
         <div class="flex justify-end pt-3 border-t border-[var(--line-hair)]">
           <button id="save-params-btn" type="button" class="h-10 px-6 bg-[var(--accent-amber)] hover:opacity-90 text-[var(--bg-void)] font-mono text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer active:scale-95">
             Guardar ajustes
+          </button>
+        </div>
+      </section>
+
+      <!-- SECTION 2B: TELEMETRÍA GPS -->
+      <section class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-[var(--line-hair)] pb-3">
+          <span class="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">TELEMETRÍA GPS</span>
+          <span id="gps-settings-status-badge" class="font-mono text-[10px] uppercase tracking-widest ${profile.gpsCache?.live?.totalMile ? 'text-[var(--accent-volt)]' : 'text-[var(--text-secondary)]'}">
+            ${profile.gpsCache?.live?.totalMile
+              ? `${Number(profile.gpsCache.live.totalMile).toLocaleString('es-CO')} KM · ${Number(profile.gpsCache.live.externalVoltage || 0).toFixed(2)}V`
+              : (getGpsConfig(profile).username ? 'CREDENCIALES GUARDADAS' : 'SIN VINCULAR')}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+          <div class="space-y-1">
+            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">USUARIO IOPGPS</label>
+            <input 
+              id="set-gps-user" 
+              type="text" 
+              autocomplete="username"
+              placeholder="Tu usuario o placa"
+              value="${getGpsConfig(profile).username}" 
+              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
+            />
+          </div>
+
+          <div class="space-y-1">
+            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">CONTRASEÑA IOPGPS</label>
+            <input 
+              id="set-gps-pass" 
+              type="password" 
+              autocomplete="current-password"
+              placeholder="••••••••"
+              value="${getGpsConfig(profile).password}" 
+              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
+            />
+          </div>
+
+          <div class="space-y-1">
+            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">IMEI DEL DISPOSITIVO (OPCIONAL)</label>
+            <input 
+              id="set-gps-imei" 
+              type="text" 
+              placeholder="Auto-detectar de la cuenta"
+              value="${getGpsConfig(profile).imei}" 
+              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm tabular-nums" 
+            />
+          </div>
+
+          <div class="space-y-1">
+            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">FECHA DE INSTALACIÓN GPS</label>
+            <input 
+              id="set-gps-start" 
+              type="date" 
+              value="${getGpsConfig(profile).installStartDate || DEFAULT_GPS_CONFIG.installStartDate}" 
+              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm tabular-nums" 
+            />
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[var(--line-hair)] font-mono">
+          <span id="gps-settings-meta" class="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider tabular-nums">
+            ${profile.gpsCache?.days ? `${Object.keys(profile.gpsCache.days).length} DÍAS EN MEMORIA` : 'SE RECUERDA AUTOMÁTICAMENTE AL GUARDAR'}${profile.gpsCache?.live?.address ? ` · ${String(profile.gpsCache.live.address).split(',')[0].toUpperCase()}` : ''}
+          </span>
+          <button id="sync-gps-now-btn" type="button" class="h-10 px-5 border border-[var(--accent-amber)] text-[var(--accent-amber)] hover:bg-[var(--accent-amber)] hover:text-[var(--bg-void)] font-mono text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer active:scale-95">
+            Guardar y sincronizar GPS
           </button>
         </div>
       </section>
@@ -654,9 +754,9 @@ export async function renderSettingsView(container) {
   const btnCancelModalVehicle = container.querySelector('#btn-cancel-modal-vehicle');
   const btnConfirmModalVehicle = container.querySelector('#btn-confirm-modal-vehicle');
 
-  function openVehicleModal() {
+  async function openVehicleModal() {
     playHorologyTick(1200, 0.015, 0.03);
-    const confirmed = confirm('Cambiar las especificaciones del vehículo recalculará todas las métricas de autonomía y consumo. ¿Deseas continuar?');
+    const confirmed = await confirmDialog({ title: 'Cambiar el vehículo recalcula autonomía y consumo', confirmLabel: 'Continuar' });
     if (!confirmed) return;
 
     pendingVehicle = { ...profile };
@@ -776,7 +876,7 @@ export async function renderSettingsView(container) {
       closeVehicleModal();
       renderSettingsView(container);
     } catch (err) {
-      alert('Error guardando vehículo: ' + err.message);
+      showToast('ERROR · ' + (err && err.message ? err.message : 'Error guardando vehículo'));
     }
   });
 
@@ -873,7 +973,7 @@ export async function renderSettingsView(container) {
       closeGaugeModal();
       renderSettingsView(container);
     } catch (err) {
-      alert('Error guardando estilo de medidor: ' + err.message);
+      showToast('ERROR · ' + (err && err.message ? err.message : 'Error guardando estilo de medidor'));
     }
   });
 
@@ -892,6 +992,44 @@ export async function renderSettingsView(container) {
       });
       showToast(`UNIDAD: ${u === 'gal' ? 'KM/GAL' : (u === 'l100' ? 'L/100 KM' : 'KM/L')}`);
       window.dispatchEvent(new CustomEvent('octane:update-state', { detail: { unit: u } }));
+    });
+  });
+
+  // Theme Selector Handlers
+  container.querySelectorAll('#set-theme-selector .theme-opt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const nextTheme = btn.dataset.themeOpt || 'dark';
+      playHorologyTick(900, 0.02, 0.03);
+      if (typeof document !== 'undefined') {
+        document.documentElement.setAttribute('data-theme', nextTheme);
+      }
+      if (store && typeof store.setState === 'function') {
+        store.setState({ theme: nextTheme });
+      }
+      container.querySelectorAll('#set-theme-selector .theme-opt-btn').forEach(b => {
+        const isSelected = b.dataset.themeOpt === nextTheme;
+        b.className = `theme-opt-btn h-9 border ${isSelected ? 'border-[var(--accent-amber)] bg-[var(--bg-elevated)] text-[var(--accent-amber)] font-bold' : 'border-[var(--line-hair)] text-[var(--text-secondary)] hover:border-[var(--line-strong)]'} transition-all cursor-pointer`;
+      });
+      showToast(nextTheme === 'dark' ? 'MODO CARBÓN' : 'MODO PAPEL');
+      window.dispatchEvent(new CustomEvent('octane:update-state', { detail: { theme: nextTheme } }));
+    });
+  });
+
+  // Sound Selector Handlers
+  container.querySelectorAll('#set-sound-selector .sound-opt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const active = btn.dataset.soundOpt === 'on';
+      setSoundEnabled(active);
+      if (active) playHorologyTick(1100, 0.015, 0.025);
+      if (store && typeof store.setState === 'function') {
+        store.setState({ soundEnabled: active });
+      }
+      container.querySelectorAll('#set-sound-selector .sound-opt-btn').forEach(b => {
+        const isSelected = (b.dataset.soundOpt === 'on') === active;
+        b.className = `sound-opt-btn h-9 border ${isSelected ? 'border-[var(--accent-amber)] bg-[var(--bg-elevated)] text-[var(--accent-amber)] font-bold' : 'border-[var(--line-hair)] text-[var(--text-secondary)] hover:border-[var(--line-strong)]'} transition-all cursor-pointer`;
+      });
+      showToast(active ? 'AUDIO TÁCTIL ON' : 'SILENCIADO');
+      window.dispatchEvent(new CustomEvent('octane:update-state', { detail: { soundEnabled: active } }));
     });
   });
 
@@ -914,9 +1052,59 @@ export async function renderSettingsView(container) {
       if (typeof syncToCloud === 'function') syncToCloud();
       showToast('AJUSTES GUARDADOS');
     } catch (err) {
-      alert('Error guardando ajustes: ' + err.message);
+      showToast('ERROR · ' + (err && err.message ? err.message : 'Error guardando ajustes'));
     }
   });
+
+  // Sync GPS Telemetry Button Handler
+  const syncGpsBtn = container.querySelector('#sync-gps-now-btn');
+  if (syncGpsBtn) {
+    syncGpsBtn.addEventListener('click', async () => {
+      playHorologyTick(1350, 0.015, 0.03);
+      const gpsUser = container.querySelector('#set-gps-user')?.value.trim() || '';
+      const gpsPass = container.querySelector('#set-gps-pass')?.value || '';
+      const gpsImei = container.querySelector('#set-gps-imei')?.value.trim() || '';
+      const gpsStart = container.querySelector('#set-gps-start')?.value.trim() || DEFAULT_GPS_CONFIG.installStartDate;
+
+      if (!gpsUser || !gpsPass) {
+        showToast('INGRESA USUARIO Y CONTRASEÑA GPS');
+        return;
+      }
+
+      profile.gpsConfig = {
+        ...(profile.gpsConfig || DEFAULT_GPS_CONFIG),
+        enabled: true,
+        username: gpsUser,
+        password: gpsPass,
+        imei: gpsImei,
+        installDate: gpsStart,
+        installStartDate: gpsStart
+      };
+
+      saveRememberedGpsCreds(profile.gpsConfig);
+
+      syncGpsBtn.disabled = true;
+      syncGpsBtn.innerText = 'SINCRONIZANDO...';
+
+      try {
+        await saveVehicleProfile(profile);
+        if (store && typeof store.setState === 'function') {
+          store.setState({ vehicleProfile: profile });
+        }
+        const res = await syncGpsTelemetry({ forceFullBackfill: true, silent: false });
+        if (res && res.ok) {
+          renderSettingsView(container);
+        } else {
+          syncGpsBtn.disabled = false;
+          syncGpsBtn.innerText = 'Guardar y sincronizar GPS';
+        }
+      } catch (err) {
+        showToast('ERROR SINCRONIZANDO GPS');
+        syncGpsBtn.disabled = false;
+        syncGpsBtn.innerText = 'Guardar y sincronizar GPS';
+      }
+    });
+  }
 
   // Auth Button Handlers
   const signinBtn = container.querySelector('#auth-signin-btn');
@@ -931,10 +1119,10 @@ export async function renderSettingsView(container) {
           showToast('SESIÓN INICIADA');
           renderSettingsView(container);
         } else {
-          alert('Firebase Auth no disponible');
+          showToast('INICIO DE SESIÓN NO DISPONIBLE');
         }
       } catch (err) {
-        alert('Error auth Google: ' + err.message);
+        showToast('ERROR · ' + (err && err.message ? err.message : 'Error auth Google'));
       }
     });
   }
@@ -949,7 +1137,7 @@ export async function renderSettingsView(container) {
           renderSettingsView(container);
         }
       } catch (err) {
-        alert('Error al cerrar sesión: ' + err.message);
+        showToast('ERROR · ' + (err && err.message ? err.message : 'Error al cerrar sesión'));
       }
     });
   }
@@ -971,7 +1159,7 @@ export async function renderSettingsView(container) {
         const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        const now = new Date().toISOString().substring(0, 10);
+        const now = todayLocalYmd();
         a.href = url;
         a.download = `octane_copia_seguridad_${now}.json`;
         a.click();
@@ -979,7 +1167,7 @@ export async function renderSettingsView(container) {
       }
       showToast('COPIA DE SEGURIDAD EXPORTADA');
     } catch (err) {
-      alert('Error exportando copia: ' + err.message);
+      showToast('ERROR · ' + (err && err.message ? err.message : 'Error exportando copia'));
     }
   });
 
@@ -1024,7 +1212,7 @@ export async function renderSettingsView(container) {
       showToast('COPIA RESTAURADA');
       renderSettingsView(container);
     } catch (err) {
-      alert('Error importando copia de seguridad: ' + err.message);
+      showToast('ERROR · ' + (err && err.message ? err.message : 'Error importando copia de seguridad'));
     }
   });
 
@@ -1068,7 +1256,7 @@ export async function renderSettingsView(container) {
           window.location.reload();
         }, 300);
       } catch (err) {
-        alert('Error al borrar: ' + err.message);
+        showToast('ERROR · ' + (err && err.message ? err.message : 'Error al borrar'));
         btnConfirmReset.innerText = 'Sí, borrar todo';
         btnConfirmReset.disabled = false;
       }

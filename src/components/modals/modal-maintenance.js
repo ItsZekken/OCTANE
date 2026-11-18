@@ -20,10 +20,13 @@
  * Silencio Verbal Absoluto: Zero <p> tags, zero blur, 1px precision hairlines.
  */
 
+import { confirmDialog } from '../dialogs/app-dialog.js';
+import { todayLocalYmd } from '../../core/date-utils.js';
 import { store, playHorologyTick, showToast } from '../../core/state.js';
 import { saveMaintenanceItem, deleteMaintenanceItem, getMaintenanceItems } from '../../core/db-local.js';
 import { triggerCloudSync } from '../../core/firebase-sync.js';
 import { AVAILABLE_ICONS, ICONS_CATALOG, resolveIconId, renderComponentIconSvg } from '../cluster/icons-catalog.js';
+import { parseIntegerMetric, formatThousandsLive, setCursorAtEnd } from '../../core/number-utils.js';
 
 let modalRootEl = null;
 
@@ -169,7 +172,7 @@ export function openResetMaintenanceModal({ item, currentOdo = 0, onSave }) {
     const intervalKm = Math.max(1, Number(item.intervalKm) || 5000);
     const lastServiceOdo = Number(item.lastServiceOdo) || 0;
     const initialOdo = currentOdo > 0 ? currentOdo : (lastServiceOdo + intervalKm);
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = todayLocalYmd();
     const iconSvg = renderComponentIconSvg(item, 'w-4 h-4 text-[var(--accent-volt)]');
 
     modalRootEl.innerHTML = `
@@ -208,10 +211,9 @@ export function openResetMaintenanceModal({ item, currentOdo = 0, onSave }) {
             
             <input 
               id="maint-odo-input" 
-              type="number" 
-              step="1" 
+              type="text" 
               inputmode="numeric" 
-              value="${initialOdo}"
+              value="${formatThousandsLive(initialOdo)}"
               class="w-full font-sans font-light text-5xl tracking-tighter tabular-nums text-center bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 focus:outline-none text-[var(--text-primary)]" 
               autofocus 
             />
@@ -245,8 +247,7 @@ export function openResetMaintenanceModal({ item, currentOdo = 0, onSave }) {
                 </label>
                 <input 
                   id="maint-cost-input" 
-                  type="number" 
-                  step="1000" 
+                  type="text" 
                   inputmode="numeric" 
                   placeholder="0" 
                   class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-1.5 text-[var(--text-primary)] text-xs font-mono tabular-nums focus:outline-none placeholder:text-[var(--text-muted)]"
@@ -305,20 +306,26 @@ export function openResetMaintenanceModal({ item, currentOdo = 0, onSave }) {
     const submitBtn = document.getElementById('maint-submit-btn');
 
     const updatePreview = () => {
-        const val = Number(odoInput.value) || 0;
+        const val = parseIntegerMetric(odoInput.value);
         if (lastServiceOdo > 0 && val > lastServiceOdo) {
             const diff = val - lastServiceOdo;
-            deltaPreview.textContent = `+${diff.toLocaleString('en-US')} KM DESDE ÚLTIMO RELEVO`;
+            deltaPreview.textContent = `+${formatThousandsLive(diff)} KM DESDE ÚLTIMO RELEVO`;
         } else {
-            deltaPreview.textContent = `DIAL REINICIARÁ A ${intervalKm.toLocaleString('en-US')} KM`;
+            deltaPreview.textContent = `DIAL REINICIARÁ A ${formatThousandsLive(intervalKm)} KM`;
         }
     };
-    odoInput.addEventListener('input', updatePreview);
+    odoInput.addEventListener('input', () => {
+        odoInput.value = formatThousandsLive(odoInput.value);
+        updatePreview();
+    });
+    costInput?.addEventListener('input', () => {
+        costInput.value = formatThousandsLive(costInput.value);
+    });
 
     setTimeout(() => {
         if (odoInput) {
             odoInput.focus();
-            odoInput.select();
+            setCursorAtEnd(odoInput);
         }
     }, 40);
 
@@ -327,8 +334,8 @@ export function openResetMaintenanceModal({ item, currentOdo = 0, onSave }) {
     cancelBtn?.addEventListener('click', closeMaintenanceModal);
 
     submitBtn?.addEventListener('click', async () => {
-        const odoVal = parseFloat(odoInput.value);
-        const costVal = parseFloat(costInput.value) || 0;
+        const odoVal = parseIntegerMetric(odoInput.value);
+        const costVal = parseIntegerMetric(costInput.value);
         const dateVal = (dateInput.value || '').trim() || todayStr;
         const notesVal = (notesInput.value || '').trim();
 
@@ -375,6 +382,8 @@ export function openResetMaintenanceModal({ item, currentOdo = 0, onSave }) {
             store.setState({ maintenanceItems: updatedList });
 
             triggerCloudSync();
+
+            window.dispatchEvent(new CustomEvent('octane:maintenance-updated', { detail: { item } }));
 
             playHorologyTick(1600, 0.02, 0.04);
             showToast('RELEVO REGISTRADO · DIAL CALIBRADO');
@@ -455,10 +464,9 @@ export function openEditComponentModal({ item, onSave, onDelete }) {
               </label>
               <input 
                 id="edit-comp-interval" 
-                type="number" 
-                step="500" 
+                type="text" 
                 inputmode="numeric" 
-                value="${intervalKm}" 
+                value="${formatThousandsLive(intervalKm)}" 
                 class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 text-[var(--text-primary)] text-xs font-mono tabular-nums focus:outline-none"
               />
             </div>
@@ -521,13 +529,17 @@ export function openEditComponentModal({ item, onSave, onDelete }) {
         selectedIcon = iconId;
     });
 
+    intervalInput?.addEventListener('input', () => {
+        intervalInput.value = formatThousandsLive(intervalInput.value);
+    });
+
     closeX?.addEventListener('click', closeMaintenanceModal);
     backdrop?.addEventListener('click', closeMaintenanceModal);
     cancelBtn?.addEventListener('click', closeMaintenanceModal);
 
     // Delete handler
     deleteBtn?.addEventListener('click', async () => {
-        const confirmed = window.confirm(`¿ELIMINAR "${safeName}" DEL CLÚSTER?`);
+        const confirmed = await confirmDialog({ title: `¿ELIMINAR "${safeName}" DEL CLÚSTER?`, confirmLabel: 'Eliminar', danger: true });
         if (!confirmed) return;
 
         try {
@@ -535,6 +547,8 @@ export function openEditComponentModal({ item, onSave, onDelete }) {
             const currentItems = store.getState().maintenanceItems || [];
             store.setState({ maintenanceItems: currentItems.filter(i => i.id !== item.id) });
             triggerCloudSync();
+
+            window.dispatchEvent(new CustomEvent('octane:maintenance-updated', { detail: { item, action: 'delete' } }));
 
             playHorologyTick(1100, 0.02, 0.03);
             showToast('COMPONENTE ELIMINADO');
@@ -551,7 +565,7 @@ export function openEditComponentModal({ item, onSave, onDelete }) {
     // Save handler
     submitBtn?.addEventListener('click', async () => {
         const rawName = (nameInput.value || '').trim();
-        const intervalVal = parseFloat(intervalInput.value);
+        const intervalVal = parseIntegerMetric(intervalInput.value);
 
         if (!rawName) {
             nameInput.focus();
@@ -584,6 +598,8 @@ export function openEditComponentModal({ item, onSave, onDelete }) {
 
             triggerCloudSync();
 
+            window.dispatchEvent(new CustomEvent('octane:maintenance-updated', { detail: { item, action: 'update' } }));
+
             playHorologyTick(1600, 0.02, 0.04);
             showToast('COMPONENTE ACTUALIZADO');
             closeMaintenanceModal();
@@ -611,7 +627,7 @@ export function openAddComponentModal({ currentOdo = 0, onSave }) {
     initMaintenanceModal();
     playHorologyTick(1400, 0.018, 0.035);
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = todayLocalYmd();
     let selectedIcon = 'general';
 
     modalRootEl.innerHTML = `
@@ -659,10 +675,9 @@ export function openAddComponentModal({ currentOdo = 0, onSave }) {
               </label>
               <input 
                 id="new-comp-interval" 
-                type="number" 
-                step="500" 
+                type="text" 
                 inputmode="numeric" 
-                placeholder="10000" 
+                placeholder="10.000" 
                 class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 text-[var(--text-primary)] text-xs font-mono tabular-nums focus:outline-none placeholder:text-[var(--text-muted)]"
               />
             </div>
@@ -674,10 +689,9 @@ export function openAddComponentModal({ currentOdo = 0, onSave }) {
               </label>
               <input 
                 id="new-comp-odo" 
-                type="number" 
-                step="1" 
+                type="text" 
                 inputmode="numeric" 
-                value="${currentOdo}" 
+                value="${formatThousandsLive(currentOdo)}" 
                 class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 text-[var(--text-primary)] text-xs font-mono tabular-nums focus:outline-none"
               />
             </div>
@@ -729,6 +743,14 @@ export function openAddComponentModal({ currentOdo = 0, onSave }) {
         selectedIcon = iconId;
     });
 
+    intervalInput?.addEventListener('input', () => {
+        intervalInput.value = formatThousandsLive(intervalInput.value);
+    });
+
+    odoInput?.addEventListener('input', () => {
+        odoInput.value = formatThousandsLive(odoInput.value);
+    });
+
     setTimeout(() => nameInput?.focus(), 40);
 
     closeX?.addEventListener('click', closeMaintenanceModal);
@@ -737,8 +759,8 @@ export function openAddComponentModal({ currentOdo = 0, onSave }) {
 
     submitBtn?.addEventListener('click', async () => {
         const rawName = (nameInput.value || '').trim();
-        const intervalVal = parseFloat(intervalInput.value);
-        const odoVal = parseFloat(odoInput.value) || 0;
+        const intervalVal = parseIntegerMetric(intervalInput.value);
+        const odoVal = parseIntegerMetric(odoInput.value);
 
         if (!rawName) {
             nameInput.focus();
@@ -772,6 +794,8 @@ export function openAddComponentModal({ currentOdo = 0, onSave }) {
             store.setState({ maintenanceItems: [...currentItems, newItem] });
 
             triggerCloudSync();
+
+            window.dispatchEvent(new CustomEvent('octane:maintenance-updated', { detail: { item: newItem, action: 'create' } }));
 
             playHorologyTick(1600, 0.02, 0.04);
             showToast('COMPONENTE AÑADIDO AL CLÚSTER');
@@ -932,7 +956,7 @@ export function openHistoryMaintenanceModal({ item, currentOdo = 0, onReset, onD
     });
 
     deleteBtn?.addEventListener('click', async () => {
-        const confirmed = window.confirm(`¿ELIMINAR "${safeName}" DEL CLÚSTER?`);
+        const confirmed = await confirmDialog({ title: `¿ELIMINAR "${safeName}" DEL CLÚSTER?`, confirmLabel: 'Eliminar', danger: true });
         if (!confirmed) return;
 
         try {

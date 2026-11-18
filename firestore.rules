@@ -22,6 +22,7 @@ rules_version = '2';
 //       * legal_docs: list (optional, max 200 items)
 //       * ride_sessions: list (optional, max 5000 items)
 //       * platform_passes: list (optional, max 200 items)
+//   - deleted: list (optional, max 20000 items) - Tombstones of deleted records.
 //   - userEmail: string (optional, nullable, max 150 chars) - Google email of the owner.
 //   - clientAgent: string (optional, max 500 chars) - User-agent string of the sync client.
 //
@@ -70,7 +71,8 @@ service cloud.firestore {
         'syncedAt',
         'stores',
         'userEmail',
-        'clientAgent'
+        'clientAgent',
+        'deleted'
       ]);
     }
 
@@ -100,6 +102,12 @@ service cloud.firestore {
     function isValidClientAgent(data) {
       return !('clientAgent' in data) ||
              (data.clientAgent is string && data.clientAgent.size() <= 500);
+    }
+
+    // Validate optional tombstone list of deleted records
+    function isValidDeleted(data) {
+      return !('deleted' in data) ||
+             (data.deleted is list && data.deleted.size() <= 20000);
     }
 
     // Validate store lists and bounded array lengths
@@ -144,7 +152,8 @@ service cloud.firestore {
              isValidTimestampOrIso(data.exportedAt) &&
              isValidStores(data) &&
              isValidEmailField(data) &&
-             isValidClientAgent(data);
+             isValidClientAgent(data) &&
+             isValidDeleted(data);
     }
 
     // Ensure uid cannot be mutated on update

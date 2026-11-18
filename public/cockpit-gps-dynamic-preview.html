@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>OCTANE // KINETIC — Dynamic GPS Cockpit & Horology Preview</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+    :root {
+      --bg-void: #09090B;
+      --bg-surface: #0E0E11;
+      --bg-elevated: #141418;
+      --line-hair: #1E1E24;
+      --line-strong: #2E2E38;
+      --text-primary: #F4F4F6;
+      --text-secondary: #8A8A93;
+      --text-muted: #52525B;
+      --accent-amber: #F59E0B;
+      --accent-volt: #10B981;
+      --accent-cyan: #38BDF8;
+      --accent-crimson: #EF4444;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: var(--bg-void);
+      color: var(--text-primary);
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; font-feature-settings: 'tnum' 1; }
+    .flat-frame { border: 1px solid var(--line-hair); background: var(--bg-surface); }
+    .hairline-b { border-bottom: 1px solid var(--line-hair); }
+    .hairline-t { border-top: 1px solid var(--line-hair); }
+    .hairline-r { border-right: 1px solid var(--line-hair); }
+    .hairline-l { border-left: 1px solid var(--line-hair); }
+
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.55; }
+    }
+    .animate-pulse-subtle { animation: pulse-subtle 2.5s infinite ease-in-out; }
+  </style>
+</head>
+<body class="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+
+  <!-- Encabezado Prototipo -->
+  <header class="flex items-center justify-between pb-4 hairline-b">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-[var(--accent-amber)] animate-pulse-subtle"></span>
+        <h1 class="font-mono text-xs uppercase tracking-[0.2em] text-[var(--accent-amber)] font-bold">PROTOTIPO EXPERIMENTAL</h1>
+      </div>
+      <h2 class="text-xl md:text-2xl font-light tracking-tight text-[var(--text-primary)] mt-1">Horología Espacial & Telemetría Dinámica</h2>
+    </div>
+    <div class="text-right font-mono text-[11px] text-[var(--text-secondary)]">
+      <span>OCTANE // KINETIC</span>
+      <span class="block text-[9px] text-[var(--text-muted)]">LABS · GPS FUSION</span>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       COMPONENTE 1: Banner Contextual de Tanqueada Sugerida en Gasolinera
+       ========================================================================= -->
+  <section class="space-y-2">
+    <div class="flex items-center justify-between font-mono text-[10px] text-[var(--text-secondary)] uppercase tracking-wider">
+      <span>1. Sugerencia Automática de Tanqueada (Geocerca EDS)</span>
+      <span class="text-[var(--accent-volt)]">ACTIVO EN EDS MALLORQUÍN</span>
+    </div>
+
+    <div id="gas-station-banner" class="flat-frame p-3.5 flex items-center justify-between gap-4 border-l-2 border-l-[var(--accent-amber)] bg-gradient-to-r from-[var(--bg-elevated)] to-[var(--bg-surface)] transition-all">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-8 h-8 rounded-full bg-[var(--accent-amber)]/10 border border-[var(--accent-amber)]/30 text-[var(--accent-amber)] flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 font-mono text-[10px] uppercase text-[var(--text-secondary)]">
+            <span>DETECCIÓN EDS · 18:25 (PARADA 6 MIN)</span>
+            <span class="text-[var(--text-muted)]">·</span>
+            <span class="text-[var(--accent-amber)] font-semibold">98.240 KM</span>
+          </div>
+          <div class="text-xs font-mono font-medium text-[var(--text-primary)] truncate mt-0.5">
+            ¿Tanqueaste en TERPEL | EDS Mallorquín?
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0 font-mono text-xs">
+        <button onclick="dismissBanner()" class="px-3 py-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-[10px] uppercase tracking-wider transition-colors cursor-pointer">
+          IGNORAR
+        </button>
+        <button onclick="openRefuelPreview()" class="px-3.5 py-1.5 bg-[var(--accent-amber)] text-[#09090B] font-bold text-[10px] uppercase tracking-wider hover:brightness-110 active:scale-95 transition-all cursor-pointer">
+          REGISTRAR LLENO
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       COMPONENTE 2: Chamber Dinámico en Cockpit (Combustible vs. Ritmo Circadiano 24H)
+       ========================================================================= -->
+  <section class="space-y-2">
+    <div class="flex items-center justify-between font-mono text-[10px] text-[var(--text-secondary)] uppercase tracking-wider">
+      <span>2. Cámara Dinámica del Cockpit (Alternancia de Instrumento)</span>
+      <div class="flex items-center gap-1 bg-[var(--bg-elevated)] p-0.5 border border-[var(--line-hair)]">
+        <button id="btn-mode-fuel" onclick="switchCockpitMode('fuel')" class="px-2 py-0.5 text-[9px] font-mono text-[var(--text-primary)] bg-[var(--bg-void)] border border-[var(--line-strong)]">
+          COMBUSTIBLE
+        </button>
+        <button id="btn-mode-horology" onclick="switchCockpitMode('horology')" class="px-2 py-0.5 text-[9px] font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+          RITMO 24H
+        </button>
+      </div>
+    </div>
+
+    <div class="flat-frame grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-[var(--line-hair)]">
+
+      <!-- Lado Izquierdo: Instrumento Dinámico Central (Lente o Reloj 24H) -->
+      <div class="md:col-span-6 p-6 flex flex-col items-center justify-between bg-[var(--bg-surface)] min-h-[340px]">
+        
+        <!-- Header del instrumento -->
+        <div class="w-full flex items-center justify-between font-mono text-[10px] text-[var(--text-secondary)] uppercase tracking-wider">
+          <span id="dial-mode-label">NIVEL DISPONIBLE</span>
+          <span id="dial-status-badge" class="text-[var(--accent-volt)]">REPOSO NORMAL</span>
+        </div>
+
+        <!-- VISTA A: Medidor de Combustible Clásico -->
+        <div id="view-fuel-container" class="my-auto flex flex-col items-center justify-center transition-all duration-300">
+          <div class="relative w-44 h-44 flex items-center justify-center">
+            <!-- Arco SVG de Nivel -->
+            <svg class="w-full h-full -rotate-90" viewBox="0 0 160 160">
+              <circle cx="80" cy="80" r="70" stroke="var(--line-hair)" stroke-width="8" fill="none" />
+              <circle cx="80" cy="80" r="70" stroke="var(--accent-amber)" stroke-width="8" stroke-dasharray="440" stroke-dashoffset="154" stroke-linecap="round" fill="none" />
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <span class="font-sans font-light text-5xl tracking-tighter tabular-nums text-[var(--text-primary)]">65%</span>
+              <span class="font-mono text-[10px] uppercase text-[var(--accent-amber)] mt-1">6.01 GAL DISP.</span>
+              <span class="font-mono text-[9px] text-[var(--text-secondary)] mt-0.5">216 KM AUTONOMÍA</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- VISTA B: Horología Espacial 24 Horas (Ritmo Circadiano del Carro) -->
+        <div id="view-horology-container" class="hidden my-auto flex flex-col items-center justify-center transition-all duration-300">
+          <div class="relative w-52 h-52 flex items-center justify-center">
+            <svg class="w-full h-full" viewBox="0 0 200 200">
+              <!-- Círculo base 24h -->
+              <circle cx="100" cy="100" r="88" stroke="var(--line-strong)" stroke-width="2" stroke-dasharray="1 7" fill="none" />
+              
+              <!-- Segmentos de Actividad del Día (Normalizados 24 horas: 1h = 15 deg) -->
+              <!-- Sueño / Noche (00:00 - 07:00): 105 deg -->
+              <circle cx="100" cy="100" r="80" stroke="#1F1F24" stroke-width="6" stroke-dasharray="146 502" stroke-dashoffset="125" fill="none" />
+              
+              <!-- Viaje Mañana (07:34 - 08:11 · 37 min): ~9.2 deg -->
+              <circle cx="100" cy="100" r="80" stroke="var(--accent-amber)" stroke-width="8" stroke-dasharray="13 502" stroke-dashoffset="271" stroke-linecap="round" fill="none" />
+
+              <!-- Reposo Diurno / Trabajo (08:15 - 17:22): ~136 deg -->
+              <circle cx="100" cy="100" r="80" stroke="#2A2A32" stroke-width="6" stroke-dasharray="190 502" stroke-dashoffset="284" fill="none" />
+
+              <!-- Viaje Regreso (17:22 - 18:15 · 53 min): ~13 deg -->
+              <circle cx="100" cy="100" r="80" stroke="var(--accent-crimson)" stroke-width="8" stroke-dasharray="18 502" stroke-dashoffset="474" stroke-linecap="round" fill="none" />
+
+              <!-- Aguja horaria 24H actual (Apuntando a las 14:07) -->
+              <line x1="100" y1="100" x2="100" y2="28" stroke="var(--accent-volt)" stroke-width="2" stroke-linecap="round" transform="rotate(211.75 100 100)" />
+              <circle cx="100" cy="100" r="4" fill="var(--accent-volt)" />
+            </svg>
+
+            <!-- Centro del Reloj Horológico -->
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+              <span class="font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">REPOSO ACTUAL</span>
+              <span class="font-sans font-light text-2xl tracking-tight tabular-nums text-[var(--text-primary)] mt-0.5">3H 14M</span>
+              <span class="font-mono text-[9px] uppercase text-[var(--accent-volt)] mt-0.5">MOTOR FRÍO</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 font-mono text-[9px] text-[var(--text-secondary)] mt-2">
+            <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-amber)]"></span> VIAJES (1.5H)</span>
+            <span class="flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-[#2A2A32]"></span> PARQUEO (22.5H)</span>
+          </div>
+        </div>
+
+        <!-- Footer del instrumento: Estado térmico del motor -->
+        <div class="w-full pt-3 hairline-t flex items-center justify-between font-mono text-[10px] text-[var(--text-secondary)]">
+          <span class="text-[9px] uppercase tracking-wider">RETENCIÓN TÉRMICA</span>
+          <span id="thermal-retention-val" class="font-semibold text-[var(--text-primary)] tabular-nums">12% (ARRANQUE FRÍO)</span>
+        </div>
+      </div>
+
+      <!-- Lado Derecho: Odómetro Mecánico Drum-Counter & Chasis con Easter Egg -->
+      <div class="md:col-span-6 p-6 flex flex-col justify-between bg-[var(--bg-void)]">
+        <div>
+          <!-- Odómetro Split-Roller -->
+          <div class="flex items-center justify-between font-mono text-[10px] uppercase text-[var(--text-secondary)] tracking-wider mb-2">
+            <span>KILOMETRAJE ACTUAL (GPS)</span>
+            <span class="text-[var(--accent-amber)] font-bold">28.4 KM/DÍA</span>
+          </div>
+
+          <div class="flex items-center justify-center gap-1.5 py-2">
+            <div class="w-10 h-14 bg-[var(--bg-surface)] border border-[var(--line-strong)] flex items-center justify-center font-mono text-3xl font-medium text-[var(--text-primary)]">0</div>
+            <div class="w-10 h-14 bg-[var(--bg-surface)] border border-[var(--line-strong)] flex items-center justify-center font-mono text-3xl font-medium text-[var(--text-primary)]">9</div>
+            <div class="w-10 h-14 bg-[var(--bg-surface)] border border-[var(--line-strong)] flex items-center justify-center font-mono text-3xl font-medium text-[var(--text-primary)]">8</div>
+            <span class="font-mono text-2xl text-[var(--text-muted)]">.</span>
+            <div class="w-10 h-14 bg-[var(--bg-surface)] border border-[var(--line-strong)] flex items-center justify-center font-mono text-3xl font-medium text-[var(--text-primary)]">2</div>
+            <div class="w-10 h-14 bg-[var(--bg-surface)] border border-[var(--line-strong)] flex items-center justify-center font-mono text-3xl font-medium text-[var(--text-primary)]">4</div>
+            <div class="w-10 h-14 bg-[var(--bg-surface)] border border-[var(--line-strong)] flex items-center justify-center font-mono text-3xl font-medium text-[var(--text-primary)]">0</div>
+            <span class="font-mono text-xs text-[var(--accent-amber)] font-bold ml-1">KM</span>
+          </div>
+        </div>
+
+        <!-- Chasis CAD con Easter Egg de Toques Múltiples -->
+        <div class="pt-4">
+          <div class="flex items-center justify-between font-mono text-[9px] uppercase text-[var(--text-secondary)] mb-1">
+            <span>CHASIS ACTIVO · TOCA 5 VECES PARA TELEMETRÍA FANTASMA</span>
+            <span id="tap-count-badge" class="text-[var(--text-muted)]">0/5</span>
+          </div>
+
+          <div id="cad-easter-egg-trigger" onclick="handleCarTap()" class="p-4 flat-frame bg-[var(--bg-surface)]/40 hover:bg-[var(--bg-surface)] cursor-pointer transition-all active:scale-98 flex items-center justify-center relative overflow-hidden group">
+            <div class="text-center font-mono">
+              <svg class="w-48 h-20 mx-auto transition-transform group-hover:scale-105" viewBox="0 0 200 80" fill="none">
+                <path d="M20 55 L35 55 L45 35 L75 25 L135 25 L165 40 L185 45 L185 55 L170 55 M50 55 A15 15 0 0 1 80 55 M130 55 A15 15 0 0 1 160 55" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="65" cy="55" r="9" stroke="#52525B" stroke-width="3" fill="#141418"/>
+                <circle cx="145" cy="55" r="9" stroke="#52525B" stroke-width="3" fill="#141418"/>
+              </svg>
+              <span class="text-[10px] text-[var(--text-secondary)] block mt-1">KIA PICANTO 1.0L (HATCHBACK)</span>
+            </div>
+            
+            <!-- Toast de Easter Egg -->
+            <div id="easter-egg-toast" class="absolute inset-0 bg-[var(--accent-amber)] text-[#09090B] font-mono font-bold text-xs uppercase flex items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200">
+              ⚡ INICIANDO GHOST RACE TELEMETRY...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // 1. Manejo del banner de gasolinera
+    function dismissBanner() {
+      const banner = document.getElementById('gas-station-banner');
+      banner.style.opacity = '0';
+      setTimeout(() => banner.style.display = 'none', 300);
+    }
+
+    function openRefuelPreview() {
+      alert("Abriendo modal 'Nueva Tanqueada' con: \n• Odómetro: 98.240 KM (GPS) \n• Modo: Tanque Lleno a Full \n• Fecha: 18:25 (Parada EDS detectada)");
+    }
+
+    // 2. Alternancia de Instrumento en el Cockpit
+    function switchCockpitMode(mode) {
+      const btnFuel = document.getElementById('btn-mode-fuel');
+      const btnHorology = document.getElementById('btn-mode-horology');
+      const viewFuel = document.getElementById('view-fuel-container');
+      const viewHorology = document.getElementById('view-horology-container');
+      const dialLabel = document.getElementById('dial-mode-label');
+      const statusBadge = document.getElementById('dial-status-badge');
+      const thermalVal = document.getElementById('thermal-retention-val');
+
+      if (mode === 'fuel') {
+        btnFuel.className = "px-2 py-0.5 text-[9px] font-mono text-[var(--text-primary)] bg-[var(--bg-void)] border border-[var(--line-strong)]";
+        btnHorology.className = "px-2 py-0.5 text-[9px] font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)]";
+        viewFuel.classList.remove('hidden');
+        viewHorology.classList.add('hidden');
+        dialLabel.textContent = "NIVEL DISPONIBLE";
+        statusBadge.textContent = "REPOSO NORMAL";
+        statusBadge.className = "text-[var(--accent-volt)]";
+        thermalVal.textContent = "12% (ARRANQUE FRÍO)";
+      } else {
+        btnHorology.className = "px-2 py-0.5 text-[9px] font-mono text-[var(--text-primary)] bg-[var(--bg-void)] border border-[var(--line-strong)]";
+        btnFuel.className = "px-2 py-0.5 text-[9px] font-mono text-[var(--text-secondary)] hover:text-[var(--text-primary)]";
+        viewHorology.classList.remove('hidden');
+        viewFuel.classList.add('hidden');
+        dialLabel.textContent = "HOROLOGÍA 24 HORAS";
+        statusBadge.textContent = "MOTOR EN REPOSO (PARQUEADO)";
+        statusBadge.className = "text-[var(--accent-amber)]";
+        thermalVal.textContent = "MOTOR ENFRIADO · PRÓXIMO INICIO ES FRÍO";
+      }
+    }
+
+    // 3. Easter egg contador de toques
+    let tapCount = 0;
+    let tapResetTimer = null;
+
+    function handleCarTap() {
+      tapCount++;
+      const badge = document.getElementById('tap-count-badge');
+      const toast = document.getElementById('easter-egg-toast');
+      badge.textContent = `${tapCount}/5`;
+      badge.className = "text-[var(--accent-amber)] font-bold";
+
+      clearTimeout(tapResetTimer);
+      tapResetTimer = setTimeout(() => {
+        tapCount = 0;
+        badge.textContent = "0/5";
+        badge.className = "text-[var(--text-muted)]";
+      }, 2000);
+
+      if (tapCount >= 5) {
+        toast.style.opacity = '1';
+        setTimeout(() => {
+          window.location.href = '/ghost-race.html';
+        }, 800);
+      }
+    }
+  </script>
+</body>
+</html>

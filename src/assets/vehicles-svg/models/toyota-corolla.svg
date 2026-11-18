@@ -22,19 +22,23 @@
 
   <!-- Front Wheel (Center: 215, 202) -->
   <g transform="translate(215, 202)">
-    <circle r="46" fill="#141418" stroke="#09090B" stroke-width="6"/>
-    <circle r="28" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="-25" y1="0" x2="25" y2="0" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="0" y1="-25" x2="0" y2="25" stroke="#D4D4D8" stroke-width="5"/>
-    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    <g class="vehicle-wheel vehicle-wheel-front" style="transform-box: fill-box; transform-origin: center;">
+      <circle r="46" fill="#141418" stroke="#09090B" stroke-width="6"/>
+      <circle r="28" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="-25" y1="0" x2="25" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="0" y1="-25" x2="0" y2="25" stroke="#D4D4D8" stroke-width="5"/>
+      <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    </g>
   </g>
 
   <!-- Rear Wheel (Center: 585, 202) -->
   <g transform="translate(585, 202)">
-    <circle r="46" fill="#141418" stroke="#09090B" stroke-width="6"/>
-    <circle r="28" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="-25" y1="0" x2="25" y2="0" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="0" y1="-25" x2="0" y2="25" stroke="#D4D4D8" stroke-width="5"/>
-    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    <g class="vehicle-wheel vehicle-wheel-rear" style="transform-box: fill-box; transform-origin: center;">
+      <circle r="46" fill="#141418" stroke="#09090B" stroke-width="6"/>
+      <circle r="28" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="-25" y1="0" x2="25" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="0" y1="-25" x2="0" y2="25" stroke="#D4D4D8" stroke-width="5"/>
+      <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    </g>
   </g>
 </svg>
