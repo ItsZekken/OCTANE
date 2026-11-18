@@ -28,19 +28,23 @@
 
   <!-- Front Wheel (Center: 220, 194) -->
   <g transform="translate(220, 194)">
-    <circle r="52" fill="#141418" stroke="#09090B" stroke-width="6" stroke-dasharray="14 6"/>
-    <circle r="31" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="-27" y1="0" x2="27" y2="0" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="0" y1="-27" x2="0" y2="27" stroke="#D4D4D8" stroke-width="5"/>
-    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    <g class="vehicle-wheel vehicle-wheel-front" style="transform-box: fill-box; transform-origin: center;">
+      <circle r="52" fill="#141418" stroke="#09090B" stroke-width="6" stroke-dasharray="14 6"/>
+      <circle r="31" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="-27" y1="0" x2="27" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="0" y1="-27" x2="0" y2="27" stroke="#D4D4D8" stroke-width="5"/>
+      <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    </g>
   </g>
 
   <!-- Rear Wheel (Center: 600, 194) -->
   <g transform="translate(600, 194)">
-    <circle r="52" fill="#141418" stroke="#09090B" stroke-width="6" stroke-dasharray="14 6"/>
-    <circle r="31" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="-27" y1="0" x2="27" y2="0" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="0" y1="-27" x2="0" y2="27" stroke="#D4D4D8" stroke-width="5"/>
-    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    <g class="vehicle-wheel vehicle-wheel-rear" style="transform-box: fill-box; transform-origin: center;">
+      <circle r="52" fill="#141418" stroke="#09090B" stroke-width="6" stroke-dasharray="14 6"/>
+      <circle r="31" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="-27" y1="0" x2="27" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="0" y1="-27" x2="0" y2="27" stroke="#D4D4D8" stroke-width="5"/>
+      <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    </g>
   </g>
 </svg>

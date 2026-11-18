@@ -180,6 +180,7 @@ export const INITIAL_STATE = Object.freeze({
     currentUnit: 'gal',              // 'gal' | 'l100' | 'kml'
     scopeFilter: 'full_era',         // 'full_era' | 'all'
     currentView: 'cockpit',          // 'cockpit' | 'cluster' | 'glovebox' | 'rides' | 'settings'
+    ridesContextDate: null,          // 'YYYY-MM-DD' | null — fecha por defecto para nuevos registros en Carreras
     soundEnabled: savedSound,
     fuelPriceCop: 16000,
     theme: savedTheme,               // 'dark' | 'light'

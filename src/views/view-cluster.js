@@ -27,16 +27,19 @@ let storeUnsubscribe = null;
 let currentActiveContainer = null;
 
 /**
- * Computes the highest odometer reading from telemetry logs.
+ * Computes the highest odometer reading from telemetry logs and live GPS odometer.
  * @param {Array<Object>} logs
+ * @param {Object} [vehicleProfile=null]
  * @returns {number}
  */
-export function getCurrentOdometer(logs = []) {
-    if (!Array.isArray(logs) || logs.length === 0) return 0;
-    return logs.reduce((max, log) => {
+export function getCurrentOdometer(logs = [], vehicleProfile = null) {
+    const gpsOdo = Number(vehicleProfile?.gpsCache?.live?.totalMile) || 0;
+    if (!Array.isArray(logs) || logs.length === 0) return gpsOdo;
+    const maxLogOdo = logs.reduce((max, log) => {
         const odo = Number(log.odometer_reading) || 0;
         return odo > max ? odo : max;
     }, 0);
+    return Math.max(maxLogOdo, gpsOdo);
 }
 
 /**
@@ -104,7 +107,10 @@ export async function renderClusterView(container) {
     // 1. Fetch telemetry logs and calculate current vehicle odometer
     const state = store.getState();
     const logs = state.telemetryLogs || [];
-    let currentOdo = getCurrentOdometer(logs);
+    const gpsLive = state.vehicleProfile?.gpsCache?.live || null;
+    let currentOdo = getCurrentOdometer(logs, state.vehicleProfile);
+    const extVoltage = Number(gpsLive?.externalVoltage) || 0;
+    const accStatus = Boolean(gpsLive?.accStatus);
 
     // 2. Fetch or auto-seed maintenance items from IndexedDB
     let items = [];
@@ -120,15 +126,21 @@ export async function renderClusterView(container) {
 
     // 3. Render Outer Framework
     container.innerHTML = `
-      <div class="view-cluster max-w-5xl mx-auto space-y-6 pb-20 select-none">
+      <div class="view-cluster w-full space-y-6 pb-20 select-none">
         
         <!-- Top View Header -->
-        <div class="border-b border-[var(--line-hair)] pb-3 flex items-center justify-between">
+        <div class="border-b border-[var(--line-hair)] pb-3 flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2.5">
             <span class="w-2 h-2 bg-[var(--accent-amber)]"></span>
             <span class="font-mono text-xs uppercase tracking-widest text-[var(--text-primary)] font-semibold">CLÚSTER</span>
           </div>
-          <div class="flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">
+          <div class="flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">
+            ${extVoltage > 0 ? `
+              <span id="cluster-top-voltage-readout" class="tabular-nums ${extVoltage < 12.1 ? 'text-[var(--accent-crimson)]' : 'text-[var(--accent-volt)]'}">
+                BATERÍA: ${extVoltage.toFixed(2)}V · ${accStatus ? 'ACC ON' : 'ACC OFF'}
+              </span>
+              <span class="text-[var(--line-strong)]">·</span>
+            ` : ''}
             <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-volt)]"></span>
             <span id="cluster-top-odo-readout" class="tabular-nums">ODÓMETRO: ${currentOdo.toLocaleString('en-US')} KM</span>
           </div>
@@ -268,11 +280,16 @@ export async function renderClusterView(container) {
         let odoChanged = false;
         let itemsChanged = false;
 
-        if (newState.telemetryLogs !== prevState.telemetryLogs) {
-            const newOdo = getCurrentOdometer(newState.telemetryLogs || []);
+        if (newState.telemetryLogs !== prevState.telemetryLogs || newState.vehicleProfile !== prevState.vehicleProfile) {
+            const newOdo = getCurrentOdometer(newState.telemetryLogs || [], newState.vehicleProfile);
             if (newOdo !== currentOdo) {
                 currentOdo = newOdo;
                 odoChanged = true;
+            }
+            const voltEl = container.querySelector('#cluster-top-voltage-readout');
+            const liveSnap = newState.vehicleProfile?.gpsCache?.live;
+            if (voltEl && liveSnap && Number(liveSnap.externalVoltage) > 0) {
+                voltEl.textContent = `BATERÍA: ${Number(liveSnap.externalVoltage).toFixed(2)}V · ${liveSnap.accStatus ? 'ACC ON' : 'ACC OFF'}`;
             }
         }
 

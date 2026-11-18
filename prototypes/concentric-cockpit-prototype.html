@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>OCTANE // KINETIC — Fusión Concéntrica Solar 24H + Núcleo de Combustible</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      --bg-void: #09090B;
+      --bg-surface: #0E0E11;
+      --bg-elevated: #141418;
+      --line-hair: #1E1E24;
+      --line-strong: #2E2E38;
+      --text-primary: #F4F4F6;
+      --text-secondary: #8A8A93;
+      --text-muted: #52525B;
+      --accent-amber: #F59E0B;
+      --accent-volt: #10B981;
+      --accent-crimson: #EF4444;
+      --accent-cyan: #38BDF8;
+      --accent-night: #1E293B;
+      --accent-day: #2A2416;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background-color: var(--bg-void);
+      color: var(--text-primary);
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-feature-settings: 'tnum' 1, 'zero' 1;
+    }
+
+    .drum-slot {
+      box-shadow: inset 0 3px 6px rgba(0,0,0,0.85), inset 0 -3px 6px rgba(0,0,0,0.85);
+    }
+
+    /* Car rev-up animation for easter egg */
+    @keyframes car-rev {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      25% { transform: translateY(-2px) rotate(-1.5deg); }
+      75% { transform: translateY(1px) rotate(1deg); }
+    }
+    .revving {
+      animation: car-rev 0.12s ease-in-out infinite;
+    }
+
+    @keyframes car-launch {
+      0% { transform: translateX(0); opacity: 1; }
+      40% { transform: translateX(-15px) scale(0.95); opacity: 0.9; }
+      100% { transform: translateX(180px) scale(1.1); opacity: 0; }
+    }
+    .launching {
+      animation: car-launch 0.5s cubic-bezier(0.6, -0.28, 0.735, 0.045) forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#09090B] text-[#F4F4F6] flex flex-col items-center justify-start p-3 sm:p-6 antialiased select-none">
+
+  <!-- HEADER NATIVO OCTANE -->
+  <header class="w-full max-w-md flex items-center justify-between py-3 border-b border-[#1E1E24] mb-3">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-[#F59E0B] shadow-[0_0_8px_rgba(245,158,11,0.6)]"></span>
+      <span class="font-mono text-xs font-bold tracking-widest text-[#F4F4F6]">OCTANE</span>
+      <span class="font-mono text-[10px] text-[#8A8A93]">TELEMETRÍA VEHICULAR</span>
+    </div>
+    <span class="font-mono text-[10px] text-[#52525B]">COCKPIT V2</span>
+  </header>
+
+  <main class="w-full max-w-md space-y-3.5">
+
+    <!-- TARJETA DEL CHASIS CON EASTER EGG (TOCA 5 VECES EL DIBUJO DEL CARRO) -->
+    <div class="p-3.5 border border-[#1E1E24] bg-[#0E0E11] flex items-center justify-between relative overflow-hidden">
+      <div>
+        <span class="font-mono text-[9px] uppercase tracking-widest text-[#8A8A93] block">CHASIS ACTIVO</span>
+        <span class="font-mono text-sm font-semibold text-[#F4F4F6]">Kia Picanto 1.0L</span>
+        <span class="font-mono text-[10px] text-[#52525B] block mt-0.5">35.0 L · 9.25 GAL</span>
+      </div>
+
+      <!-- Car SVG target with Easter Egg trigger -->
+      <div id="car-tap-target" class="w-24 h-12 flex items-center justify-center cursor-pointer select-none" title="Toca 5 veces para desbloquear Ghost Race">
+        <svg id="car-svg-icon" viewBox="0 0 100 40" class="w-full h-full text-[#F4F4F6]/80 hover:text-[#F59E0B] transition-colors">
+          <path d="M10 28 L15 16 L35 12 L70 12 L85 20 L95 24 L95 30 L85 30 A 6 6 0 0 1 73 30 L32 30 A 6 6 0 0 1 20 30 L10 30 Z" fill="none" stroke="currentColor" stroke-width="2"/>
+          <circle cx="26" cy="30" r="4" fill="#F59E0B" />
+          <circle cx="79" cy="30" r="4" fill="#F59E0B" />
+        </svg>
+      </div>
+
+      <!-- Secret tap feedback HUD -->
+      <div id="tap-feedback" class="absolute bottom-1 right-3 font-mono text-[9px] text-[#F59E0B] tracking-wider opacity-0 transition-opacity">
+        REV: <span id="tap-num">0</span>/5
+      </div>
+    </div>
+
+    <!-- EL INSTRUMENTO PROTAGONISTA: FUSIÓN CONCÉNTRICA SOLAR 24H + NÚCLEO DE COMBUSTIBLE -->
+    <div class="p-4 sm:p-5 border border-[#1E1E24] bg-[#0E0E11] flex flex-col items-center justify-center relative">
+      
+      <!-- Top Micro-bar: Orientación Solar -->
+      <div class="w-full flex items-center justify-between font-mono text-[9px] uppercase tracking-widest text-[#8A8A93] mb-2 px-1">
+        <span class="text-[#F59E0B]/90 flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#F59E0B]"></span>
+          DÍA (06H - 18H)
+        </span>
+        <span class="text-[#38BDF8]/90 flex items-center gap-1">
+          NOCHE (18H - 06H)
+          <span class="w-1.5 h-1.5 rounded-full bg-[#38BDF8]"></span>
+        </span>
+      </div>
+
+      <!-- MAIN INSTRUMENT: 24H SOLAR RING + FUEL CORE -->
+      <div class="relative w-64 h-64 sm:w-72 sm:h-72 flex items-center justify-center">
+        
+        <!-- SVG DIAL 24H (ORIENTACIÓN SOLAR NATURAL: 12H ARRIBA, 00H ABAJO) -->
+        <!-- En SVG estándar, 0 deg es derecha (18h). Rotamos +90 deg para que 12h quede ARRIBA. -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 240 240">
+          <defs>
+            <!-- Sutil gradiente para la mitad diurna (06h a 18h) -->
+            <linearGradient id="day-arc-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#F59E0B" stop-opacity="0.30"/>
+              <stop offset="100%" stop-color="#F59E0B" stop-opacity="0.08"/>
+            </linearGradient>
+
+            <!-- Sutil gradiente para la mitad nocturna (18h a 06h) -->
+            <linearGradient id="night-arc-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.08"/>
+              <stop offset="100%" stop-color="#38BDF8" stop-opacity="0.25"/>
+            </linearGradient>
+          </defs>
+
+          <!-- 1. BASE DEL ANILLO: MITAD NOCTURNA (Abajo: 18h a 06h, 180 grados) -->
+          <!-- Circunferencia R=108: 2*PI*108 = 678.58 px -->
+          <!-- Semicírculo = 339.29 px -->
+          <circle cx="120" cy="120" r="108" stroke="url(#night-arc-grad)" stroke-width="7" stroke-dasharray="339.29 339.29" stroke-dashoffset="0" fill="none" class="rotate-0 origin-center" />
+
+          <!-- 2. BASE DEL ANILLO: MITAD DIURNA (Arriba: 06h a 18h, 180 grados) -->
+          <circle cx="120" cy="120" r="108" stroke="url(#day-arc-grad)" stroke-width="7" stroke-dasharray="339.29 339.29" stroke-dashoffset="339.29" fill="none" class="rotate-0 origin-center" />
+
+          <!-- 3. MARCADORES HORARIOS CARDINALES (12h, 18h, 00h, 06h) -->
+          <!-- 12:00 Mediodía (Cenit - Arriba) -->
+          <line x1="120" y1="6" x2="120" y2="18" stroke="#F59E0B" stroke-width="2" />
+          <text x="120" y="27" font-family="'JetBrains Mono', monospace" font-size="8" fill="#F59E0B" text-anchor="middle" font-weight="700">12H</text>
+
+          <!-- 18:00 Atardecer (Derecha) -->
+          <line x1="234" y1="120" x2="222" y2="120" stroke="#8A8A93" stroke-width="1.5" />
+          <text x="214" y="123" font-family="'JetBrains Mono', monospace" font-size="7.5" fill="#8A8A93" text-anchor="middle">18H</text>
+
+          <!-- 00:00 Medianoche (Nadir - Abajo) -->
+          <line x1="120" y1="234" x2="120" y2="222" stroke="#38BDF8" stroke-width="2" />
+          <text x="120" y="218" font-family="'JetBrains Mono', monospace" font-size="8" fill="#38BDF8" text-anchor="middle" font-weight="700">00H</text>
+
+          <!-- 06:00 Amanecer (Izquierda) -->
+          <line x1="6" y1="120" x2="18" y2="120" stroke="#8A8A93" stroke-width="1.5" />
+          <text x="26" y="123" font-family="'JetBrains Mono', monospace" font-size="7.5" fill="#8A8A93" text-anchor="middle">06H</text>
+
+          <!-- 4. SEGMENTOS DE VIAJE EN EL ANILLO (Con la paleta cinemática) -->
+          <!-- Viaje Mañana: 07:34 a 08:11 (Crucero fluido: Amarillo #FACC15) -->
+          <!-- Ángulo: 07.5h en dial solar (00h=180, 06h=270, 12h=0/360, 18h=90) -->
+          <circle cx="120" cy="120" r="108" stroke="#FACC15" stroke-width="9" stroke-dasharray="18 660" stroke-dashoffset="-495" fill="none" stroke-linecap="round" />
+
+          <!-- Viaje Tarde: 12:30 a 13:10 (Tráfico moderado: Ámbar #F59E0B) -->
+          <circle cx="120" cy="120" r="108" stroke="#F59E0B" stroke-width="9" stroke-dasharray="19 660" stroke-dashoffset="-350" fill="none" stroke-linecap="round" />
+
+          <!-- Viaje Noche: 18:45 a 19:40 (Trancón denso: Rojo #EF4444) -->
+          <circle cx="120" cy="120" r="108" stroke="#EF4444" stroke-width="9" stroke-dasharray="26 660" stroke-dashoffset="-190" fill="none" stroke-linecap="round" />
+        </svg>
+
+        <!-- MANECILLA HORARIA ACTUAL (TIEMPO REAL: Ej. 11:45 am, justo antes de las 12h) -->
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none rotate-[-8deg]">
+          <!-- Puntero Horológico Pip -->
+          <div class="w-1.5 h-6 bg-[#F59E0B] -translate-y-[108px] rounded-full shadow-[0_0_10px_rgba(245,158,11,1)]"></div>
+        </div>
+
+        <!-- NÚCLEO INTERIOR: LENTE DE COMBUSTIBLE OCTANE -->
+        <div id="fuel-core-lens" class="relative z-10 w-44 h-44 sm:w-48 sm:h-48 rounded-full border border-[#2E2E38] bg-[#09090B] flex flex-col items-center justify-center cursor-pointer active:scale-98 transition-transform shadow-2xl hover:border-[#F59E0B]/50" title="Toca para ciclar modo: Autonomía / Días / Valor">
+          
+          <!-- Liquid Simulation Background (Sutil gradiente de llenado al 45%) -->
+          <div class="absolute inset-0 rounded-full overflow-hidden pointer-events-none">
+            <div class="absolute bottom-0 inset-x-0 h-[45%] bg-gradient-to-t from-[#F59E0B]/25 to-transparent transition-all"></div>
+            <!-- Dynamic wave line -->
+            <div class="absolute bottom-[45%] inset-x-0 h-[1px] bg-[#F59E0B]/50"></div>
+          </div>
+
+          <!-- Micro-label superior -->
+          <span id="core-mode-label" class="font-mono text-[9px] uppercase tracking-[0.2em] text-[#8A8A93] relative z-20">AUTONOMÍA</span>
+          
+          <!-- Macro-Valor numérico -->
+          <span id="core-hero-val" class="font-sans font-light text-5xl tracking-tighter text-[#F4F4F6] tabular-nums relative z-20 mt-0.5">184</span>
+          
+          <!-- Unidad -->
+          <span id="core-unit-label" class="font-mono text-[10px] uppercase text-[#F59E0B] tracking-wider relative z-20 font-bold">KM REST.</span>
+          
+          <!-- Lectura secundaria -->
+          <span id="core-sub-label" class="font-mono text-[10px] text-[#52525B] tabular-nums relative z-20 mt-1.5">4.2 GAL · 45%</span>
+        </div>
+
+      </div>
+
+      <!-- Barra de calibración física inferior -->
+      <div class="w-full flex items-center justify-between font-mono text-[10px] text-[#8A8A93] pt-3 mt-2 border-t border-[#1E1E24]">
+        <span>HORA ACTUAL · 11:48</span>
+        <span class="text-[#F59E0B]">FÍSICO 45% · AGUJA 48%</span>
+      </div>
+
+    </div>
+
+    <!-- ODÓMETRO MECÁNICO (SPLIT-ROLLER DRUM COUNTER) -->
+    <div class="p-4 border border-[#1E1E24] bg-[#0E0E11]">
+      <div class="flex items-center justify-between font-mono text-[10px] text-[#8A8A93] mb-2">
+        <span class="uppercase tracking-widest">KILOMETRAJE ACTUAL</span>
+        <span class="text-[#F59E0B] font-semibold">28.3 KM/DÍA</span>
+      </div>
+      <div class="flex items-center justify-center gap-1.5 py-2">
+        <div class="w-10 h-14 bg-[#09090B] border border-[#2E2E38] drum-slot flex items-center justify-center font-mono text-3xl font-medium text-[#F4F4F6]">0</div>
+        <div class="w-10 h-14 bg-[#09090B] border border-[#2E2E38] drum-slot flex items-center justify-center font-mono text-3xl font-medium text-[#F4F4F6]">9</div>
+        <div class="w-10 h-14 bg-[#09090B] border border-[#2E2E38] drum-slot flex items-center justify-center font-mono text-3xl font-medium text-[#F4F4F6]">8</div>
+        <div class="w-10 h-14 bg-[#09090B] border border-[#2E2E38] drum-slot flex items-center justify-center font-mono text-3xl font-medium text-[#F4F4F6]">2</div>
+        <div class="w-10 h-14 bg-[#09090B] border border-[#2E2E38] drum-slot flex items-center justify-center font-mono text-3xl font-medium text-[#F4F4F6]">1</div>
+        <span class="font-mono text-sm text-[#F59E0B] font-bold ml-1">KM</span>
+      </div>
+    </div>
+
+    <!-- FEATURE 3: EJEMPLO DE FICHA DE VIAJE CON EL BADGE DE INERCIA TÉRMICA -->
+    <div class="p-4 border border-[#1E1E24] bg-[#0E0E11] space-y-3">
+      <div class="flex items-center justify-between">
+        <span class="font-mono text-[9px] uppercase tracking-widest text-[#8A8A93]">FICHA CINEMÁTICA (GPS DATA)</span>
+        <!-- BADGE EXCLUSIVO EN LA FICHA DE VIAJE -->
+        <span class="px-2 py-0.5 bg-[#EF4444]/15 border border-[#EF4444]/40 text-[#EF4444] font-mono text-[9px] font-bold tracking-wider uppercase">
+          ARRANQUE EN FRÍO (> 2H REPOSO)
+        </span>
+      </div>
+
+      <div class="flex items-baseline justify-between font-mono text-xs text-[#F4F4F6]">
+        <span>18:45 → 19:40 (La Ceiba ➔ Caribe Verde)</span>
+        <span class="font-bold text-[#F59E0B]">7.78 KM · 20 MIN</span>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2 text-center pt-2 border-t border-[#1E1E24] font-mono text-[10px]">
+        <div>
+          <span class="text-[#8A8A93] block">VEL. MEDIA</span>
+          <span class="font-bold text-[#F4F4F6]">23.7 KM/H</span>
+        </div>
+        <div>
+          <span class="text-[#8A8A93] block">TRANCÓN</span>
+          <span class="font-bold text-[#EF4444]">32% TIEMPO</span>
+        </div>
+        <div>
+          <span class="text-[#8A8A93] block">ESTADO MOTOR</span>
+          <span class="font-bold text-[#EF4444]">RÉGIMEN SEVERO</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL EMBEBIDO A PANTALLA COMPLETA DE GHOST RACE (EASTER EGG) -->
+  <div id="ghost-race-modal" class="fixed inset-0 z-50 bg-[#09090B] flex flex-col hidden transition-opacity duration-300">
+    <!-- Barra superior de control con botón CERRAR -->
+    <div class="h-11 bg-[#0E0E11] border-b border-[#1E1E24] px-4 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></span>
+        <span class="font-mono text-xs font-bold tracking-wider text-[#F59E0B]">OCTANE // GHOST RACE</span>
+        <span class="font-mono text-[10px] text-[#8A8A93]">(EASTER EGG ACTIVADO)</span>
+      </div>
+      <button id="close-ghost-btn" class="flex items-center gap-1.5 px-2.5 py-1 bg-[#1E1E24] hover:bg-[#2E2E38] text-[#F4F4F6] font-mono text-xs font-bold border border-[#2E2E38] active:scale-95 transition-all">
+        <span>CERRAR</span>
+        <span class="text-[#F59E0B]">✕</span>
+      </button>
+    </div>
+
+    <!-- Iframe con la experiencia interactiva real -->
+    <iframe src="/ghost-race.html" class="w-full flex-1 border-0 bg-[#09090B]"></iframe>
+  </div>
+
+  <script>
+    // 1. Core Lens SightGlass Cycling (Autonomía -> Días -> Valor)
+    const coreLens = document.getElementById('fuel-core-lens');
+    const modeLbl = document.getElementById('core-mode-label');
+    const heroVal = document.getElementById('core-hero-val');
+    const unitLbl = document.getElementById('core-unit-label');
+    const subLbl = document.getElementById('core-sub-label');
+
+    let modeIdx = 0;
+    const modes = [
+      { mode: 'AUTONOMÍA', val: '184', unit: 'KM REST.', sub: '4.2 GAL · 45%' },
+      { mode: 'TIEMPO ESTIMADO', val: '6.5', unit: 'DÍAS', sub: 'HASTA RESERVA (5.0 L)' },
+      { mode: 'VALOR EN TANQUE', val: '$67K', unit: 'COP', sub: 'GASOLINA DISPONIBLE' }
+    ];
+
+    coreLens.addEventListener('click', () => {
+      modeIdx = (modeIdx + 1) % modes.length;
+      const m = modes[modeIdx];
+      modeLbl.textContent = m.mode;
+      heroVal.textContent = m.val;
+      unitLbl.textContent = m.unit;
+      subLbl.textContent = m.sub;
+    });
+
+    // 2. Easter Egg Taps on Car Target
+    const carTarget = document.getElementById('car-tap-target');
+    const carSvg = document.getElementById('car-svg-icon');
+    const tapFeedback = document.getElementById('tap-feedback');
+    const tapNum = document.getElementById('tap-num');
+    const ghostModal = document.getElementById('ghost-race-modal');
+    const closeGhostBtn = document.getElementById('close-ghost-btn');
+
+    let tapCount = 0;
+    let tapResetTimer = null;
+
+    carTarget.addEventListener('click', () => {
+      tapCount++;
+      tapNum.textContent = tapCount;
+      tapFeedback.style.opacity = '1';
+
+      // Visual rev animation on tap
+      carSvg.classList.add('revving');
+      setTimeout(() => carSvg.classList.remove('revving'), 140);
+
+      clearTimeout(tapResetTimer);
+
+      if (tapCount >= 5) {
+        tapCount = 0;
+        tapFeedback.textContent = '🚀 ¡ARRANCANDO!';
+        carSvg.classList.add('launching');
+
+        setTimeout(() => {
+          ghostModal.classList.remove('hidden');
+          carSvg.classList.remove('launching');
+          tapFeedback.style.opacity = '0';
+          tapFeedback.textContent = 'REV: 0/5';
+        }, 500);
+      } else {
+        tapResetTimer = setTimeout(() => {
+          tapCount = 0;
+          tapFeedback.style.opacity = '0';
+        }, 2200);
+      }
+    });
+
+    closeGhostBtn.addEventListener('click', () => {
+      ghostModal.classList.add('hidden');
+    });
+  </script>
+</body>
+</html>

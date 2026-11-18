@@ -12,6 +12,7 @@
 
 import { playHorologyTick, isSoundEnabled, toggleSound, setSoundEnabled } from '../core/telemetry-engine.js';
 import store from '../core/state.js';
+import { syncToCloud } from '../core/firebase-sync.js';
 
 let headerState = {
     scope: 'full_era',
@@ -115,43 +116,64 @@ export function renderHeader(container, options = {}) {
 
     container.innerHTML = `
         <header class="sticky top-0 z-40 bg-[var(--bg-void)]/95 backdrop-blur-md border-b border-[var(--line-hair)]">
-            <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+            <div class="max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto px-4 h-12 flex items-center justify-between gap-4">
                 
                 <!-- Brand Identity (Swiss Flat Typography) -->
-                <div class="flex items-center gap-3 cursor-pointer shrink-0" id="header-brand-logo" title="OCTANE">
+                <div class="flex items-center gap-2.5 cursor-pointer shrink-0" id="header-brand-logo" title="OCTANE">
                     <div class="w-2.5 h-2.5 bg-[var(--accent-amber)]"></div>
-                    <div class="flex flex-col sm:flex-row sm:items-baseline sm:gap-2.5">
-                        <span class="font-sans font-semibold text-sm tracking-tight text-[var(--text-primary)]">OCTANE</span>
-                        <span class="font-mono text-[9px] sm:text-[10px] text-[var(--text-secondary)] tracking-widest uppercase">TELEMETRÍA VEHICULAR</span>
-                        <span id="header-vehicle-tag" class="hidden md:inline-block font-mono text-[10px] text-[var(--text-muted)] tracking-widest uppercase">${headerState.vehicleName}</span>
-                    </div>
+                    <span class="font-sans font-semibold text-sm tracking-tight text-[var(--text-primary)]">OCTANE</span>
                 </div>
 
-                <!-- Flat Precision Controls (Sound + Theme) -->
-                <div class="flex items-center gap-2">
-                    <!-- Tactical Audio Haptics Toggle -->
-                    <button id="sound-btn" type="button" class="h-8 w-8 rounded-sm flat-pill flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)]" title="Audio háptico táctil">
-                        <svg id="sound-on-icon" class="w-3.5 h-3.5 ${isSoundEnabled() ? '' : 'hidden'}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
-                        </svg>
-                        <svg id="sound-off-icon" class="w-3.5 h-3.5 ${isSoundEnabled() ? 'hidden' : ''} opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
-                        </svg>
-                    </button>
+                <!-- Estado de guardado: solo un punto, sin texto permanente -->
+                <button id="header-save-dot" type="button" class="w-8 h-8 flex items-center justify-center cursor-pointer" aria-label="Estado de guardado">
+                    <span id="header-save-dot-led" class="w-1.5 h-1.5 rounded-full transition-colors"></span>
+                </button>
 
-                    <!-- Dark / Light Architectural Theme Switch -->
-                    <button id="theme-btn" type="button" class="h-8 w-8 rounded-sm flat-pill flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)]" title="Modo Carbon / Papel">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-                        </svg>
-                    </button>
-                </div>
             </div>
         </header>
     `;
 
     bindHeaderEvents();
+    bindSaveDot();
     subscribeToStore();
+}
+
+/**
+ * Resuelve el estado visible de guardado a partir del store.
+ * @returns {{ color: string, message: string, retry: boolean }}
+ */
+function resolveSaveState() {
+    const s = store.getState();
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (!s.user) return { color: 'var(--text-muted)', message: 'GUARDADO EN ESTE DISPOSITIVO', retry: false };
+    if (offline || s.syncStatus === 'offline') return { color: 'var(--text-muted)', message: 'SIN CONEXIÓN · GUARDADO EN ESTE DISPOSITIVO', retry: false };
+    if (s.syncStatus === 'syncing') return { color: 'var(--accent-amber)', message: 'SINCRONIZANDO', retry: false };
+    if (s.syncStatus === 'error') return { color: 'var(--accent-crimson)', message: 'NO SE PUDO SINCRONIZAR · REINTENTANDO', retry: true };
+    return { color: 'var(--accent-volt)', message: 'SINCRONIZADO', retry: false };
+}
+
+let saveDotUnsub = null;
+function bindSaveDot() {
+    if (!currentContainer) return;
+    const dot = currentContainer.querySelector('#header-save-dot');
+    const led = currentContainer.querySelector('#header-save-dot-led');
+    if (!dot || !led) return;
+
+    const paint = () => { led.style.backgroundColor = resolveSaveState().color; };
+    paint();
+    if (saveDotUnsub) saveDotUnsub();
+    saveDotUnsub = store.subscribe((state, prev) => {
+        if (state.syncStatus !== prev.syncStatus || state.user !== prev.user) paint();
+    });
+    window.addEventListener('online', paint);
+    window.addEventListener('offline', paint);
+
+    dot.addEventListener('click', () => {
+        playHorologyTick(1000, 0.012, 0.02);
+        const st = resolveSaveState();
+        showToast(st.message);
+        if (st.retry) syncToCloud();
+    });
 }
 
 function bindHeaderEvents() {

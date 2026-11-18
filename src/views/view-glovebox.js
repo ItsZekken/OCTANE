@@ -14,9 +14,10 @@
  *     * N° Póliza / Ref with 1-touch copy button.
  *     * Entidad aseguradora, Valor pagado, Notas.
  *     * Action buttons: [EDITAR] and [ELIMINAR].
- * - Silencio Verbal Absoluto: Prohibidos <p> tags, zero blur, zero drop shadows.
+ * - Silencio Verbal Absoluto: Prohibidos párrafos y p-tags, zero blur, zero drop shadows.
  */
 
+import { confirmDialog } from '../components/dialogs/app-dialog.js';
 import { playHorologyTick, showToast } from '../core/state.js';
 import { getLegalDocs, deleteLegalDoc } from '../core/db-local.js';
 import { evaluateLegalDoc, calculateActiveAlerts } from '../core/alerts-engine.js';
@@ -27,8 +28,8 @@ let boundListeners = [];
 let openAccordionId = null;
 
 const MONTH_NAMES = Object.freeze([
-    'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-    'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+    'ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN',
+    'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'
 ]);
 
 /**
@@ -67,9 +68,12 @@ export function formatCostCop(cost) {
 
     if (num >= 1000000) {
         const m = num / 1000000;
-        return `$${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M COP`;
+        return `$${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
     }
-    return `$${num.toLocaleString('es-CO')} COP`;
+    if (num >= 1000) {
+        return `$${Math.round(num / 1000)}K`;
+    }
+    return `$${num}`;
 }
 
 export const formatCompactCop = formatCostCop;
@@ -488,7 +492,7 @@ function bindCardInteractions() {
             const title = btn.getAttribute('data-title') || 'DOCUMENTO';
             if (!docId) return;
 
-            const confirmed = window.confirm(`¿ELIMINAR REGISTRO DE "${title.toUpperCase()}"?`);
+            const confirmed = await confirmDialog({ title: `¿ELIMINAR REGISTRO DE "${title.toUpperCase()}"?`, confirmLabel: 'Eliminar', danger: true });
             if (!confirmed) return;
 
             try {

@@ -5,13 +5,15 @@
  * Strict specifications:
  * - Clean titles: "Nuevo Documento" or "Editar Documento" (zero "//").
  * - Underline inputs without enclosed boxes or "EJ. ..." placeholders.
- * - Single-line hairline dividers, zero <p> tags, zero blur.
+ * - Single-line hairline dividers, zero paragraph tags, zero blur.
  * - Tactile feedback and instant IndexedDB persistence.
  */
 
+import { confirmDialog } from '../dialogs/app-dialog.js';
 import { playHorologyTick, showToast } from '../../core/state.js';
 import { saveLegalDoc, deleteLegalDoc } from '../../core/db-local.js';
 import { calculateActiveAlerts } from '../../core/alerts-engine.js';
+import { parseIntegerMetric, formatThousandsLive } from '../../core/number-utils.js';
 
 let modalContainer = null;
 let currentDoc = null;
@@ -174,11 +176,10 @@ function renderModal() {
             </label>
             <input 
               id="legal-input-cost" 
-              type="number" 
-              value="${costCop}" 
+              type="text" 
+              inputmode="numeric" 
+              value="${costCop ? formatThousandsLive(costCop) : ''}" 
               placeholder="0" 
-              step="1000"
-              min="0"
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 text-[var(--text-primary)] text-xs font-mono outline-none placeholder:text-[var(--text-muted)] tabular-nums"
             />
           </div>
@@ -264,10 +265,17 @@ function bindModalEvents() {
   const deleteBtn = modalContainer.querySelector('#legal-delete-btn');
   const typeSelect = modalContainer.querySelector('#legal-input-type');
   const nameInput = modalContainer.querySelector('#legal-input-name');
+  const costInput = modalContainer.querySelector('#legal-input-cost');
 
   const close = () => closeLegalDocModal();
   if (closeBtn) closeBtn.onclick = close;
   if (cancelBtn) cancelBtn.onclick = close;
+
+  if (costInput) {
+    costInput.addEventListener('input', () => {
+      costInput.value = formatThousandsLive(costInput.value);
+    });
+  }
 
   if (typeSelect && nameInput) {
     typeSelect.onchange = (e) => {
@@ -281,7 +289,7 @@ function bindModalEvents() {
   // Delete Action
   if (deleteBtn && currentDoc?.id) {
     deleteBtn.onclick = async () => {
-      const confirmed = window.confirm(`¿ELIMINAR ESTE DOCUMENTO?`);
+      const confirmed = await confirmDialog({ title: `¿ELIMINAR ESTE DOCUMENTO?`, confirmLabel: 'Eliminar', danger: true });
       if (!confirmed) return;
 
       try {
@@ -305,7 +313,7 @@ function bindModalEvents() {
       const name = nameInput?.value?.trim() || type;
       const expiryDate = modalContainer.querySelector('#legal-input-expiry')?.value;
       const docNumber = modalContainer.querySelector('#legal-input-number')?.value?.trim() || '';
-      const costCop = Number(modalContainer.querySelector('#legal-input-cost')?.value) || 0;
+      const costCop = parseIntegerMetric(costInput?.value);
       const entity = modalContainer.querySelector('#legal-input-entity')?.value?.trim() || '';
       const notes = modalContainer.querySelector('#legal-input-notes')?.value?.trim() || '';
 

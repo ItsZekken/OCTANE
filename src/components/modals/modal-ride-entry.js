@@ -17,15 +17,22 @@
  * Silencio Verbal Absoluto: Prohibidos <p> tags, placeholders "EJ. ...", bordes pesados.
  */
 
+import { promptDialog } from '../dialogs/app-dialog.js';
+import { todayLocalYmd, shortHumanDate } from '../../core/date-utils.js';
 import { playHorologyTick, showToast } from '../../core/state.js';
 import {
   getVehicleProfile,
   getTelemetryLogs,
   saveRideSession,
-  savePlatformPass
+  savePlatformPass,
+  deleteRideSession,
+  deletePlatformPass
 } from '../../core/db-local.js';
 import { syncToCloud } from '../../core/firebase-sync.js';
 import { calculateCostPerKm, formatCop, formatCompactCop } from '../../core/rides-engine.js';
+import { parseIntegerMetric, formatThousandsLive, parseDistanceKm } from '../../core/number-utils.js';
+import { createNumericKeypad } from '../keypad/numeric-keypad.js';
+import { ensureFieldInView } from '../../core/viewport-manager.js';
 
 let modalRootEl = null;
 
@@ -133,19 +140,20 @@ export async function openRideEntryModal(options = {}) {
     vehicleProfile: profile
   });
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = todayLocalYmd();
   let platforms = getStoredPlatforms();
 
   // Initial form values
-  let selectedDate = editItem?.date || editItem?.startDate || todayStr;
-  let grossAmount = editItem ? (Number(editItem.grossEarnings || editItem.grossRevenueCop || editItem.amountCop || editItem.fareCop || 0) || '') : '';
-  let distanceKm = editItem ? (Number(editItem.distanceKm || editItem.workKm || editItem.km || 0) || '') : '';
+  const isValidYmd = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  let selectedDate = editItem?.date || editItem?.startDate || (isValidYmd(options.initialDate) ? options.initialDate : todayStr);
+  let grossAmount = editItem ? (parseIntegerMetric(editItem.grossEarnings || editItem.grossRevenueCop || editItem.amountCop || editItem.fareCop || 0) || '') : '';
+  let distanceKm = editItem ? (parseDistanceKm(editItem.distanceKm || editItem.workKm || editItem.km || 0) || '') : '';
   let isEnRoute = editItem ? Boolean(editItem.isEnRoute || editItem.tripType === 'en_route') : false;
   let selectedPlatform = editItem?.platform || platforms[0] || 'Directo';
   let noteText = editItem?.notes || '';
 
   // Expense specific initial values
-  let expenseAmount = (activeMode === 'expense' && editItem) ? (Number(editItem.amountCop || editItem.costCop || 0) || '') : '';
+  let expenseAmount = (activeMode === 'expense' && editItem) ? (parseIntegerMetric(editItem.amountCop || editItem.costCop || 0) || '') : '';
   let expenseConcept = editItem?.concept || editItem?.platform || 'Comisión';
 
   const commonConcepts = ['Comisión', 'Tarifa', 'Recarga', 'Peaje', 'Lavada', 'Otro'];
@@ -163,8 +171,8 @@ export async function openRideEntryModal(options = {}) {
       <div id="ride-modal-backdrop" class="fixed inset-0 bg-black/85 transition-opacity duration-150"></div>
 
       <!-- Modal Dialog Frame -->
-      <div class="fixed inset-0 overflow-y-auto flex items-center justify-center p-3 sm:p-4 z-10">
-        <div class="relative w-full max-w-md bg-[var(--bg-surface)] border border-[var(--line-hair)] text-[var(--text-primary)] rounded-none flex flex-col overflow-hidden shadow-none">
+      <div class="fixed inset-0 overflow-y-auto flex items-end sm:items-center justify-center p-0 sm:p-4 z-10">
+        <div class="relative w-full max-w-md bg-[var(--bg-surface)] border-t sm:border border-[var(--line-hair)] text-[var(--text-primary)] rounded-t-sm sm:rounded-none flex flex-col max-h-[96vh] sm:max-h-[90vh] overflow-hidden shadow-none">
           
           <!-- Header Directo -->
           <header class="flex items-center justify-between px-4 h-12 border-b border-[var(--line-hair)] bg-[var(--bg-void)] shrink-0">
@@ -212,14 +220,41 @@ export async function openRideEntryModal(options = {}) {
             ${isRide ? renderRideFooterReadout() : renderExpenseFooterReadout()}
           </div>
 
-          <!-- Bottom Action Button -->
-          <button 
-            id="modal-submit-action-btn" 
-            type="button" 
-            class="h-12 w-full ${isRide ? 'bg-[var(--accent-volt)] text-[var(--bg-void)]' : 'bg-[var(--accent-crimson)] text-white'} font-mono text-xs font-semibold uppercase tracking-widest transition-opacity hover:opacity-90 flex items-center justify-center cursor-pointer shrink-0"
-          >
-            ${isEditing ? 'GUARDAR CAMBIOS' : (isRide ? 'REGISTRAR CARRERA' : 'REGISTRAR EGRESO')}
-          </button>
+          <!-- In-App Tactile Numeric Keypad Slot -->
+          <div id="ride-keypad-slot" class="shrink-0"></div>
+
+          <!-- Bottom Action Area -->
+          ${isEditing ? `
+            <div id="modal-edit-action-container" class="grid grid-cols-12 divide-x divide-[var(--line-hair)] border-t border-[var(--line-hair)] shrink-0 bg-[var(--bg-void)]">
+              <button 
+                id="modal-delete-action-btn" 
+                type="button" 
+                class="col-span-4 h-12 bg-transparent hover:bg-[var(--accent-crimson)]/10 text-[var(--accent-crimson)] font-mono text-xs uppercase tracking-wider font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                title="Eliminar registro permanentemente"
+              >
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                <span>BORRAR</span>
+              </button>
+              
+              <button 
+                id="modal-submit-action-btn" 
+                type="button" 
+                class="col-span-8 h-12 ${isRide ? 'bg-[var(--accent-volt)] text-[var(--bg-void)]' : 'bg-[var(--accent-crimson)] text-white'} font-mono text-xs font-semibold uppercase tracking-widest transition-opacity hover:opacity-90 flex items-center justify-center cursor-pointer"
+              >
+                GUARDAR CAMBIOS
+              </button>
+            </div>
+          ` : `
+            <button 
+              id="modal-submit-action-btn" 
+              type="button" 
+              class="h-12 w-full ${isRide ? 'bg-[var(--accent-volt)] text-[var(--bg-void)]' : 'bg-[var(--accent-crimson)] text-white'} font-mono text-xs font-semibold uppercase tracking-widest transition-opacity hover:opacity-90 flex items-center justify-center cursor-pointer shrink-0"
+            >
+              ${isRide ? 'REGISTRAR CARRERA' : 'REGISTRAR EGRESO'}
+            </button>
+          `}
 
         </div>
       </div>
@@ -239,13 +274,12 @@ export async function openRideEntryModal(options = {}) {
         <div class="relative flex items-center justify-center">
           <input 
             id="input-ride-gross" 
-            type="number" 
-            step="500" 
-            inputmode="numeric" 
+            type="text" 
+            inputmode="none" 
+            data-format="thousands" 
             placeholder="0" 
-            value="${grossAmount}" 
+            value="${grossAmount ? formatThousandsLive(grossAmount) : ''}" 
             class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-volt)] font-sans font-light text-5xl tracking-tighter tabular-nums text-center text-[var(--text-primary)] focus:outline-none py-1 placeholder:text-[var(--text-muted)]" 
-            autofocus 
           />
         </div>
       </div>
@@ -258,11 +292,11 @@ export async function openRideEntryModal(options = {}) {
         <div class="relative flex items-center justify-center">
           <input 
             id="input-ride-km" 
-            type="number" 
-            step="0.1" 
-            inputmode="decimal" 
+            type="text" 
+            inputmode="none" 
+            data-decimal="true" 
             placeholder="0.0" 
-            value="${distanceKm}" 
+            value="${distanceKm || ''}" 
             class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-volt)] font-sans font-light text-4xl tracking-tighter tabular-nums text-center text-[var(--text-primary)] focus:outline-none py-1 placeholder:text-[var(--text-muted)]" 
           />
         </div>
@@ -385,13 +419,12 @@ export async function openRideEntryModal(options = {}) {
         <div class="relative flex items-center justify-center">
           <input 
             id="input-expense-amount" 
-            type="number" 
-            step="500" 
-            inputmode="numeric" 
+            type="text" 
+            inputmode="none" 
+            data-format="thousands" 
             placeholder="0" 
-            value="${expenseAmount}" 
+            value="${expenseAmount ? formatThousandsLive(expenseAmount) : ''}" 
             class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-crimson)] font-sans font-light text-5xl tracking-tighter tabular-nums text-center text-[var(--accent-crimson)] focus:outline-none py-1 placeholder:text-[var(--text-muted)]" 
-            autofocus 
           />
         </div>
       </div>
@@ -449,8 +482,8 @@ export async function openRideEntryModal(options = {}) {
   }
 
   function renderRideFooterReadout() {
-    const gross = Number(grossAmount) || 0;
-    const km = Number(distanceKm) || 0;
+    const gross = parseIntegerMetric(grossAmount);
+    const km = parseDistanceKm(distanceKm);
 
     // Fuel calculation: If en route, 0 extra fuel up to credit; otherwise km * costPerKm
     let fuelCost = 0;
@@ -470,7 +503,7 @@ export async function openRideEntryModal(options = {}) {
         <div class="px-1">
           <div class="text-[9px] uppercase text-[var(--text-secondary)]">GASOLINA</div>
           <div class="font-sans font-light text-sm sm:text-base tabular-nums ${fuelCost > 0 ? 'text-[var(--accent-crimson)]' : 'text-[var(--accent-volt)]'} mt-0.5">
-            ${fuelCost > 0 ? `-$${fuelCost.toLocaleString('es-CO')}` : '$0 (EN RUTA)'}
+            ${fuelCost > 0 ? `-$${formatThousandsLive(fuelCost)}` : '$0 (EN RUTA)'}
           </div>
         </div>
 
@@ -478,7 +511,7 @@ export async function openRideEntryModal(options = {}) {
         <div class="px-1">
           <div class="text-[9px] uppercase text-[var(--text-secondary)]">DESGASTE (10%)</div>
           <div class="font-sans font-light text-sm sm:text-base tabular-nums text-[var(--accent-amber)] mt-0.5">
-            -$${wearReserve.toLocaleString('es-CO')}
+            -$${formatThousandsLive(wearReserve)}
           </div>
         </div>
 
@@ -486,7 +519,7 @@ export async function openRideEntryModal(options = {}) {
         <div class="px-1">
           <div class="text-[9px] uppercase text-[var(--text-secondary)]">BOLSILLO ESTIMADO</div>
           <div class="font-sans font-light text-sm sm:text-base tabular-nums ${estimatedNet > 0 ? 'text-[var(--accent-volt)]' : 'text-[var(--text-secondary)]'} mt-0.5">
-            +$${estimatedNet.toLocaleString('es-CO')}
+            +$${formatThousandsLive(estimatedNet)}
           </div>
         </div>
       </div>
@@ -494,12 +527,12 @@ export async function openRideEntryModal(options = {}) {
   }
 
   function renderExpenseFooterReadout() {
-    const amount = Number(expenseAmount) || 0;
+    const amount = parseIntegerMetric(expenseAmount);
     return `
       <div class="flex items-center justify-between font-mono text-xs px-2">
         <span class="text-[var(--text-secondary)] uppercase text-[10px]">TOTAL EGRESO A DEDUCIR:</span>
         <span class="font-sans font-light text-lg tabular-nums text-[var(--accent-crimson)]">
-          -$${amount.toLocaleString('es-CO')}
+          -$${formatThousandsLive(amount) || '0'}
         </span>
       </div>
     `;
@@ -561,6 +594,69 @@ export async function openRideEntryModal(options = {}) {
     if (submitBtn) {
       submitBtn.addEventListener('click', handleSave);
     }
+
+    // Delete Action (Only active when editing an existing record)
+    const deleteBtn = modalRootEl.querySelector('#modal-delete-action-btn');
+    const actionContainer = modalRootEl.querySelector('#modal-edit-action-container');
+    if (deleteBtn && actionContainer && editItem) {
+      deleteBtn.addEventListener('click', () => {
+        playHorologyTick(1000, 0.015, 0.02);
+        const isRide = activeMode === 'ride';
+        actionContainer.innerHTML = `
+          <div class="col-span-12 h-12 flex items-center justify-between px-3 bg-[var(--bg-void)] border-t border-[var(--line-hair)] text-[var(--text-primary)] font-mono text-xs">
+            <span class="text-[var(--accent-crimson)] font-semibold tracking-wider uppercase text-[10px] sm:text-[11px]">
+              ¿ELIMINAR ${isRide ? 'CARRERA' : 'EGRESO'}?
+            </span>
+            <div class="flex items-center gap-1.5">
+              <button 
+                id="modal-delete-cancel-btn" 
+                type="button" 
+                class="h-8 px-2.5 border border-[var(--line-hair)] bg-[var(--bg-surface)] hover:bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] uppercase text-[10px] tracking-wider font-semibold cursor-pointer transition-colors"
+              >
+                CANCELAR
+              </button>
+              <button 
+                id="modal-delete-confirm-btn" 
+                type="button" 
+                class="h-8 px-2.5 bg-[var(--accent-crimson)] text-white hover:bg-[var(--accent-crimson)]/90 uppercase text-[10px] tracking-wider font-bold cursor-pointer transition-colors"
+              >
+                SÍ, BORRAR
+              </button>
+            </div>
+          </div>
+        `;
+
+        actionContainer.querySelector('#modal-delete-cancel-btn')?.addEventListener('click', () => {
+          playHorologyTick(1100, 0.012, 0.02);
+          renderModal();
+        });
+
+        actionContainer.querySelector('#modal-delete-confirm-btn')?.addEventListener('click', async () => {
+          playHorologyTick(800, 0.025, 0.04);
+          try {
+            if (isRide) {
+              await deleteRideSession(editItem.id);
+              showToast('CARRERA ELIMINADA');
+            } else {
+              await deletePlatformPass(editItem.id);
+              showToast('EGRESO ELIMINADO');
+            }
+
+            try {
+              if (typeof syncToCloud === 'function') syncToCloud();
+            } catch (_) {}
+
+            window.dispatchEvent(new CustomEvent('octane:rides-updated', { detail: { deletedId: editItem.id } }));
+            if (typeof options.onDelete === 'function') options.onDelete(editItem);
+            if (typeof options.onMovementChanged === 'function') options.onMovementChanged();
+            closeRideEntryModal();
+          } catch (err) {
+            console.error('[OCTANE] Error deleting entry:', err);
+            showToast('ERROR AL ELIMINAR');
+          }
+        });
+      });
+    }
   }
 
   function bindRideEvents() {
@@ -571,14 +667,29 @@ export async function openRideEntryModal(options = {}) {
     const dateInput = modalRootEl.querySelector('#input-ride-date');
     const noteInput = modalRootEl.querySelector('#input-ride-note');
     const addPlatBtn = modalRootEl.querySelector('#btn-add-platform');
+    const keypadSlot = modalRootEl.querySelector('#ride-keypad-slot');
+
+    if (keypadSlot && grossInput && kmInput) {
+      createNumericKeypad({
+        container: keypadSlot,
+        inputs: [grossInput, kmInput],
+        onConfirm: handleSave,
+        onInput: () => {
+          grossAmount = parseIntegerMetric(grossInput.value);
+          distanceKm = parseDistanceKm(kmInput.value);
+          updateFooter();
+        }
+      });
+    }
 
     grossInput?.addEventListener('input', () => {
-      grossAmount = grossInput.value;
+      grossInput.value = formatThousandsLive(grossInput.value);
+      grossAmount = parseIntegerMetric(grossInput.value);
       updateFooter();
     });
 
     kmInput?.addEventListener('input', () => {
-      distanceKm = kmInput.value;
+      distanceKm = parseDistanceKm(kmInput.value);
       updateFooter();
     });
 
@@ -596,6 +707,10 @@ export async function openRideEntryModal(options = {}) {
 
     dateInput?.addEventListener('change', () => {
       selectedDate = dateInput.value;
+    });
+
+    noteInput?.addEventListener('focus', () => {
+      ensureFieldInView(noteInput);
     });
 
     noteInput?.addEventListener('input', () => {
@@ -627,9 +742,9 @@ export async function openRideEntryModal(options = {}) {
     });
 
     // Add new platform
-    addPlatBtn?.addEventListener('click', () => {
+    addPlatBtn?.addEventListener('click', async () => {
       playHorologyTick(1200, 0.015, 0.025);
-      const name = window.prompt('Nombre de la nueva plataforma:');
+      const name = await promptDialog({ label: 'Nueva plataforma', maxLength: 20 });
       if (name && name.trim()) {
         const cleanName = name.trim();
         if (!platforms.some(p => p.toLowerCase() === cleanName.toLowerCase())) {
@@ -646,10 +761,28 @@ export async function openRideEntryModal(options = {}) {
     const amountInput = modalRootEl.querySelector('#input-expense-amount');
     const detailInput = modalRootEl.querySelector('#input-expense-detail');
     const dateInput = modalRootEl.querySelector('#input-expense-date');
+    const keypadSlot = modalRootEl.querySelector('#ride-keypad-slot');
+
+    if (keypadSlot && amountInput) {
+      createNumericKeypad({
+        container: keypadSlot,
+        inputs: [amountInput],
+        onConfirm: handleSave,
+        onInput: () => {
+          expenseAmount = parseIntegerMetric(amountInput.value);
+          updateFooter();
+        }
+      });
+    }
 
     amountInput?.addEventListener('input', () => {
-      expenseAmount = amountInput.value;
+      amountInput.value = formatThousandsLive(amountInput.value);
+      expenseAmount = parseIntegerMetric(amountInput.value);
       updateFooter();
+    });
+
+    detailInput?.addEventListener('focus', () => {
+      ensureFieldInView(detailInput);
     });
 
     detailInput?.addEventListener('input', () => {
@@ -675,8 +808,15 @@ export async function openRideEntryModal(options = {}) {
 
     try {
       if (activeMode === 'ride') {
-        const grossVal = Math.max(0, Number(grossAmount) || 0);
-        const kmVal = Math.max(0, Number(distanceKm) || 0);
+        const grossInputEl = modalRootEl.querySelector('#input-ride-gross');
+        const kmInputEl = modalRootEl.querySelector('#input-ride-km');
+        const dateInputEl = modalRootEl.querySelector('#input-ride-date');
+        const noteInputEl = modalRootEl.querySelector('#input-ride-note');
+
+        const grossVal = parseIntegerMetric(grossInputEl ? grossInputEl.value : grossAmount) || 0;
+        const kmVal = parseDistanceKm(kmInputEl ? kmInputEl.value : distanceKm) || 0;
+        const curDate = dateInputEl ? dateInputEl.value : selectedDate;
+        const curNote = noteInputEl ? noteInputEl.value : noteText;
 
         if (grossVal <= 0 && kmVal <= 0) {
           showToast('INGRESA VALOR O DISTANCIA');
@@ -686,7 +826,7 @@ export async function openRideEntryModal(options = {}) {
         const payload = {
           id: editItem?.id || `ride_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
           type: 'ride',
-          date: selectedDate,
+          date: curDate,
           grossEarnings: grossVal,
           grossRevenueCop: grossVal,
           distanceKm: kmVal,
@@ -695,18 +835,25 @@ export async function openRideEntryModal(options = {}) {
           tripType: isEnRoute ? 'en_route' : 'free',
           isEnRoute: Boolean(isEnRoute),
           platform: selectedPlatform || 'Directo',
-          notes: String(noteText || '').trim(),
+          notes: String(curNote || '').trim(),
           createdAt: editItem?.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
 
         await saveRideSession(payload);
-        showToast(isEditing ? 'CARRERA ACTUALIZADA' : 'CARRERA REGISTRADA');
+        showToast((isEditing ? 'CARRERA ACTUALIZADA' : 'CARRERA REGISTRADA') + (curDate && curDate !== todayStr ? ' · ' + shortHumanDate(curDate) : ''));
         window.dispatchEvent(new CustomEvent('octane:rides-updated', { detail: { item: payload } }));
         if (typeof options.onSave === 'function') options.onSave(payload);
       } else {
         // Mode Expense
-        const expenseVal = Math.max(0, Number(expenseAmount) || 0);
+        const amountInputEl = modalRootEl.querySelector('#input-expense-amount');
+        const detailInputEl = modalRootEl.querySelector('#input-expense-detail');
+        const dateInputEl = modalRootEl.querySelector('#input-expense-date');
+
+        const expenseVal = parseIntegerMetric(amountInputEl ? amountInputEl.value : expenseAmount) || 0;
+        const curDate = dateInputEl ? dateInputEl.value : selectedDate;
+        const curConcept = detailInputEl ? detailInputEl.value : expenseConcept;
+
         if (expenseVal <= 0) {
           showToast('INGRESA MONTO DEL EGRESO');
           return;
@@ -715,18 +862,18 @@ export async function openRideEntryModal(options = {}) {
         const payload = {
           id: editItem?.id || `pass_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
           type: 'expense',
-          date: selectedDate,
-          startDate: selectedDate,
+          date: curDate,
+          startDate: curDate,
           amountCop: expenseVal,
           costCop: expenseVal,
-          concept: String(expenseConcept || 'Comisión').trim(),
-          platform: String(expenseConcept || 'General').trim(),
+          concept: String(curConcept || 'Comisión').trim(),
+          platform: String(curConcept || 'General').trim(),
           createdAt: editItem?.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
 
         await savePlatformPass(payload);
-        showToast(isEditing ? 'EGRESO ACTUALIZADO' : 'EGRESO REGISTRADO');
+        showToast((isEditing ? 'EGRESO ACTUALIZADO' : 'EGRESO REGISTRADO') + (curDate && curDate !== todayStr ? ' · ' + shortHumanDate(curDate) : ''));
         window.dispatchEvent(new CustomEvent('octane:rides-updated', { detail: { item: payload } }));
         if (typeof options.onSave === 'function') options.onSave(payload);
       }

@@ -9,6 +9,7 @@
  * - Silencio Verbal Absoluto: Strict micro-labels, zero verbose text.
  */
 
+import { todayLocalYmd } from './date-utils.js';
 import { getFreeNotes, saveFreeNote, deleteFreeNote, getTelemetryLogs } from './db-local.js';
 import { store, playHorologyTick, showToast } from './state.js';
 
@@ -260,7 +261,7 @@ export async function createNote(params = {}) {
 
   // Date stamping
   const isDated = params.isDated !== undefined ? Boolean(params.isDated) : true;
-  const date = isDated ? (params.date || new Date().toISOString().substring(0, 10)) : null;
+  const date = isDated ? (params.date || todayLocalYmd()) : null;
 
   // Odometer sealing
   const isOdoSealed = Boolean(params.isOdoSealed);

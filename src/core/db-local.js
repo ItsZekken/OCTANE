@@ -13,8 +13,12 @@
  * Strict ZERO dummy data: returns clean empty arrays when no user records exist.
  */
 
+import { parseFuelVolume, parseIntegerMetric, sanitizeFuelCostCop } from './number-utils.js';
+
 export const DB_NAME = 'OctaneKineticDB';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
+export const DELETED_STORE = 'deleted_records';
+const TOMBSTONE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 export const STORES = Object.freeze({
     VEHICLE_PROFILE: 'vehicle_profile',
@@ -41,6 +45,7 @@ export const DEFAULT_VEHICLE_PROFILE = Object.freeze({
     ridesModuleEnabled: true,
     isConfigured: false,
     onboardingCompleted: false,
+    learnedGasStations: [],
     updatedAt: new Date().toISOString(),
 });
 
@@ -120,6 +125,11 @@ export function openDB() {
             if (!db.objectStoreNames.contains(STORES.RIDE_SESSIONS)) {
                 const ridesStore = db.createObjectStore(STORES.RIDE_SESSIONS, { keyPath: 'id' });
                 ridesStore.createIndex('date', 'date', { unique: false });
+            }
+
+            // 8. deleted_records: marcas de borrado para que la sincronización no resucite registros
+            if (!db.objectStoreNames.contains(DELETED_STORE)) {
+                db.createObjectStore(DELETED_STORE, { keyPath: 'key' });
             }
 
             // 7. platform_passes (keyPath: 'id')
@@ -203,9 +213,15 @@ export async function saveToStore(storeName, item) {
         const tx = db.transaction(storeName, 'readwrite');
         const store = tx.objectStore(storeName);
         const req = store.put(item);
+        let result;
 
-        req.onsuccess = () => resolve(req.result);
+        // Resolver solo cuando la transacción quedó confirmada en disco (no al encolar la escritura),
+        // para que la UI nunca anuncie 'guardado' antes de que lo esté.
+        req.onsuccess = () => { result = req.result; };
         req.onerror = () => reject(req.error);
+        tx.oncomplete = () => resolve(result);
+        tx.onerror = () => reject(tx.error || req.error);
+        tx.onabort = () => reject(tx.error || new Error('Transaction aborted while saving'));
     });
 }
 
@@ -218,12 +234,25 @@ export async function saveToStore(storeName, item) {
 export async function deleteFromStore(storeName, key) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, 'readwrite');
+        const trackable = storeName !== DELETED_STORE && storeName !== STORES.VEHICLE_PROFILE
+            && db.objectStoreNames.contains(DELETED_STORE);
+        const tx = db.transaction(trackable ? [storeName, DELETED_STORE] : storeName, 'readwrite');
         const store = tx.objectStore(storeName);
         const req = store.delete(key);
+        if (trackable) {
+            // Misma transacción: o se borra y se marca, o ninguna de las dos
+            tx.objectStore(DELETED_STORE).put({
+                key: storeName + ':' + key,
+                store: storeName,
+                id: key,
+                deletedAt: new Date().toISOString(),
+            });
+        }
 
-        req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || req.error);
+        tx.onabort = () => reject(tx.error || new Error('Transaction aborted while deleting'));
     });
 }
 
@@ -239,8 +268,10 @@ export async function clearStore(storeName) {
         const store = tx.objectStore(storeName);
         const req = store.clear();
 
-        req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || req.error);
+        tx.onabort = () => reject(tx.error || new Error('Transaction aborted while clearing'));
     });
 }
 
@@ -289,9 +320,10 @@ export const getUserProfile = getVehicleProfile;
 /**
  * Normalizes a telemetry record for persistence and calculation consistency.
  * @param {Object} raw
+ * @param {Object} [vehicleProfile=null]
  * @returns {Object}
  */
-export function normalizeTelemetryLog(raw) {
+export function normalizeTelemetryLog(raw, vehicleProfile = null) {
     if (!raw || typeof raw !== 'object') {
         throw new Error('Invalid telemetry log object');
     }
@@ -303,10 +335,14 @@ export function normalizeTelemetryLog(raw) {
 
     // Extract canonical YYYY-MM-DD
     const date = dateStr.slice(0, 10);
-    const odometer_reading = Number(raw.odometer_reading) || 0;
-    const fuel_level_percent = Number(raw.fuel_level_percent) || 0;
+    const tankCap = vehicleProfile?.tankCapacityGallons || DEFAULT_VEHICLE_PROFILE.tankCapacityGallons || 25;
+    const odometer_reading = parseIntegerMetric(raw.odometer_reading);
+    const fuel_level_percent = Math.min(100, Math.max(0, Number(raw.fuel_level_percent) || 0));
     const refuels_count = Number(raw.refuels_count) || 0;
-    const gallons_added = Number(raw.gallons_added) || 0;
+    const gallons_added = parseFuelVolume(raw.gallons_added, tankCap);
+    const price_per_gallon = raw.price_per_gallon !== undefined
+        ? (Number(raw.price_per_gallon) || 0)
+        : (raw.pricePerGallon !== undefined ? (Number(raw.pricePerGallon) || 0) : 0);
 
     // Detect full tank: explicit bool takes absolute precedence.
     // Only infer from decimal refuel or >=99.5% fuel level if is_full_tank is undefined.
@@ -318,17 +354,41 @@ export function normalizeTelemetryLog(raw) {
         is_full_tank = Boolean(hasDecimalGallons || fuel_level_percent >= 99.5);
     }
 
-    const total_cost_cop = Number(raw.total_cost_cop) || 0;
+    const defaultPrice = Number(vehicleProfile?.fuelPriceCop) || DEFAULT_VEHICLE_PROFILE.fuelPriceCop || 16000;
+    const total_cost_cop = sanitizeFuelCostCop(raw.total_cost_cop, gallons_added, defaultPrice);
+    const notes = raw.notes !== undefined ? String(raw.notes) : '';
+
+    const createdAt = raw.createdAt || (raw.timestamp ? new Date(raw.timestamp).toISOString() : raw.updatedAt || new Date().toISOString());
+    let time = raw.time || null;
+    if (!time && raw.createdAt) {
+        try {
+            const d = new Date(raw.createdAt);
+            if (!isNaN(d.getTime())) {
+                time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            }
+        } catch (_) {}
+    } else if (!time && raw.updatedAt && String(raw.updatedAt).slice(0, 10) === date) {
+        try {
+            const d = new Date(raw.updatedAt);
+            if (!isNaN(d.getTime())) {
+                time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            }
+        } catch (_) {}
+    }
 
     return {
         id: raw.id || date,
         date,
+        time,
+        createdAt,
         odometer_reading,
         fuel_level_percent,
         refuels_count,
         gallons_added,
         is_full_tank,
+        price_per_gallon,
         total_cost_cop,
+        notes,
         distance_km: raw.distance_km !== undefined ? Number(raw.distance_km) : null,
         duration_seconds: raw.duration_seconds !== undefined ? Number(raw.duration_seconds) : null,
         idle_seconds: raw.idle_seconds !== undefined ? Number(raw.idle_seconds) : null,
@@ -343,16 +403,50 @@ export function normalizeTelemetryLog(raw) {
 /**
  * Returns all telemetry logs sorted chronologically ascending by date.
  * Returns empty array [] when no logs exist (strict ZERO defaultRawData).
+ * Automatically heals corrupt entries retroactively.
+ * @param {Object} [vehicleProfile=null]
  * @returns {Promise<Array>}
  */
-export async function getTelemetryLogs() {
+export async function getTelemetryLogs(vehicleProfile = null) {
     const rawList = await getAllFromStore(STORES.TELEMETRY_LOGS);
     if (!Array.isArray(rawList) || rawList.length === 0) {
         return [];
     }
-    return rawList.sort((a, b) => {
+    let profile = vehicleProfile;
+    if (!profile) {
+        try {
+            profile = await getFromStore(STORES.VEHICLE_PROFILE, 'main');
+        } catch {
+            // fallback
+        }
+    }
+    const normalizedList = [];
+    for (const raw of rawList) {
+        const normalized = normalizeTelemetryLog(raw, profile);
+
+        // Auto-heal corrupt or distorted fields permanently in IndexedDB:
+        const isCorruptCost = raw.total_cost_cop !== undefined && raw.total_cost_cop !== null && raw.total_cost_cop !== normalized.total_cost_cop;
+        const isCorruptGal = raw.gallons_added !== undefined && raw.gallons_added !== null && raw.gallons_added !== normalized.gallons_added;
+        const isCorruptOdo = raw.odometer_reading !== undefined && raw.odometer_reading !== null && raw.odometer_reading !== normalized.odometer_reading;
+
+        if (isCorruptCost || isCorruptGal || isCorruptOdo) {
+            try {
+                await saveToStore(STORES.TELEMETRY_LOGS, normalized);
+            } catch {
+                // silent healing failover in read-only / test contexts
+            }
+        }
+        normalizedList.push(normalized);
+    }
+    return normalizedList.sort((a, b) => {
         if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-        return (Number(a.odometer_reading) || 0) - (Number(b.odometer_reading) || 0);
+        if (a.odometer_reading !== b.odometer_reading) {
+            return (Number(a.odometer_reading) || 0) - (Number(b.odometer_reading) || 0);
+        }
+        const timeA = a.time || (a.createdAt ? String(a.createdAt).slice(11, 16) : '');
+        const timeB = b.time || (b.createdAt ? String(b.createdAt).slice(11, 16) : '');
+        if (timeA && timeB && timeA !== timeB) return timeA < timeB ? -1 : 1;
+        return String(a.id || '').localeCompare(String(b.id || ''));
     });
 }
 
@@ -361,12 +455,19 @@ export const getLogs = getTelemetryLogs;
 /**
  * Retrieves a single telemetry log by id or date string.
  * @param {string} idOrDate - Primary key id or 'YYYY-MM-DD'
+ * @param {Object} [vehicleProfile=null]
  * @returns {Promise<Object|null>}
  */
-export async function getTelemetryLog(idOrDate) {
+export async function getTelemetryLog(idOrDate, vehicleProfile = null) {
     if (!idOrDate) return null;
+    let profile = vehicleProfile;
+    if (!profile) {
+        try {
+            profile = await getFromStore(STORES.VEHICLE_PROFILE, 'main');
+        } catch {}
+    }
     const direct = await getFromStore(STORES.TELEMETRY_LOGS, idOrDate);
-    if (direct) return direct;
+    if (direct) return normalizeTelemetryLog(direct, profile);
 
     const db = await openDB();
     const dateKey = String(idOrDate).slice(0, 10);
@@ -378,7 +479,7 @@ export async function getTelemetryLog(idOrDate) {
         }
         const index = store.index('date');
         const req = index.get(dateKey);
-        req.onsuccess = () => resolve(req.result ?? null);
+        req.onsuccess = () => resolve(req.result ? normalizeTelemetryLog(req.result, profile) : null);
         req.onerror = () => reject(req.error);
     });
 }
@@ -387,10 +488,11 @@ export async function getTelemetryLog(idOrDate) {
  * Adds or updates a telemetry log.
  * Prevents key collision on same-day logs while preserving record updates.
  * @param {Object} log
+ * @param {Object} [vehicleProfile=null]
  * @returns {Promise<Object>}
  */
-export async function addTelemetryLog(log) {
-    const normalized = normalizeTelemetryLog(log);
+export async function addTelemetryLog(log, vehicleProfile = null) {
+    const normalized = normalizeTelemetryLog(log, vehicleProfile);
 
     // Collision guard: if log has no explicit id, and a record with id === normalized.id already exists,
     // generate a collision-safe ID so multiple records on the same day are preserved
@@ -434,7 +536,8 @@ export async function deleteTelemetryLog(idOrDate) {
     const db = await openDB();
     const dateKey = String(idOrDate).slice(0, 10);
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORES.TELEMETRY_LOGS, 'readwrite');
+        const hasTomb = db.objectStoreNames.contains(DELETED_STORE);
+        const tx = db.transaction(hasTomb ? [STORES.TELEMETRY_LOGS, DELETED_STORE] : STORES.TELEMETRY_LOGS, 'readwrite');
         const store = tx.objectStore(STORES.TELEMETRY_LOGS);
         if (!store.indexNames.contains('date')) {
             return resolve();
@@ -445,25 +548,44 @@ export async function deleteTelemetryLog(idOrDate) {
             const keys = req.result || [];
             for (const k of keys) {
                 store.delete(k);
+                if (hasTomb) {
+                    tx.objectStore(DELETED_STORE).put({
+                        key: STORES.TELEMETRY_LOGS + ':' + k,
+                        store: STORES.TELEMETRY_LOGS,
+                        id: k,
+                        deletedAt: new Date().toISOString(),
+                    });
+                }
             }
-            resolve();
         };
         req.onerror = () => reject(req.error);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || req.error);
+        tx.onabort = () => reject(tx.error || new Error('Transaction aborted while deleting'));
     });
 }
 
+/** Lista las marcas de borrado vigentes (descarta las de más de 90 días). */
+export async function getDeletedRecords() {
+    const db = await openDB();
+    if (!db.objectStoreNames.contains(DELETED_STORE)) return [];
+    const all = await getAllFromStore(DELETED_STORE);
+    const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+    return all.filter(r => Date.parse(r.deletedAt) >= cutoff);
+}
 /**
  * Adds or updates multiple telemetry logs within a single atomic readwrite transaction.
  * @param {Array<Object>} logs
+ * @param {Object} [vehicleProfile=null]
  * @returns {Promise<number>} Number of records inserted/updated
  */
-export async function bulkAddTelemetryLogs(logs) {
+export async function bulkAddTelemetryLogs(logs, vehicleProfile = null) {
     if (!Array.isArray(logs) || logs.length === 0) return 0;
 
     const db = await openDB();
     const dateSeen = new Set();
     const normalizedLogs = logs.map((raw, idx) => {
-        const norm = normalizeTelemetryLog(raw);
+        const norm = normalizeTelemetryLog(raw, vehicleProfile);
         if (!raw.id) {
             if (dateSeen.has(norm.date)) {
                 norm.id = `${norm.date}_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 4)}`;
@@ -706,6 +828,7 @@ export async function clearAllData() {
     for (const name of storeNames) {
         await clearStore(name);
     }
+    try { await clearStore(DELETED_STORE); } catch { /* store ausente en BD antigua */ }
     // Re-seed default vehicle profile (unconfigured for onboarding)
     await saveVehicleProfile({ ...DEFAULT_VEHICLE_PROFILE, isConfigured: false, onboardingCompleted: false });
 }
@@ -723,12 +846,18 @@ export async function exportAllStores() {
     const storeNames = Object.values(STORES);
 
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeNames, 'readonly');
+        const hasTomb = db.objectStoreNames.contains(DELETED_STORE);
+        const tx = db.transaction(hasTomb ? [...storeNames, DELETED_STORE] : storeNames, 'readonly');
         const snapshot = {
             version: 1,
             exportedAt: new Date().toISOString(),
-            stores: {}
+            stores: {},
+            deleted: []
         };
+        if (hasTomb) {
+            const dreq = tx.objectStore(DELETED_STORE).getAll();
+            dreq.onsuccess = () => { snapshot.deleted = dreq.result || []; };
+        }
 
         let pending = storeNames.length;
         for (const storeName of storeNames) {
@@ -765,6 +894,8 @@ export async function importAllStores(snapshot, options = { merge: false }) {
     const payload = snapshot.stores || snapshot;
     const db = await openDB();
     const isMerge = Boolean(options && options.merge);
+    const hasTomb = db.objectStoreNames.contains(DELETED_STORE);
+    const incomingDeleted = Array.isArray(snapshot.deleted) ? snapshot.deleted : [];
 
     const storeNames = [
         STORES.VEHICLE_PROFILE,
@@ -777,7 +908,54 @@ export async function importAllStores(snapshot, options = { merge: false }) {
     ];
 
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeNames, 'readwrite');
+        const tx = db.transaction(hasTomb ? [...storeNames, DELETED_STORE] : storeNames, 'readwrite');
+        const tombStore = hasTomb ? tx.objectStore(DELETED_STORE) : null;
+
+        // Aplica las marcas de borrado entrantes (solo en fusión): borra lo local que sea más viejo que la marca
+        if (isMerge && tombStore) {
+            for (const tomb of incomingDeleted) {
+                if (!tomb || !tomb.store || tomb.id === undefined || !storeNames.includes(tomb.store)) continue;
+                const dTs = Date.parse(tomb.deletedAt) || 0;
+                const target = tx.objectStore(tomb.store);
+                const lreq = target.get(tomb.id);
+                lreq.onsuccess = () => {
+                    const local = lreq.result;
+                    const lTs = local && local.updatedAt ? Date.parse(local.updatedAt) : 0;
+                    if (local && lTs <= dTs) target.delete(tomb.id);
+                    const existing = tombStore.get(tomb.store + ':' + tomb.id);
+                    existing.onsuccess = () => {
+                        if (!existing.result || Date.parse(existing.result.deletedAt) < dTs) tombStore.put(tomb);
+                    };
+                };
+            }
+        }
+
+        // En fusión (sincronización con la nube) gana siempre el registro más reciente por updatedAt:
+        // antes, una copia vieja de la nube pisaba lo que acababas de registrar en el dispositivo.
+        const putItem = (store, item) => {
+            if (!isMerge || !item || item[store.keyPath] === undefined) {
+                store.put(item);
+                return;
+            }
+            const id = item[store.keyPath];
+            const getReq = store.get(id);
+            getReq.onsuccess = () => {
+                const local = getReq.result;
+                const localTs = local && local.updatedAt ? Date.parse(local.updatedAt) : 0;
+                const incomingTs = item.updatedAt ? Date.parse(item.updatedAt) : 0;
+                if (local && localTs > incomingTs) return; // lo local es más nuevo: se conserva
+                if (!tombStore) { store.put(item); return; }
+                const tkey = store.name + ':' + id;
+                const treq = tombStore.get(tkey);
+                treq.onsuccess = () => {
+                    const tomb = treq.result;
+                    const tTs = tomb ? Date.parse(tomb.deletedAt) || 0 : 0;
+                    if (tomb && tTs >= incomingTs) return; // borrado después de esa versión: no resucita
+                    if (tomb) tombStore.delete(tkey); // editado después del borrado: gana el registro
+                    store.put(item);
+                };
+            };
+        };
 
         for (const storeName of storeNames) {
             const rawItems = payload[storeName];
@@ -788,9 +966,12 @@ export async function importAllStores(snapshot, options = { merge: false }) {
                 }
                 for (const item of rawItems) {
                     if (storeName === STORES.TELEMETRY_LOGS) {
-                        store.put(normalizeTelemetryLog(item));
+                        const norm = normalizeTelemetryLog(item);
+                        // normalize rellena updatedAt con 'ahora' si falta; respetar el original
+                        if (isMerge && !item.updatedAt) norm.updatedAt = '';
+                        putItem(store, norm);
                     } else {
-                        store.put(item);
+                        putItem(store, item);
                     }
                 }
             }

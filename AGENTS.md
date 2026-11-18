@@ -4,8 +4,11 @@ Cualquier agente de inteligencia artificial o desarrollador que modifique este r
 
 ---
 
-## 1. Documento Rector
-- Consultar y respetar siempre [DESIGN_GUIDELINES.md](file:///c:/Users/jperaltac/OneDrive%20-%20Universidad%20del%20Norte/Juan%20Camilo/Proyectos/OCTANE/DESIGN_GUIDELINES.md).
+## 1. Documentos Rectores
+- Consultar y respetar siempre:
+  1. [DESIGN_GUIDELINES.md](file:///c:/Users/jperaltac/OneDrive%20-%20Universidad%20del%20Norte/Juan%20Camilo/Proyectos/OCTANE/DESIGN_GUIDELINES.md) (Sistema de Diseño Industrial y Silencio Verbal).
+  2. [ARCHITECTURE.md](file:///c:/Users/jperaltac/OneDrive%20-%20Universidad%20del%20Norte/Juan%20Camilo/Proyectos/OCTANE/ARCHITECTURE.md) (Arquitectura de Software y Persistencia).
+  3. [README.md](file:///c:/Users/jperaltac/OneDrive%20-%20Universidad%20del%20Norte/Juan%20Camilo/Proyectos/OCTANE/README.md) (Visión General y Comandos).
 - Ningún componente nuevo o refactorizado puede violar los principios de elegancia, minimalismo, silencio verbal o separación de responsabilidades.
 
 ---
@@ -23,13 +26,23 @@ Cualquier agente de inteligencia artificial o desarrollador que modifique este r
    - El estado de mantenimiento pertenece al `Clúster` y los documentos a la `Guantera`.
 5. ❌ **Prohibido el desbordamiento visual de macro-números**:
    - Siempre verificar que números de 5 o 6 dígitos en el odómetro (`97.395`, `150.000`) se mantengan estrictamente dentro de los límites de su caja en cualquier resolución.
-6. ❌ **Prohibidos los modales flotantes pequeños para el Onboarding**:
-   - El onboarding debe presentarse a pantalla completa, espacioso, limpio y guiado paso a paso.
+6. ❌ **Prohibidos los modales flotantes pequeños para el Onboarding o Detalle de Viajes**:
+   - El onboarding y las fichas cinemáticas deben presentarse a pantalla completa (`100dvh`), espaciosos, limpios y guiados paso a paso.
+7. ❌ **Prohibidas las etiquetas inventadas o inferencias falsas**:
+   - No añadir etiquetas ficticias como `"A/C SOLAR"` o `"RALENTÍ A/C"` basadas en conjeturas de la hora del día.
+8. ❌ **Prohibido hardcodear credenciales en el código fuente**:
+   - Cero usuarios, contraseñas, IMEIs o tokens en código (`JGN691`, `Spicy691`, etc.). Siempre leer de `localStorage` o `vehicleProfile.gpsConfig`.
 
 ---
 
-## 3. Protocolo de Verificación
-Antes de dar por completada una tarea:
+## 3. Protocolo de Verificación Obligatorio
+Antes de dar por completada una tarea o realizar un despliegue:
 1. Comprobar que el build de producción finaliza sin errores: `npm run build`.
-2. Ejecutar las pruebas automatizadas del proyecto: `node tests/test-core.js`.
-3. Validar visualmente la armonía en modo oscuro (`Modo Carbón`) y modo claro (`Modo Papel`).
+2. Ejecutar la suite completa de pruebas:
+   ```bash
+   node tests/test-core.js
+   node tests/test-gps-trips-modal.js
+   node tests/test-rides-engine.js
+   ```
+3. Validar la armonía visual en modo oscuro (`Modo Carbón`) y modo claro (`Modo Papel`).
+4. Verificar que no se hayan introducido credenciales con `Select-String`.

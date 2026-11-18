@@ -25,14 +25,16 @@ if (!fs.existsSync(OUTPUT_DIR)) {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 }
 
-function renderWheel(cx, cy, rTire, rRim, spokeR, isOffRoad = false) {
+function renderWheel(cx, cy, rTire, rRim, spokeR, isOffRoad = false, wheelClass = 'vehicle-wheel') {
   const treadAttr = isOffRoad ? ' stroke-dasharray="14 6"' : '';
   return `  <g transform="translate(${cx}, ${cy})">
-    <circle r="${rTire}" fill="#141418" stroke="#09090B" stroke-width="6"${treadAttr}/>
-    <circle r="${rRim}" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="-${spokeR}" y1="0" x2="${spokeR}" y2="0" stroke="#D4D4D8" stroke-width="5"/>
-    <line x1="0" y1="-${spokeR}" x2="0" y2="${spokeR}" stroke="#D4D4D8" stroke-width="5"/>
-    <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    <g class="${wheelClass}" style="transform-box: fill-box; transform-origin: center;">
+      <circle r="${rTire}" fill="#141418" stroke="#09090B" stroke-width="6"${treadAttr}/>
+      <circle r="${rRim}" fill="#09090B" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="-${spokeR}" y1="0" x2="${spokeR}" y2="0" stroke="#D4D4D8" stroke-width="5"/>
+      <line x1="0" y1="-${spokeR}" x2="0" y2="${spokeR}" stroke="#D4D4D8" stroke-width="5"/>
+      <circle r="9" fill="var(--car-paint, #FF5500)" stroke="#09090B" stroke-width="4"/>
+    </g>
   </g>`;
 }
 
@@ -85,10 +87,10 @@ ${extraElements ? extraElements + '\n' : ''}  <!-- Roof Highlight Line -->
   <path d="${taillightPath}" fill="#F43F5E" stroke="#09090B" stroke-width="5" stroke-linejoin="round"/>
 
   <!-- Front Wheel (Center: ${cx1}, ${cy}) -->
-${renderWheel(cx1, cy, rTire, rRim, spokeR, isOffRoad)}
+${renderWheel(cx1, cy, rTire, rRim, spokeR, isOffRoad, 'vehicle-wheel vehicle-wheel-front')}
 
   <!-- Rear Wheel (Center: ${cx2}, ${cy}) -->
-${renderWheel(cx2, cy, rTire, rRim, spokeR, isOffRoad)}
+${renderWheel(cx2, cy, rTire, rRim, spokeR, isOffRoad, 'vehicle-wheel vehicle-wheel-rear')}
 </svg>
 `;
 

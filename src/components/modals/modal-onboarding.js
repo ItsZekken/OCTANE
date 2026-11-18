@@ -10,6 +10,7 @@
  * - Paso 4: Silueta SVG del vehículo con el color elegido y botón de entrada directo.
  */
 
+import { todayLocalYmd } from '../../core/date-utils.js';
 import { playHorologyTick } from '../../core/telemetry-engine.js';
 import { store, showToast } from '../../core/state.js';
 import {
@@ -995,7 +996,7 @@ async function finishOnboarding() {
             const logs = await getTelemetryLogs();
             if (logs.length === 0) {
                 const baselineLog = {
-                    date: new Date().toISOString().slice(0, 10),
+                    date: todayLocalYmd(),
                     odometer_reading: profile.initialOdometer,
                     fuel_level_percent: 100,
                     gallons_added: 0,

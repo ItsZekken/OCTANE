@@ -29,7 +29,7 @@ export function renderFabContextual() {
 
   fabContainerEl = document.createElement('div');
   fabContainerEl.id = 'octane-fab-contextual-root';
-  fabContainerEl.className = 'fixed bottom-20 right-6 md:bottom-8 md:right-8 z-50 select-none';
+  fabContainerEl.className = 'fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] right-4 sm:right-6 md:bottom-8 md:right-8 z-50 select-none';
   document.body.appendChild(fabContainerEl);
 
   updateFabDisplay();
@@ -226,11 +226,15 @@ function bindMenuActions() {
           window.dispatchEvent(new CustomEvent('octane:open-maintenance', { detail: { mode: 'create' } }));
           break;
         case 'ride':
-          window.dispatchEvent(new CustomEvent('octane:open-ride-entry', { detail: { mode: 'ride' } }));
+        case 'expense': {
+          // Contexto temporal: si el usuario está viendo un periodo pasado en Carreras,
+          // el nuevo registro nace en ese día y no en hoy.
+          const ctx = store && typeof store.getState === 'function' ? store.getState().ridesContextDate : null;
+          const detail = { mode: action };
+          if (ctx) detail.initialDate = ctx;
+          window.dispatchEvent(new CustomEvent('octane:open-ride-entry', { detail }));
           break;
-        case 'expense':
-          window.dispatchEvent(new CustomEvent('octane:open-ride-entry', { detail: { mode: 'expense' } }));
-          break;
+        }
       }
     });
   });

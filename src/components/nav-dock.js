@@ -111,7 +111,7 @@ export function renderNavDock(container, options = {}) {
   const colsCount = navItems.length;
 
   container.innerHTML = `
-    <nav class="fixed bottom-0 inset-x-0 z-40 bg-[var(--bg-void)] border-t border-[var(--line-hair)]">
+    <nav class="fixed bottom-0 inset-x-0 z-40 bg-[var(--bg-void)] border-t border-[var(--line-hair)] pb-[env(safe-area-inset-bottom,0px)]">
       <div class="relative max-w-md mx-auto h-14 flex items-stretch divide-x divide-[var(--line-hair)] border-x border-[var(--line-hair)]">
         ${navItems.map(item => {
           const isActive = activeTabId === item.id;

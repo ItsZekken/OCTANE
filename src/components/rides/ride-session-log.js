@@ -19,8 +19,11 @@ import {
 } from '../../core/db-local.js';
 import { formatDateShort } from '../../core/telemetry-engine.js';
 import { openRideEntryModal } from '../modals/modal-ride-entry.js';
+import { openMovementDetailModal } from '../modals/modal-movement-detail.js';
+import { syncToCloud } from '../../core/firebase-sync.js';
 
 let activeContainer = null;
+let lastRenderOptions = {};
 let updateListenerAttached = false;
 
 /**
@@ -145,7 +148,7 @@ export function initRideSessionLog() {
 
   window.addEventListener('octane:rides-updated', () => {
     if (activeContainer && document.body.contains(activeContainer)) {
-      renderRideSessionLog(activeContainer);
+      renderRideSessionLog(activeContainer, lastRenderOptions);
     }
   });
 }
@@ -163,6 +166,7 @@ export function initRideSessionLog() {
 export async function renderRideSessionLog(container, options = {}) {
   if (!container) return;
   activeContainer = container;
+  lastRenderOptions = { ...options };
   initRideSessionLog();
 
   let sessions = options.sessions;
@@ -195,28 +199,10 @@ export async function renderRideSessionLog(container, options = {}) {
           <span class="font-mono text-xs uppercase tracking-widest text-[var(--text-primary)] font-semibold">
             MOVIMIENTOS
           </span>
-          <span class="font-mono text-[10px] text-[var(--text-secondary)] tabular-nums">
-            (${totalCount})
-          </span>
         </div>
-
-        <div class="flex items-center gap-2">
-          <button 
-            id="btn-log-add-ride" 
-            type="button" 
-            class="h-7 px-2.5 border border-[var(--line-hair)] hover:border-[var(--accent-volt)] bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)] font-mono text-[10px] uppercase font-semibold text-[var(--accent-volt)] flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            <span>+ CARRERA</span>
-          </button>
-          
-          <button 
-            id="btn-log-add-expense" 
-            type="button" 
-            class="h-7 px-2.5 border border-[var(--line-hair)] hover:border-[var(--accent-crimson)] bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)] font-mono text-[10px] uppercase font-semibold text-[var(--accent-crimson)] flex items-center gap-1 transition-colors cursor-pointer"
-          >
-            <span>- EGRESO</span>
-          </button>
-        </div>
+        <span class="font-mono text-[10px] text-[var(--text-secondary)] uppercase tracking-widest tabular-nums">
+          ${totalCount} ${totalCount === 1 ? 'REGISTRO' : 'REGISTROS'}
+        </span>
       </div>
 
       <!-- Main Frame -->
@@ -226,29 +212,6 @@ export async function renderRideSessionLog(container, options = {}) {
 
     </div>
   `;
-
-  // Bind Quick Add Buttons
-  container.querySelector('#btn-log-add-ride')?.addEventListener('click', () => {
-    playHorologyTick(1200, 0.015, 0.025);
-    openRideEntryModal({
-      mode: 'ride',
-      onSave: () => {
-        if (typeof options.onMovementChanged === 'function') options.onMovementChanged();
-        renderRideSessionLog(container, options);
-      }
-    });
-  });
-
-  container.querySelector('#btn-log-add-expense')?.addEventListener('click', () => {
-    playHorologyTick(1200, 0.015, 0.025);
-    openRideEntryModal({
-      mode: 'expense',
-      onSave: () => {
-        if (typeof options.onMovementChanged === 'function') options.onMovementChanged();
-        renderRideSessionLog(container, options);
-      }
-    });
-  });
 
   const frameEl = container.querySelector('#movements-list-frame');
   if (!frameEl) return;
@@ -261,47 +224,11 @@ export async function renderRideSessionLog(container, options = {}) {
         <span class="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)] mb-1">
           SIN MOVIMIENTOS
         </span>
-        <div class="font-sans font-light text-2xl tracking-tight text-[var(--text-muted)] my-2">
-          NINGÚN REGISTRO EN ESTE CICLO
-        </div>
-        <div class="flex items-center gap-3 mt-3">
-          <button 
-            id="btn-empty-add-ride" 
-            type="button" 
-            class="h-9 px-4 bg-[var(--accent-volt)] hover:bg-[var(--accent-volt)]/90 text-[var(--bg-void)] font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
-          >
-            + REGISTRAR CARRERA
-          </button>
-          <button 
-            id="btn-empty-add-expense" 
-            type="button" 
-            class="h-9 px-4 border border-[var(--line-hair)] hover:border-[var(--accent-crimson)] text-[var(--text-primary)] hover:text-[var(--accent-crimson)] bg-[var(--bg-void)] font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
-          >
-            - REGISTRAR EGRESO
-          </button>
+        <div class="font-sans font-light text-2xl tracking-tight text-[var(--text-muted)] my-1">
+          NINGÚN REGISTRO EN ESTE PERIODO
         </div>
       </div>
     `;
-
-    frameEl.querySelector('#btn-empty-add-ride')?.addEventListener('click', () => {
-      openRideEntryModal({
-        mode: 'ride',
-        onSave: () => {
-          if (typeof options.onMovementChanged === 'function') options.onMovementChanged();
-          renderRideSessionLog(container, options);
-        }
-      });
-    });
-
-    frameEl.querySelector('#btn-empty-add-expense')?.addEventListener('click', () => {
-      openRideEntryModal({
-        mode: 'expense',
-        onSave: () => {
-          if (typeof options.onMovementChanged === 'function') options.onMovementChanged();
-          renderRideSessionLog(container, options);
-        }
-      });
-    });
     return;
   }
 
@@ -314,142 +241,95 @@ export async function renderRideSessionLog(container, options = {}) {
       : `-$${Number(item.amountCop).toLocaleString('es-CO')}`;
 
     return `
-      <div class="movement-row p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-[var(--bg-elevated)]/25 transition-colors" data-id="${item.id}" data-store="${item.store}">
-        
-        <!-- Left: Macro Amount + Metadata -->
-        <div class="min-w-0 space-y-1">
-          <div class="flex items-center gap-2 flex-wrap">
-            <!-- Amount -->
-            <span class="font-sans font-light text-xl sm:text-2xl tracking-tight tabular-nums ${isRide ? 'text-[var(--accent-volt)]' : 'text-[var(--accent-crimson)]'} font-medium">
+      <div 
+        class="movement-row p-3 sm:p-3.5 flex flex-col gap-1.5 hover:bg-[var(--bg-elevated)]/30 active:bg-[var(--bg-elevated)]/50 transition-colors cursor-pointer" 
+        data-id="${item.id}" 
+        data-store="${item.store}"
+      >
+        <!-- Line 1: Primary Metrics & Status / Action -->
+        <div class="flex items-center justify-between gap-2">
+          
+          <!-- Left: Amount + Concept/Distance -->
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="font-sans font-light text-lg sm:text-xl tracking-tight tabular-nums ${isRide ? 'text-[var(--accent-volt)]' : 'text-[var(--accent-crimson)]'} font-semibold">
               ${amountFormatted}
             </span>
 
-            <span class="text-[var(--line-strong)]">·</span>
+            <span class="text-[var(--line-strong)] text-xs">·</span>
 
-            <!-- Distance or Concept -->
             ${isRide ? `
               <span class="font-mono text-xs tabular-nums text-[var(--text-primary)] font-semibold">
                 ${Number(item.km).toFixed(1)} KM
               </span>
             ` : `
-              <span class="font-mono text-xs uppercase text-[var(--text-primary)] font-semibold">
+              <span class="font-mono text-xs uppercase text-[var(--text-primary)] font-semibold truncate">
                 ${escapeHtml(item.concept || 'DEDUCCIÓN')}
               </span>
             `}
+          </div>
 
-            <!-- Badge En ruta vs Libre -->
+          <!-- Right: Fixed Trajectory Badge -->
+          <div class="flex items-center shrink-0">
+            <!-- Trajectory Badge (Distinct geometry & colors, separate from platforms) -->
             ${isRide ? (
-              item.isEnRoute 
-                ? `<span class="px-1.5 py-0.5 border border-[var(--accent-volt)]/40 bg-[var(--accent-volt)]/10 text-[var(--accent-volt)] font-mono text-[9px] uppercase tracking-wider">EN RUTA</span>`
-                : `<span class="px-1.5 py-0.5 border border-[var(--line-hair)] bg-[var(--bg-void)] text-[var(--text-secondary)] font-mono text-[9px] uppercase tracking-wider">LIBRE</span>`
-            ) : ''}
-
-            <!-- Platform Tag -->
-            <span class="px-1.5 py-0.5 border border-[var(--line-hair)] bg-[var(--bg-void)] text-[var(--text-secondary)] font-mono text-[9px] uppercase tracking-wider">
-              ${escapeHtml(item.platform || 'DIRECTO')}
-            </span>
+              item.isEnRoute ? `
+                <span class="px-2 py-0.5 border border-[var(--accent-volt)]/40 bg-[var(--accent-volt)]/10 text-[var(--accent-volt)] font-mono text-[9px] uppercase tracking-wider font-semibold inline-flex items-center gap-1.5">
+                  <span class="w-1.5 h-1.5 bg-[var(--accent-volt)]"></span>
+                  EN RUTA
+                </span>
+              ` : `
+                <span class="px-2 py-0.5 border border-[var(--line-strong)] bg-transparent text-[var(--text-secondary)] font-mono text-[9px] uppercase tracking-wider inline-flex items-center gap-1.5 font-medium">
+                  <span class="w-1.5 h-1.5 border border-[var(--text-secondary)]"></span>
+                  LIBRE
+                </span>
+              `
+            ) : `
+              <span class="px-2 py-0.5 border border-[var(--accent-crimson)]/30 bg-[var(--accent-crimson)]/10 text-[var(--accent-crimson)] font-mono text-[9px] uppercase tracking-wider font-semibold inline-flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 bg-[var(--accent-crimson)]"></span>
+                EGRESO
+              </span>
+            `}
           </div>
 
-          <!-- Subline: Date + Note if any -->
-          <div class="flex items-center gap-2 font-mono text-[10px] text-[var(--text-secondary)] truncate">
-            <span class="tabular-nums text-[var(--text-muted)]">${formattedDate}</span>
-            ${item.notes ? `
-              <span class="text-[var(--line-strong)]">·</span>
-              <span class="text-[var(--text-muted)] truncate max-w-xs">${escapeHtml(item.notes)}</span>
-            ` : ''}
-          </div>
         </div>
 
-        <!-- Right Actions: [EDITAR] and [ELIMINAR] -->
-        <div class="flex items-center gap-2 shrink-0" data-actions-for="${item.id}">
-          <button 
-            type="button" 
-            class="btn-edit-movement px-2.5 py-1 border border-[var(--line-hair)] hover:border-[var(--text-primary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-void)] font-mono text-[10px] uppercase transition-colors cursor-pointer"
-          >
-            EDITAR
-          </button>
+        <!-- Line 2: Entity Platform Tag + Date + Note Snippet -->
+        <div class="flex items-center gap-2 font-mono text-[10px] text-[var(--text-secondary)] min-w-0">
+          <span class="tabular-nums text-[var(--text-muted)] shrink-0">${formattedDate}</span>
           
-          <button 
-            type="button" 
-            class="btn-delete-movement px-2.5 py-1 border border-[var(--line-hair)] hover:border-[var(--accent-crimson)] text-[var(--text-secondary)] hover:text-[var(--accent-crimson)] bg-[var(--bg-void)] font-mono text-[10px] uppercase transition-colors cursor-pointer"
-          >
-            ✕
-          </button>
+          <span class="text-[var(--line-strong)]">·</span>
+
+          <!-- Platform Entity Chip -->
+          <span class="px-1.5 py-0.2 border border-[var(--line-hair)] bg-[var(--bg-void)] text-[var(--text-primary)] font-mono text-[9px] uppercase tracking-wider font-medium shrink-0">
+            ${escapeHtml(item.platform || 'DIRECTO')}
+          </span>
+
+          ${item.notes ? `
+            <span class="text-[var(--line-strong)]">·</span>
+            <span class="text-[var(--text-muted)] italic truncate max-w-[180px] sm:max-w-md">
+              ${escapeHtml(item.notes)}
+            </span>
+          ` : ''}
         </div>
 
       </div>
     `;
   }).join('');
 
-  // Bind Actions (Edit & Delete)
+  // Bind Row Click -> Open Minimalist Detail Modal (with Edit/Delete flow inside)
   const rows = frameEl.querySelectorAll('.movement-row');
   rows.forEach(row => {
     const id = row.dataset.id;
-    const storeName = row.dataset.store;
     const movement = movements.find(m => m.id === id);
     if (!movement) return;
 
-    // Edit
-    const editBtn = row.querySelector('.btn-edit-movement');
-    editBtn?.addEventListener('click', () => {
-      playHorologyTick(1200, 0.015, 0.025);
-      openRideEntryModal({
-        mode: movement.type,
-        item: movement.raw || movement,
-        onSave: () => {
+    // Row Click: opens the Minimalist Movement Detail Modal
+    row.addEventListener('click', () => {
+      openMovementDetailModal(movement, {
+        onMovementChanged: () => {
           if (typeof options.onMovementChanged === 'function') options.onMovementChanged();
           renderRideSessionLog(container, options);
         }
-      });
-    });
-
-    // Delete with inline confirmation
-    const delBtn = row.querySelector('.btn-delete-movement');
-    delBtn?.addEventListener('click', () => {
-      playHorologyTick(1000, 0.015, 0.02);
-      const actionsEl = row.querySelector(`[data-actions-for="${id}"]`);
-      if (!actionsEl) return;
-
-      actionsEl.innerHTML = `
-        <div class="flex items-center gap-1.5">
-          <span class="text-[var(--accent-crimson)] font-mono text-[9px] font-bold">¿BORRAR?</span>
-          <button 
-            type="button" 
-            class="btn-confirm-del px-2 py-0.5 bg-[var(--accent-crimson)] text-white hover:bg-[var(--accent-crimson)]/90 font-mono text-[9px] uppercase font-bold cursor-pointer"
-          >
-            SÍ
-          </button>
-          <button 
-            type="button" 
-            class="btn-cancel-del px-2 py-0.5 border border-[var(--line-hair)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-mono text-[9px] uppercase cursor-pointer"
-          >
-            NO
-          </button>
-        </div>
-      `;
-
-      actionsEl.querySelector('.btn-confirm-del')?.addEventListener('click', async () => {
-        playHorologyTick(800, 0.025, 0.04);
-        try {
-          if (storeName === 'ride_sessions') {
-            await deleteRideSession(id);
-            showToast('CARRERA ELIMINADA');
-          } else {
-            await deletePlatformPass(id);
-            showToast('EGRESO ELIMINADO');
-          }
-          window.dispatchEvent(new CustomEvent('octane:rides-updated', { detail: { deletedId: id } }));
-          if (typeof options.onMovementChanged === 'function') options.onMovementChanged();
-          renderRideSessionLog(container, options);
-        } catch (err) {
-          console.error('[OCTANE] Error deleting movement:', err);
-          showToast('ERROR AL ELIMINAR');
-        }
-      });
-
-      actionsEl.querySelector('.btn-cancel-del')?.addEventListener('click', () => {
-        playHorologyTick(1100, 0.012, 0.02);
-        renderRideSessionLog(container, options);
       });
     });
   });

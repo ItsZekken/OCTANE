@@ -12,6 +12,7 @@
  *      - platform_passes (STORES.PLATFORM_PASSES)
  */
 
+import { localYmd } from './date-utils.js';
 import {
     STORES,
     exportAllStores,
@@ -39,7 +40,7 @@ export async function exportMasterBackup() {
             const a = document.createElement('a');
 
             const now = new Date();
-            const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+            const dateStr = localYmd(now).replace(/-/g, '');
             const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
             const fileName = `octane_kinetic_master_backup_${dateStr}_${timeStr}.json`;
 
