@@ -532,6 +532,49 @@ function renderModalContent() {
         </div>
     ` : '';
 
+    const monthlyTax = (type === 'monthly' && monthly?.invisibleTax?.hasData) ? monthly.invisibleTax : null;
+    const monthlyRemCop = (type === 'monthly' && monthly?.calendarRemainingCostCop > 0) ? monthly.calendarRemainingCostCop : 0;
+    const monthlyPhysicsHtml = (type === 'monthly' && (monthlyTax || monthlyRemCop > 0)) ? `
+        <div class="bg-[var(--bg-void)] divide-y divide-[var(--line-hair)] font-mono text-xs">
+            ${monthlyTax ? `
+                <div class="px-4 py-2.5 space-y-2">
+                    <div class="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-[var(--text-secondary)]">
+                        <span>DESGLOSE DEL GASTO</span>
+                        <span class="tabular-nums">${monthlyTax.totalGallons} GAL</span>
+                    </div>
+                    <div class="h-1 w-full flex overflow-hidden bg-[var(--line-hair)]">
+                        <div style="width: ${monthlyTax.pctBase}%; background-color: #3F3F46;"></div>
+                        <div style="width: ${monthlyTax.pctTraffic}%; background-color: var(--accent-amber);"></div>
+                        <div style="width: ${monthlyTax.pctIdle}%; background-color: var(--accent-cyan);"></div>
+                        <div style="width: ${monthlyTax.pctDynamicsCold}%; background-color: var(--accent-crimson);"></div>
+                    </div>
+                </div>
+                <div class="px-4 py-2 flex items-center justify-between gap-3">
+                    <span class="text-[11px] text-[var(--text-secondary)] uppercase">BASE · ${monthlyTax.pctBase}%</span>
+                    <span class="text-xs font-semibold tabular-nums text-[var(--text-primary)]">$${monthlyTax.baseCop.toLocaleString('es-CO')}</span>
+                </div>
+                <div class="px-4 py-2 flex items-center justify-between gap-3">
+                    <span class="text-[11px] text-[var(--accent-amber)] uppercase">TRANCÓN · ${monthlyTax.pctTraffic}%</span>
+                    <span class="text-xs font-semibold tabular-nums text-[var(--text-primary)]">$${monthlyTax.trafficCop.toLocaleString('es-CO')}</span>
+                </div>
+                <div class="px-4 py-2 flex items-center justify-between gap-3">
+                    <span class="text-[11px] text-[var(--accent-cyan)] uppercase">RALENTÍ · ${monthlyTax.pctIdle}%</span>
+                    <span class="text-xs font-semibold tabular-nums text-[var(--text-primary)]">$${monthlyTax.idleCop.toLocaleString('es-CO')}</span>
+                </div>
+                <div class="px-4 py-2 flex items-center justify-between gap-3">
+                    <span class="text-[11px] text-[var(--accent-crimson)] uppercase">FRÍO / DIN · ${monthlyTax.pctDynamicsCold}%</span>
+                    <span class="text-xs font-semibold tabular-nums text-[var(--text-primary)]">$${monthlyTax.dynamicsColdCop.toLocaleString('es-CO')}</span>
+                </div>
+            ` : ''}
+            ${monthlyRemCop > 0 ? `
+                <div class="px-4 py-2.5 flex items-center justify-between gap-3 bg-[var(--bg-surface)]">
+                    <span class="text-[10px] uppercase tracking-wider text-[var(--text-secondary)]">RESTANTE CALENDARIO · ~${monthly.remainingDays} ${monthly.remainingDays === 1 ? 'DÍA' : 'DÍAS'}</span>
+                    <span class="text-xs font-semibold tabular-nums text-[var(--accent-amber)]">+$${monthlyRemCop.toLocaleString('es-CO')}</span>
+                </div>
+            ` : ''}
+        </div>
+    ` : '';
+
     kpiModalRoot.innerHTML = `
         <div class="kpi-modal-backdrop fixed inset-0 bg-black/80 transition-opacity"></div>
 
@@ -589,6 +632,7 @@ function renderModalContent() {
                     <div id="kpi-history-list" class="bg-[var(--bg-surface)] divide-y divide-[var(--line-hair)]">
                         ${historyListHtml || `<div class="px-4 py-6 text-center font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">SIN REGISTROS</div>`}
                     </div>
+                    ${monthlyPhysicsHtml}
 
                 </div>
             </div>

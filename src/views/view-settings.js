@@ -28,7 +28,7 @@ import {
   getCurrentUser
 } from '../core/firebase-sync.js';
 import { exportMasterBackup, importJSONFile } from '../core/json-io.js';
-import { syncGpsTelemetry, DEFAULT_GPS_CONFIG, getGpsConfig, saveRememberedGpsCreds } from '../core/iopgps-sync.js';
+import { syncGpsTelemetry, DEFAULT_GPS_CONFIG, getGpsConfig, saveRememberedGpsCreds, resolveProxyMode } from '../core/iopgps-sync.js';
 import { CAR_COLORS } from '../components/modals/modal-onboarding.js';
 import { playHorologyTick } from '../components/fuel-gauges/gauge-controller.js';
 import { renderSpicyArcGauge } from '../components/fuel-gauges/gauge-spicy-arc.js';
@@ -195,6 +195,10 @@ export async function renderSettingsView(container) {
       currentUser = store.getState().currentUser || null;
     }
   } catch (e) {}
+
+  const gpsCfg = getGpsConfig(profile);
+  const proxyInfo = resolveProxyMode(gpsCfg);
+  const isTemporaryBridge = Boolean(gpsCfg.username && !gpsCfg.proxyUrl && proxyInfo.mode === 'public-bridge');
 
   container.innerHTML = `
     <div class="view-settings w-full space-y-6 pb-20 select-none">
@@ -374,10 +378,10 @@ export async function renderSettingsView(container) {
       <section class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] p-5 space-y-4">
         <div class="flex items-center justify-between border-b border-[var(--line-hair)] pb-3">
           <span class="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">TELEMETRÍA GPS</span>
-          <span id="gps-settings-status-badge" class="font-mono text-[10px] uppercase tracking-widest ${profile.gpsCache?.live?.totalMile ? 'text-[var(--accent-volt)]' : 'text-[var(--text-secondary)]'}">
+          <span id="gps-settings-status-badge" class="font-mono text-[10px] uppercase tracking-widest ${profile.gpsCache?.live?.totalMile ? 'text-[var(--accent-volt)]' : (isTemporaryBridge ? 'text-[var(--accent-amber)]' : 'text-[var(--text-secondary)]')}">
             ${profile.gpsCache?.live?.totalMile
               ? `${Number(profile.gpsCache.live.totalMile).toLocaleString('es-CO')} KM · ${Number(profile.gpsCache.live.externalVoltage || 0).toFixed(2)}V`
-              : (getGpsConfig(profile).username ? 'CREDENCIALES GUARDADAS' : 'SIN VINCULAR')}
+              : (isTemporaryBridge ? 'PUENTE TEMPORAL' : (gpsCfg.username ? 'CREDENCIALES GUARDADAS' : 'SIN VINCULAR'))}
           </span>
         </div>
 
@@ -389,7 +393,7 @@ export async function renderSettingsView(container) {
               type="text" 
               autocomplete="username"
               placeholder="Tu usuario o placa"
-              value="${getGpsConfig(profile).username}" 
+              value="${gpsCfg.username}" 
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
             />
           </div>
@@ -401,7 +405,7 @@ export async function renderSettingsView(container) {
               type="password" 
               autocomplete="current-password"
               placeholder="••••••••"
-              value="${getGpsConfig(profile).password}" 
+              value="${gpsCfg.password}" 
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
             />
           </div>
@@ -412,7 +416,7 @@ export async function renderSettingsView(container) {
               id="set-gps-imei" 
               type="text" 
               placeholder="Auto-detectar de la cuenta"
-              value="${getGpsConfig(profile).imei}" 
+              value="${gpsCfg.imei}" 
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm tabular-nums" 
             />
           </div>
@@ -422,15 +426,35 @@ export async function renderSettingsView(container) {
             <input 
               id="set-gps-start" 
               type="date" 
-              value="${getGpsConfig(profile).installStartDate || DEFAULT_GPS_CONFIG.installStartDate}" 
+              value="${gpsCfg.installStartDate || DEFAULT_GPS_CONFIG.installStartDate}" 
               class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm tabular-nums" 
             />
+          </div>
+
+          <div class="space-y-1 sm:col-span-2">
+            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">PROXY PRIVADO (OPCIONAL)</label>
+            <input 
+              id="set-gps-proxy-url" 
+              type="url" 
+              placeholder="https://tu-enlace.workers.dev"
+              value="${gpsCfg.proxyUrl || ''}" 
+              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
+            />
+            <span class="block text-[9px] text-[var(--text-muted)] tracking-tight">Enlace propio para sincronizar sin puente temporal.</span>
+          </div>
+
+          <div class="sm:col-span-2 pt-3 border-t border-[var(--line-hair)] flex items-center justify-between font-mono">
+            <div>
+              <span class="font-mono text-xs font-medium text-[var(--text-primary)] block">ALERTAS DE ESTACIÓN (NOTIFICACIONES)</span>
+              <span class="text-[10px] text-[var(--text-secondary)] block">Avisa al detenerse en una estación conocida para registrar tanqueada.</span>
+            </div>
+            <input id="set-gps-station-alerts" type="checkbox" ${gpsCfg.stationAlertsEnabled ? 'checked' : ''} class="w-4 h-4 rounded-sm accent-[var(--accent-amber)] cursor-pointer" />
           </div>
         </div>
 
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[var(--line-hair)] font-mono">
           <span id="gps-settings-meta" class="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider tabular-nums">
-            ${profile.gpsCache?.days ? `${Object.keys(profile.gpsCache.days).length} DÍAS EN MEMORIA` : 'SE RECUERDA AUTOMÁTICAMENTE AL GUARDAR'}${profile.gpsCache?.live?.address ? ` · ${String(profile.gpsCache.live.address).split(',')[0].toUpperCase()}` : ''}
+            ${isTemporaryBridge ? '<span class="text-[var(--accent-amber)]">PUENTE TEMPORAL</span> · ' : ''}${profile.gpsCache?.days ? `${Object.keys(profile.gpsCache.days).length} DÍAS EN MEMORIA` : 'SE RECUERDA AUTOMÁTICAMENTE AL GUARDAR'}${profile.gpsCache?.live?.address ? ` · ${String(profile.gpsCache.live.address).split(',')[0].toUpperCase()}` : ''}
           </span>
           <button id="sync-gps-now-btn" type="button" class="h-10 px-5 border border-[var(--accent-amber)] text-[var(--accent-amber)] hover:bg-[var(--accent-amber)] hover:text-[var(--bg-void)] font-mono text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer active:scale-95">
             Guardar y sincronizar GPS
@@ -1056,6 +1080,70 @@ export async function renderSettingsView(container) {
     }
   });
 
+  // Station Alerts Opt-In Toggle Handler (Notification permission requested ONLY on explicit user toggle ON)
+  const stationAlertsToggle = container.querySelector('#set-gps-station-alerts');
+  if (stationAlertsToggle) {
+    stationAlertsToggle.addEventListener('change', async () => {
+      const enabled = Boolean(stationAlertsToggle.checked);
+      playHorologyTick(enabled ? 1300 : 900, 0.015, 0.025);
+
+      if (enabled && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission === 'denied') {
+            showToast('PERMISO DE NOTIFICACIONES DENEGADO');
+          }
+        } catch (_) {}
+      }
+
+      const gpsProxyUrl = container.querySelector('#set-gps-proxy-url')?.value.trim() || '';
+      profile.gpsConfig = {
+        ...(profile.gpsConfig || DEFAULT_GPS_CONFIG),
+        proxyUrl: gpsProxyUrl,
+        stationAlertsEnabled: enabled
+      };
+      saveRememberedGpsCreds({
+        proxyUrl: gpsProxyUrl,
+        stationAlertsEnabled: enabled
+      });
+
+      try {
+        await saveVehicleProfile(profile);
+        if (store && typeof store.setState === 'function') {
+          store.setState({ vehicleProfile: profile });
+        }
+        showToast(enabled ? 'ALERTAS DE ESTACIÓN ACTIVADAS' : 'ALERTAS DE ESTACIÓN DESACTIVADAS');
+      } catch (err) {
+        showToast('ERROR · ' + (err && err.message ? err.message : 'Error guardando alertas'));
+      }
+    });
+  }
+
+  // Private Proxy URL live persistence on change
+  const gpsProxyInput = container.querySelector('#set-gps-proxy-url');
+  if (gpsProxyInput) {
+    gpsProxyInput.addEventListener('change', async () => {
+      const gpsProxyUrl = gpsProxyInput.value.trim();
+      const stationAlertsEnabled = Boolean(container.querySelector('#set-gps-station-alerts')?.checked);
+      profile.gpsConfig = {
+        ...(profile.gpsConfig || DEFAULT_GPS_CONFIG),
+        proxyUrl: gpsProxyUrl,
+        stationAlertsEnabled
+      };
+      saveRememberedGpsCreds({
+        proxyUrl: gpsProxyUrl,
+        stationAlertsEnabled
+      });
+      try {
+        await saveVehicleProfile(profile);
+        if (store && typeof store.setState === 'function') {
+          store.setState({ vehicleProfile: profile });
+        }
+        showToast(gpsProxyUrl ? 'PROXY PRIVADO GUARDADO' : 'PROXY PRIVADO REMOVIDO');
+      } catch (_) {}
+    });
+  }
+
   // Sync GPS Telemetry Button Handler
   const syncGpsBtn = container.querySelector('#sync-gps-now-btn');
   if (syncGpsBtn) {
@@ -1065,6 +1153,8 @@ export async function renderSettingsView(container) {
       const gpsPass = container.querySelector('#set-gps-pass')?.value || '';
       const gpsImei = container.querySelector('#set-gps-imei')?.value.trim() || '';
       const gpsStart = container.querySelector('#set-gps-start')?.value.trim() || DEFAULT_GPS_CONFIG.installStartDate;
+      const gpsProxyUrl = container.querySelector('#set-gps-proxy-url')?.value.trim() || '';
+      const stationAlertsEnabled = Boolean(container.querySelector('#set-gps-station-alerts')?.checked);
 
       if (!gpsUser || !gpsPass) {
         showToast('INGRESA USUARIO Y CONTRASEÑA GPS');
@@ -1078,7 +1168,9 @@ export async function renderSettingsView(container) {
         password: gpsPass,
         imei: gpsImei,
         installDate: gpsStart,
-        installStartDate: gpsStart
+        installStartDate: gpsStart,
+        proxyUrl: gpsProxyUrl,
+        stationAlertsEnabled
       };
 
       saveRememberedGpsCreds(profile.gpsConfig);

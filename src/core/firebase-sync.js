@@ -188,6 +188,92 @@ export function triggerCloudSync() {
     }, SYNC_DEBOUNCE_MS);
 }
 
+const CLOUD_MAX_BYTES = 850000;
+const CLOUD_VOLTAGE_HISTORY_CAP = 180;
+const CLOUD_NOTIFIED_STOPS_CAP = 60;
+const CLOUD_MAX_TRIPS_DATES = 120;
+
+/**
+ * Sanitizes an IndexedDB snapshot before uploading to Cloud Firestore:
+ * - Deep-clones snapshot safely without mutating the original object
+ * - Strips heavy `trackPoints` arrays from `gpsCache.tripsByDate[dateKey]`
+ * - Caps `gpsCache.voltageHistory` (latest 180) and `gpsCache.notifiedStopIds` (latest 60)
+ * - Clears `gpsConfig.password` so GPS credentials stay exclusively local
+ * - Prunes oldest `tripsByDate` keys (keeping latest 120 dates) if UTF-8 payload exceeds 850,000 bytes
+ *
+ * @param {Object} snapshot
+ * @returns {Object}
+ */
+export function sanitizeSnapshotForCloud(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object') {
+        return {};
+    }
+
+    const cloned = JSON.parse(JSON.stringify(snapshot));
+    const stores = cloned.stores;
+    const profiles = [];
+
+    if (stores && typeof stores === 'object') {
+        if (Array.isArray(stores.vehicle_profile)) {
+            for (const p of stores.vehicle_profile) {
+                if (p && typeof p === 'object') profiles.push(p);
+            }
+        } else if (stores.vehicle_profile && typeof stores.vehicle_profile === 'object') {
+            profiles.push(stores.vehicle_profile);
+        }
+    }
+
+    for (const profile of profiles) {
+        if (profile.gpsConfig && typeof profile.gpsConfig === 'object') {
+            profile.gpsConfig.password = '';
+        }
+
+        const gpsCache = profile.gpsCache;
+        if (gpsCache && typeof gpsCache === 'object') {
+            if (gpsCache.tripsByDate && typeof gpsCache.tripsByDate === 'object') {
+                for (const dateKey of Object.keys(gpsCache.tripsByDate)) {
+                    const dayTrips = gpsCache.tripsByDate[dateKey];
+                    if (Array.isArray(dayTrips)) {
+                        for (const trip of dayTrips) {
+                            if (trip && typeof trip === 'object' && 'trackPoints' in trip) {
+                                delete trip.trackPoints;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (Array.isArray(gpsCache.voltageHistory) && gpsCache.voltageHistory.length > CLOUD_VOLTAGE_HISTORY_CAP) {
+                gpsCache.voltageHistory = gpsCache.voltageHistory.slice(-CLOUD_VOLTAGE_HISTORY_CAP);
+            }
+
+            if (Array.isArray(gpsCache.notifiedStopIds) && gpsCache.notifiedStopIds.length > CLOUD_NOTIFIED_STOPS_CAP) {
+                gpsCache.notifiedStopIds = gpsCache.notifiedStopIds.slice(-CLOUD_NOTIFIED_STOPS_CAP);
+            }
+        }
+    }
+
+    const encoder = new TextEncoder();
+    const byteLength = (obj) => encoder.encode(JSON.stringify(obj)).length;
+
+    if (byteLength(cloned) > CLOUD_MAX_BYTES) {
+        for (const profile of profiles) {
+            const tripsByDate = profile?.gpsCache?.tripsByDate;
+            if (tripsByDate && typeof tripsByDate === 'object') {
+                const sortedDates = Object.keys(tripsByDate).sort();
+                if (sortedDates.length > CLOUD_MAX_TRIPS_DATES) {
+                    const toPrune = sortedDates.slice(0, sortedDates.length - CLOUD_MAX_TRIPS_DATES);
+                    for (const dateKey of toPrune) {
+                        delete tripsByDate[dateKey];
+                    }
+                }
+            }
+        }
+    }
+
+    return cloned;
+}
+
 /**
  * Executes immediate synchronization of all IndexedDB stores to Cloud Firestore.
  * @returns {Promise<boolean>}
@@ -219,7 +305,8 @@ export async function syncToCloud() {
             console.warn('[OCTANE SYNC] Pre-push merge skipped:', mergeErr.message);
         }
 
-        const snapshot = await exportAllStores();
+        const rawSnapshot = await exportAllStores();
+        const snapshot = sanitizeSnapshotForCloud(rawSnapshot);
 
         await setDoc(docRef, {
             ...snapshot,

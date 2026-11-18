@@ -697,7 +697,7 @@ function renderActiveCockpit(container) {
     // Contextual Interactive KPIs & GPS Summary
     const effTrend = computeEfficiencyTrend(model, unit);
     const costTrend = computeCostPerKmTrend(cockpitState.logs, model, lastRefuelPrice);
-    const monthlyTrend = computeMonthlyFuelMetrics(cockpitState.logs, model, lastRefuelPrice);
+    const monthlyTrend = computeMonthlyFuelMetrics(cockpitState.logs, model, lastRefuelPrice, new Date(), vehicleProfile);
     const usageTrend = computeUsageRhythmTrend(model, vehicleProfile);
     const gpsSummary = computeCockpitGpsSummary(vehicleProfile, model);
 
@@ -809,7 +809,7 @@ function renderActiveCockpit(container) {
                                 ${activeGal.toFixed(2)} GAL  ·  ${(activeGal * GAL_TO_L).toFixed(1)} L
                             </div>
                             <div id="chamber-reserve-tag" class="font-mono text-[10px] text-[var(--text-secondary)] mt-1 tracking-widest uppercase">
-                                ${hasData ? (activeTankState?.reserveKm > 0 ? `${activeTankState.reserveKm} KM A RESERVA` : 'EN RESERVA') : 'RESERVA 5.0L'}
+                                ${hasData ? (activeTankState?.reserveKm > 0 ? `${activeTankState.reserveKm} KM · ${activeTankState.reserveDateLabel || 'RESERVA'}` : 'EN RESERVA') : 'RESERVA 5.0L'}
                             </div>
                             <!-- 3 Discrete Mode Indicators (• • •) -->
                             <div id="chamber-mode-dots" class="flex items-center justify-center gap-1.5 mt-2">
@@ -1307,14 +1307,16 @@ function updateSightGlassAndWarp() {
     fluidPhysics.basePct = activeTankState.activePct || 0;
     fluidPhysics.warpKm = warpKm;
 
-    const safeEff = fullEraAvgEff > 0 ? fullEraAvgEff : 33.71;
-    const burnedSimGal = warpKm / safeEff;
+    const baseEff = Number(activeTankState?.adaptiveEff || fullEraAvgEff) || 33.71;
+    const sevFactor = Number(activeTankState?.physicalTelemetry?.severityFactor) || 1.0;
+    const projEff = sevFactor > 0 ? (baseEff / sevFactor) : baseEff;
+    const burnedSimGal = projEff > 0 ? (warpKm / projEff) : 0;
     const remGal = Math.max(0, (activeTankState.activeGal || 0) - burnedSimGal);
     const remPct = tankMaxGal > 0 ? (remGal / tankMaxGal) * 100 : 0;
     fluidPhysics.targetPct = remPct;
 
-    const remRangeKm = Math.round(remGal * safeEff);
-    const remReserveKm = Math.max(0, Math.round(Math.max(0, remGal - reserveGal) * safeEff));
+    const remRangeKm = Math.round(remGal * projEff);
+    const remReserveKm = Math.max(0, Math.round(Math.max(0, remGal - reserveGal) * projEff));
 
     const topLbl = document.getElementById('chamber-top-label');
     const heroKm = document.getElementById('chamber-hero-km');
@@ -1336,8 +1338,12 @@ function updateSightGlassAndWarp() {
     });
 
     const avgKmDay = Number(model?.stats?.avgKmPerDay) > 0 ? Number(model.stats.avgKmPerDay) : 25;
-    const daysAutonomy = Math.max(0, Math.round(remRangeKm / avgKmDay));
-    const daysToReserve = Math.max(0, Math.round(remReserveKm / avgKmDay));
+    const daysAutonomy = (warpKm === 0 && activeTankState?.autonomyDays !== undefined)
+        ? activeTankState.autonomyDays
+        : Math.max(0, Math.round(remRangeKm / avgKmDay));
+    const daysToReserve = (warpKm === 0 && activeTankState?.reserveDays !== undefined)
+        ? activeTankState.reserveDays
+        : Math.max(0, Math.round(remReserveKm / avgKmDay));
 
     if (mode === 0) {
         // Mode 0: AUTONOMÍA (KM)
@@ -1346,9 +1352,13 @@ function updateSightGlassAndWarp() {
         if (heroUnit) heroUnit.innerText = 'KM';
         if (subVol) subVol.innerText = `${remGal.toFixed(2)} GAL  ·  ${(remGal * GAL_TO_L).toFixed(1)} L`;
         if (rsvTag) {
-            rsvTag.innerText = remReserveKm > 0
-                ? `${remReserveKm} KM A RESERVA`
-                : (remGal > 0 ? 'EN RESERVA' : 'RESERVA 5.0L');
+            if (remReserveKm > 0) {
+                rsvTag.innerText = (warpKm === 0 && activeTankState?.reserveDateLabel)
+                    ? `${remReserveKm} KM · ${activeTankState.reserveDateLabel}`
+                    : `${remReserveKm} KM A RESERVA`;
+            } else {
+                rsvTag.innerText = remGal > 0 ? 'EN RESERVA' : 'RESERVA 5.0L';
+            }
         }
     } else if (mode === 1) {
         // Mode 1: TIEMPO DE TANQUE (~XX DÍAS)
@@ -1357,9 +1367,15 @@ function updateSightGlassAndWarp() {
         if (heroUnit) heroUnit.innerText = 'DÍAS';
         if (subVol) subVol.innerText = `RITMO: ${avgKmDay.toFixed(0)} KM/DÍA`;
         if (rsvTag) {
-            rsvTag.innerText = daysToReserve > 0
-                ? `RESERVA EN ~${daysToReserve} DÍAS`
-                : 'EN RESERVA';
+            if (warpKm === 0 && activeTankState?.reserveDateLabel) {
+                rsvTag.innerText = activeTankState.reserveKm > 0
+                    ? `RESERVA · ${activeTankState.reserveDateLabel}`
+                    : 'EN RESERVA';
+            } else {
+                rsvTag.innerText = daysToReserve > 0
+                    ? `RESERVA EN ~${daysToReserve} DÍAS`
+                    : 'EN RESERVA';
+            }
         }
     } else if (mode === 2) {
         // Mode 2: VALOR EN TANQUE ($XXX.XXX)
@@ -1898,6 +1914,48 @@ function renderCycleDetail() {
         </div>
     ` : '';
 
+    const tax = cyclePhys?.invisibleTax?.hasData ? cyclePhys.invisibleTax : null;
+    const taxStripHtml = tax ? `
+        <div class="border-b border-[var(--line-hair)] bg-[var(--bg-void)]">
+            <div class="h-1 w-full flex overflow-hidden bg-[var(--line-hair)]">
+                <div style="width: ${tax.pctBase}%; background-color: #3F3F46;" title="Base: ${tax.pctBase}%"></div>
+                <div style="width: ${tax.pctTraffic}%; background-color: var(--accent-amber);" title="Trancón: ${tax.pctTraffic}%"></div>
+                <div style="width: ${tax.pctIdle}%; background-color: var(--accent-cyan);" title="Ralentí: ${tax.pctIdle}%"></div>
+                <div style="width: ${tax.pctDynamicsCold}%; background-color: var(--accent-crimson);" title="Frío/Dinámica: ${tax.pctDynamicsCold}%"></div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-[var(--line-hair)] font-mono text-[10px]">
+                <div class="px-3.5 py-1.5 flex items-center justify-between gap-2">
+                    <span class="text-[var(--text-secondary)] uppercase tracking-wider">BASE</span>
+                    <strong class="text-[var(--text-primary)] tabular-nums">$${tax.baseCop.toLocaleString('es-CO')}</strong>
+                </div>
+                <div class="px-3.5 py-1.5 flex items-center justify-between gap-2">
+                    <span class="text-[var(--accent-amber)] uppercase tracking-wider">TRANCÓN</span>
+                    <strong class="text-[var(--text-primary)] tabular-nums">$${tax.trafficCop.toLocaleString('es-CO')}</strong>
+                </div>
+                <div class="px-3.5 py-1.5 flex items-center justify-between gap-2">
+                    <span class="text-[var(--accent-cyan)] uppercase tracking-wider">RALENTÍ</span>
+                    <strong class="text-[var(--text-primary)] tabular-nums">$${tax.idleCop.toLocaleString('es-CO')}</strong>
+                </div>
+                <div class="px-3.5 py-1.5 flex items-center justify-between gap-2">
+                    <span class="text-[var(--accent-crimson)] uppercase tracking-wider">FRÍO/DIN</span>
+                    <strong class="text-[var(--text-primary)] tabular-nums">$${tax.dynamicsColdCop.toLocaleString('es-CO')}</strong>
+                </div>
+            </div>
+        </div>
+    ` : '';
+
+    const latestCycleIdx = cycles.length > 0 ? cycles[cycles.length - 1].cycleIndex : null;
+    const isActiveOrRecentCycle = cockpitState.selectedCycleIdx === 'active' ||
+        cockpitState.selectedCycleIdx === null ||
+        cockpitState.selectedCycleIdx === latestCycleIdx;
+    const anomaly = model?.fuelPhysicsModel?.anomalyAlert || null;
+    const anomalyStripHtml = (anomaly && isActiveOrRecentCycle) ? `
+        <div class="px-4 py-2 border-b border-[var(--line-hair)] bg-[var(--bg-void)] flex items-center justify-between gap-2 font-mono text-[10px] text-[var(--accent-amber)] uppercase tracking-wider">
+            <span class="font-semibold">CONSUMO +${anomaly.avgExcessPct}% SOBRE LO ESPERADO</span>
+            <span class="tabular-nums text-[var(--text-secondary)]">${anomaly.consecutiveCount} CICLOS</span>
+        </div>
+    ` : '';
+
     container.innerHTML = `
         <div class="px-4 py-3 border-b border-[var(--line-hair)] flex flex-wrap items-center justify-between gap-2 font-mono text-xs">
             <div class="flex items-center gap-2">
@@ -1909,6 +1967,8 @@ function renderCycleDetail() {
             </div>
         </div>
         ${physStripHtml}
+        ${taxStripHtml}
+        ${anomalyStripHtml}
 
         <div class="divide-y divide-[var(--line-hair)] max-h-80 overflow-y-auto font-mono text-xs">
             ${displayRows.map(r => {

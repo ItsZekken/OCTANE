@@ -489,6 +489,7 @@ function renderLevelDay() {
 
     const bottomPane = modalRootEl.querySelector('#gps-day-bottom-pane');
     if (bottomPane) {
+        const hasCalibratedTrips = Array.isArray(activeDay.trips) && activeDay.trips.some(t => t?.isCalibrated);
         bottomPane.innerHTML = `
             <!-- Resumen Macro del Día: Solo 2 datos limpios (Kilómetros y Costo) -->
             <div class="px-5 py-3 border-b border-[var(--line-hair)] bg-[var(--bg-void)] flex items-center justify-between shrink-0">
@@ -498,7 +499,7 @@ function renderLevelDay() {
                 </div>
                 <div class="flex items-baseline gap-1.5 font-mono text-xs text-[var(--text-secondary)]">
                     <span class="tabular-nums font-semibold text-[var(--text-primary)]">$${activeDay.totalEstCostCop.toLocaleString('es-CO')}</span>
-                    <span class="text-[10px] text-[var(--text-muted)]">· ${activeDay.totalEstGallons} GAL</span>
+                    <span class="text-[10px] text-[var(--text-muted)]">· ${activeDay.totalEstGallons} GAL${hasCalibratedTrips ? ' · CALIBRADO' : ''}</span>
                 </div>
             </div>
 
@@ -569,6 +570,12 @@ function renderLevelTrip() {
 
     const bottomPane = modalRootEl.querySelector('#gps-day-bottom-pane');
     if (bottomPane) {
+        const tripCostCop = Number(activeTrip.reconciledCostCop ?? activeTrip.estCostCop) || 0;
+        const tripGallons = Number(activeTrip.reconciledGallons ?? activeTrip.estGallons) || 0;
+        const coldPct = Math.max(0, Math.round(Number(activeTrip.coldPenaltyPct) || 0));
+        const accelCount = Number(activeTrip.hardAccels ?? activeTrip.hardAccelCount) || 0;
+        const brakeCount = Number(activeTrip.hardBrakes) || 0;
+
         bottomPane.innerHTML = `
             <div class="flex-1 overflow-y-auto px-5 py-4 flex flex-col justify-between overscroll-contain bg-[var(--bg-void)]">
                 <div class="space-y-4">
@@ -597,14 +604,14 @@ function renderLevelTrip() {
                             <span class="font-mono text-[9px] uppercase text-[var(--text-secondary)] block">MIN</span>
                         </div>
                         <div>
-                            <span class="font-mono text-[10px] uppercase text-[var(--text-secondary)] tracking-wider block">GASOLINA</span>
-                            <span class="font-sans font-light text-2xl tracking-tight tabular-nums text-[var(--text-primary)] block mt-0.5">$${activeTrip.estCostCop.toLocaleString('es-CO')}</span>
-                            <span class="font-mono text-[9px] uppercase text-[var(--text-secondary)] block">${activeTrip.estGallons} GAL</span>
+                            <span class="font-mono text-[10px] uppercase text-[var(--text-secondary)] tracking-wider block">GASOLINA${activeTrip.isCalibrated ? ' · CALIBRADO' : ''}</span>
+                            <span class="font-sans font-light text-2xl tracking-tight tabular-nums text-[var(--text-primary)] block mt-0.5">$${tripCostCop.toLocaleString('es-CO')}</span>
+                            <span class="font-mono text-[9px] uppercase text-[var(--text-secondary)] block">${tripGallons} GAL</span>
                         </div>
                     </div>
 
-                    <!-- Métricas Secundarias Limpias: Velocidades y Tiempo en Movimiento -->
-                    <div class="flex items-center justify-between text-xs font-mono text-[var(--text-secondary)] pt-1">
+                    <!-- Métricas Secundarias Limpias: Velocidades, Movimiento y Carga Térmica/Dinámica -->
+                    <div class="grid grid-cols-3 gap-y-2.5 gap-x-2 text-xs font-mono text-[var(--text-secondary)] pt-1">
                         <div>
                             <span class="uppercase tracking-wider text-[10px]">MEDIA:</span>
                             <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${activeTrip.avgSpeedKmh} KM/H</span>
@@ -613,9 +620,21 @@ function renderLevelTrip() {
                             <span class="uppercase tracking-wider text-[10px]">MÁX:</span>
                             <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${activeTrip.speedMax} KM/H</span>
                         </div>
-                        <div>
+                        <div class="text-right">
                             <span class="uppercase tracking-wider text-[10px]">MOV:</span>
                             <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${activeTrip.movingTimeMin} MIN</span>
+                        </div>
+                        <div>
+                            <span class="uppercase tracking-wider text-[10px]">FRÍO:</span>
+                            <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${coldPct}%</span>
+                        </div>
+                        <div>
+                            <span class="uppercase tracking-wider text-[10px]">ACEL:</span>
+                            <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${accelCount}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="uppercase tracking-wider text-[10px]">FREN:</span>
+                            <span class="text-[var(--text-primary)] font-semibold tabular-nums ml-1">${brakeCount}</span>
                         </div>
                     </div>
                 </div>

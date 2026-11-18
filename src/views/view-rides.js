@@ -127,7 +127,7 @@ export async function renderRidesView(container) {
             Carreras
           </h1>
           <span class="text-[10px] text-[var(--text-secondary)] font-normal tracking-wider">
-            · $${costPerKm}/KM BASE
+            · $${costPerKm}/KM BASE${summary.netProfitPerHourCop !== null && summary.netProfitPerHourCop !== undefined ? ` · ${formatCop(summary.netProfitPerHourCop, false)}/H REAL` : ''}
           </span>
         </div>
 

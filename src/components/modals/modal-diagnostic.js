@@ -368,7 +368,7 @@ async function renderDiagnosticContent() {
             </span>
           </div>
           <span class="text-[11px] text-[var(--text-secondary)] tracking-wider font-mono">
-            ${cashFlow.activeDaysCount} ${cashFlow.activeDaysCount === 1 ? 'día activo' : 'días activos'}
+            ${cashFlow.activeDaysCount} ${cashFlow.activeDaysCount === 1 ? 'día activo' : 'días activos'}${cashFlow.hourlyProfitCop !== null && cashFlow.hourlyProfitCop !== undefined ? ` · ${fmtCop(cashFlow.hourlyProfitCop)}/H REAL` : ''}
           </span>
         </div>
 
@@ -414,7 +414,7 @@ async function renderDiagnosticContent() {
             DISTRIBUCIÓN DE COMBUSTIBLE
           </span>
           <span class="text-sm sm:text-base font-light tabular-nums text-[var(--text-primary)] font-mono">
-            ${fmtCop(fuelBreakdown.totalCarFuelCop)}
+            ${fmtCop(fuelBreakdown.totalCarFuelCop)}${fuelBreakdown.gpsIdleFuelCop > 0 ? ` <span class="text-[10px] text-[var(--text-secondary)]">· RALENTÍ GPS ${fmtCop(fuelBreakdown.gpsIdleFuelCop)}</span>` : ''}
           </span>
         </div>
 
@@ -515,6 +515,44 @@ async function renderDiagnosticContent() {
         </div>
 
       </section>
+
+      ${diag.timeSlotMatrix?.hasTimestampedData ? `
+      <!-- =====================================================================
+           ZONA 5: FRANJAS HORARIAS (Matriz plana divide-y sin cajas anidadas)
+           ===================================================================== -->
+      <section class="bg-[var(--bg-void)] border-t border-[var(--line-hair)]">
+        <div class="px-6 py-3 border-b border-[var(--line-hair)] flex items-center justify-between bg-[var(--bg-surface)]">
+          <span class="text-[10px] uppercase tracking-[0.18em] text-[var(--text-secondary)] font-semibold">
+            FRANJAS HORARIAS
+          </span>
+          <span class="text-[10px] text-[var(--text-secondary)] tracking-wider font-mono">
+            POR BLOQUE DE HORA
+          </span>
+        </div>
+        <div class="divide-y divide-[var(--line-hair)]">
+          ${diag.timeSlotMatrix.slots.map(slot => `
+            <div class="py-3.5 px-6 flex items-center justify-between gap-4">
+              <div class="min-w-0">
+                <span class="text-xs sm:text-sm font-medium text-[var(--text-primary)] block">
+                  ${slot.label} <span class="text-[10px] text-[var(--text-secondary)] font-normal ml-1">${slot.range}</span>
+                </span>
+                <span class="text-[10px] font-mono text-[var(--text-secondary)] block mt-0.5 tabular-nums">
+                  ${slot.tripsCount} ${slot.tripsCount === 1 ? 'viaje' : 'viajes'}${slot.km > 0 ? ` · ${slot.km} km` : ''}
+                </span>
+              </div>
+              <div class="text-right shrink-0">
+                <span class="text-base sm:text-lg font-light tabular-nums ${slot.grossCop > 0 ? 'text-[var(--accent-volt)]' : 'text-[var(--text-muted)]'} block font-mono">
+                  ${fmtCop(slot.grossCop)}
+                </span>
+                <span class="text-[10px] font-mono tabular-nums text-[var(--text-secondary)] block mt-0.5">
+                  ${slot.ratePerHourCop !== null ? `${fmtCop(slot.ratePerHourCop)}/H` : (slot.tripsCount > 0 ? `${fmtCop(slot.avgFareCop)} PROM` : 'SIN ACTIVIDAD')}
+                </span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+      ` : ''}
 
       <!-- =====================================================================
            AVISO DE INTEGRIDAD (Condicional: Duplicados)

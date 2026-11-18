@@ -18,6 +18,7 @@ import {
     computeCyclePhysicalTelemetry
 } from './telemetry-engine.js';
 import { buildRouteGlyph, getGpsConfig } from './iopgps-sync.js';
+import { decomposeFuelCost } from './fuel-physics-engine.js';
 
 const MONTHS_ES = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
 
@@ -343,16 +344,17 @@ export function computeCostPerKmTrend(logs = [], model = null, fallbackPriceCop 
 }
 
 /**
- * Computes Month-to-Date real fuel expenditure vs End-of-Month projection
+ * Computes Month-to-Date real fuel expenditure vs Calendar-Aware End-of-Month projection
  * and historical monthly expenditure timeline.
  *
  * @param {Array} logs
  * @param {Object} [model=null]
  * @param {number} [fallbackPriceCop=16000]
  * @param {Date} [now=new Date()]
+ * @param {Object|null} [vehicleProfile=null]
  * @returns {Object}
  */
-export function computeMonthlyFuelMetrics(logs = [], model = null, fallbackPriceCop = 16000, now = new Date()) {
+export function computeMonthlyFuelMetrics(logs = [], model = null, fallbackPriceCop = 16000, now = new Date(), vehicleProfile = null) {
     const curYear = now.getFullYear();
     const curMonthIdx = now.getMonth();
     const curMonth = String(curMonthIdx + 1).padStart(2, '0');
@@ -366,7 +368,7 @@ export function computeMonthlyFuelMetrics(logs = [], model = null, fallbackPrice
     const remainingDays = Math.max(0, daysInMonth - dayOfMonth);
 
     const safePrice = Number(fallbackPriceCop) || 16000;
-    const safeEff = Number(model?.fullEraAvgEff) || DEFAULT_BENCHMARK_EFF;
+    const safeEff = Number(model?.activeTankState?.adaptiveEff || model?.adaptiveEff || model?.fullEraAvgEff) || DEFAULT_BENCHMARK_EFF;
     const costPerKm = safeEff > 0 ? (safePrice / safeEff) : 475;
 
     // Aggregate refuel costs & gallons by calendar month (YYYY-MM)
@@ -419,7 +421,7 @@ export function computeMonthlyFuelMetrics(logs = [], model = null, fallbackPrice
     const currentMonthKm = Math.round(monthMap[curKey]?.km || 0);
     const prevMonthSpent = Math.round(monthMap[prevKey]?.spentCop || 0);
 
-    // Physical consumption projection for end of current month
+    // Physical & Calendar-Aware consumption projection for end of current month
     const overallAvgKmDay = Number(model?.stats?.avgKmPerDay) || 0;
     const kmPerDayThisMonth = (dayOfMonth >= 3 && currentMonthKm > 0) ? (currentMonthKm / dayOfMonth) : overallAvgKmDay;
     const weightMonth = Math.min(1, dayOfMonth / 10);
@@ -427,23 +429,89 @@ export function computeMonthlyFuelMetrics(logs = [], model = null, fallbackPrice
         ? (weightMonth * kmPerDayThisMonth + (1 - weightMonth) * overallAvgKmDay)
         : kmPerDayThisMonth;
 
+    const gpsDays = vehicleProfile?.gpsCache?.days || null;
+    const todayStr = localYmd(now);
+    const todayKm = Number(gpsDays?.[todayStr]?.km ?? gpsDays?.[todayStr]?.miles ?? vehicleProfile?.gpsCache?.live?.todayMile) || 0;
+    const weekdayDNA = Array.isArray(model?.weekdayDNA) ? model.weekdayDNA : null;
+    const weekdaySeverity = Array.isArray(model?.activeTankState?.weekdaySeverity)
+        ? model.activeTankState.weekdaySeverity
+        : [1, 1, 1, 1, 1, 1, 1];
+
+    let calendarRemainingGal = 0;
+    const hasDnaKm = Boolean(weekdayDNA && weekdayDNA.some(d => (Number(d?.avgKm) || 0) > 0));
+    if (hasDnaKm || effectiveDailyKm > 0) {
+        // Remainder of today if GPS shows partial day
+        if (gpsDays?.[todayStr] || todayKm > 0) {
+            const wToday = now.getDay();
+            const idxToday = wToday === 0 ? 6 : wToday - 1;
+            const todayPlanned = (weekdayDNA?.[idxToday]?.avgKm > 0) ? weekdayDNA[idxToday].avgKm : effectiveDailyKm;
+            const remTodayKm = Math.max(0, todayPlanned - todayKm);
+            const effToday = safeEff / (weekdaySeverity[idxToday] || 1.0);
+            if (effToday > 0 && remTodayKm > 0) {
+                calendarRemainingGal += remTodayKm / effToday;
+            }
+        }
+
+        for (let d = dayOfMonth + 1; d <= daysInMonth; d++) {
+            const simDate = new Date(curYear, curMonthIdx, d, 12, 0, 0);
+            const w = simDate.getDay();
+            const idx = w === 0 ? 6 : w - 1;
+            const plannedKm = (weekdayDNA?.[idx]?.avgKm > 0) ? weekdayDNA[idx].avgKm : effectiveDailyKm;
+            const effDay = safeEff / (weekdaySeverity[idx] || 1.0);
+            if (effDay > 0 && plannedKm > 0) {
+                calendarRemainingGal += plannedKm / effDay;
+            }
+        }
+    }
+    calendarRemainingGal = Number(calendarRemainingGal.toFixed(3));
+    const calendarRemainingCostCop = Math.round(calendarRemainingGal * safePrice);
+    const calendarFullProjected = currentMonthSpent + calendarRemainingCostCop;
+
     const physicalFullMonthCost = effectiveDailyKm > 0 ? Math.round(effectiveDailyKm * daysInMonth * costPerKm) : 0;
     const cashPaceFullMonthCost = (dayOfMonth >= 6 && currentMonthSpent > 0)
         ? Math.round((currentMonthSpent / dayOfMonth) * daysInMonth)
         : 0;
 
+    const dnaTotalCount = weekdayDNA ? weekdayDNA.reduce((acc, d) => acc + (Number(d?.count) || 0), 0) : 0;
+    const gpsDaysCount = gpsDays && typeof gpsDays === 'object' ? Object.keys(gpsDays).length : 0;
+    const hasRichCalendarHistory = hasDnaKm && (dailySeries.length >= 14 || dnaTotalCount >= 14 || gpsDaysCount >= 14);
+
     let rawProjected = 0;
-    if (cashPaceFullMonthCost > 0 && physicalFullMonthCost > 0) {
+    if (hasRichCalendarHistory && calendarFullProjected > 0) {
+        rawProjected = calendarFullProjected;
+    } else if (hasDnaKm && calendarRemainingCostCop > 0 && cashPaceFullMonthCost > 0) {
+        rawProjected = Math.round(0.65 * calendarFullProjected + 0.35 * cashPaceFullMonthCost);
+    } else if (cashPaceFullMonthCost > 0 && physicalFullMonthCost > 0) {
         rawProjected = Math.round(0.5 * cashPaceFullMonthCost + 0.5 * physicalFullMonthCost);
     } else if (cashPaceFullMonthCost > 0) {
         rawProjected = cashPaceFullMonthCost;
     } else {
-        rawProjected = physicalFullMonthCost;
+        rawProjected = physicalFullMonthCost || calendarFullProjected;
     }
 
-    const hasAnyBasis = currentMonthSpent > 0 || currentMonthKm > 0 || overallAvgKmDay > 0;
+    const hasAnyBasis = currentMonthSpent > 0 || currentMonthKm > 0 || overallAvgKmDay > 0 || hasDnaKm;
     const projectedMonthSpent = hasAnyBasis ? Math.max(currentMonthSpent, rawProjected) : 0;
     const dailySpendPace = dayOfMonth > 0 ? Math.round((projectedMonthSpent || currentMonthSpent) / daysInMonth) : 0;
+
+    // Monthly "Impuesto Invisible" fuel decomposition when GPS data covers current month
+    let invisibleTax = null;
+    if (gpsDays && typeof gpsDays === 'object') {
+        const monthPhys = computeCyclePhysicalTelemetry(
+            `${curKey}-01`,
+            todayStr,
+            gpsDays,
+            Number(model?.learnedSensitivity || vehicleProfile?.gpsCache?.physicalSensitivity) || 1.0
+        );
+        if (monthPhys) {
+            invisibleTax = decomposeFuelCost(monthPhys, {
+                totalCostCop: currentMonthSpent > 0 ? currentMonthSpent : undefined,
+                totalGallons: currentMonthGallons > 0 ? currentMonthGallons : undefined,
+                fuelPriceCop: safePrice,
+                priors: model?.fuelPhysicsModel?.coeffs
+            });
+            if (!invisibleTax.hasData) invisibleTax = null;
+        }
+    }
 
     // Apples-to-apples comparison: Projected current month end vs Full previous month
     let diffPct = null;
@@ -497,6 +565,10 @@ export function computeMonthlyFuelMetrics(logs = [], model = null, fallbackPrice
         currentMonthKm,
         prevMonthSpent,
         projectedMonthSpent,
+        calendarRemainingGal,
+        calendarRemainingCostCop,
+        invisibleTax,
+        anomalyAlert: model?.fuelPhysicsModel?.anomalyAlert || null,
         avgMonthlySpent,
         dailySpendPace,
         diffPct,
@@ -653,14 +725,15 @@ export function computeCockpitGpsSummary(vehicleProfile = {}, model = null, now 
     const todayRunMin = Math.round((Number(todayDayRec?.runTimeSec) || 0) / 60);
 
     // Physical telemetry window: prefer active tank cycle; if empty, compute last 7 days
+    const sensitivity = Number(model?.learnedSensitivity || gpsCache.physicalSensitivity) || 1.0;
     const activeStart = model?.activeTankState?.startDate || '';
     const cyclePhys = activeStart
-        ? computeCyclePhysicalTelemetry(activeStart, todayStr, gpsDays)
+        ? computeCyclePhysicalTelemetry(activeStart, todayStr, gpsDays, sensitivity)
         : null;
 
     const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
     const sevenDaysStart = localYmd(sevenDaysAgo);
-    const phys7d = computeCyclePhysicalTelemetry(sevenDaysStart, todayStr, gpsDays);
+    const phys7d = computeCyclePhysicalTelemetry(sevenDaysStart, todayStr, gpsDays, sensitivity);
 
     const activePhys = cyclePhys || phys7d || null;
     const physScopeLabel = cyclePhys ? 'CICLO ACTIVO' : (phys7d ? 'ÚLT. 7 DÍAS' : 'GPS');

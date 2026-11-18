@@ -372,7 +372,8 @@ export async function refreshAlerts() {
             ? Math.max(...logs.map(l => Number(l.odometer_reading) || 0))
             : 0;
         const profileOdo = Number(profile?.currentOdometer) || 0;
-        const currentOdo = Math.max(logMaxOdo, profileOdo, 0);
+        const gpsOdo = Number(profile?.gpsCache?.live?.totalMile) || 0;
+        const currentOdo = Math.max(logMaxOdo, profileOdo, gpsOdo, 0);
 
         cachedAlerts = processAlertsData({
             legalDocs,

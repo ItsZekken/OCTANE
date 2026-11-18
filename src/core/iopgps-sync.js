@@ -14,6 +14,9 @@ import { store, showToast } from './state.js';
 import { getVehicleProfile, saveVehicleProfile, getTelemetryLogs } from './db-local.js';
 import { calculateTelemetryModel } from './telemetry-engine.js';
 import { triggerCloudSync } from './firebase-sync.js';
+import { calculateDistanceMeters, checkStopNearStation, notifyGasStationStop } from './gas-station-matcher.js';
+import { refreshAlerts } from './alerts-engine.js';
+import { reconcileClosedCycleTrips } from './fuel-physics-engine.js';
 
 export const IOPGPS_INSTALL_DATE = '2026-02-01';
 export const GPS_LOCAL_CREDS_KEY = 'octane_iopgps_creds_v1';
@@ -26,7 +29,9 @@ export const DEFAULT_IOPGPS_CONFIG = Object.freeze({
     accountId: null,
     zoneId: 'America/Bogota',
     installDate: IOPGPS_INSTALL_DATE,
-    installStartDate: IOPGPS_INSTALL_DATE
+    installStartDate: IOPGPS_INSTALL_DATE,
+    proxyUrl: '',
+    stationAlertsEnabled: false
 });
 export const DEFAULT_GPS_CONFIG = DEFAULT_IOPGPS_CONFIG;
 
@@ -187,6 +192,12 @@ export function getGpsConfig(profile = null) {
     const imei = String(custom.imei || remembered.imei || '').trim();
     const accountId = Number(custom.accountId || remembered.accountId) || null;
     const installDate = custom.installStartDate || custom.installDate || remembered.installStartDate || DEFAULT_IOPGPS_CONFIG.installDate;
+    const proxyUrl = String(custom.proxyUrl ?? remembered.proxyUrl ?? '').trim();
+    const stationAlertsEnabled = Boolean(
+        custom.stationAlertsEnabled !== undefined
+            ? custom.stationAlertsEnabled
+            : remembered.stationAlertsEnabled
+    );
     const hasCredentials = Boolean(username && password);
 
     return {
@@ -198,7 +209,9 @@ export function getGpsConfig(profile = null) {
         imei,
         accountId,
         installDate,
-        installStartDate: installDate
+        installStartDate: installDate,
+        proxyUrl,
+        stationAlertsEnabled
     };
 }
 
@@ -233,6 +246,71 @@ export async function discoverAccountImei(accountId, token = '') {
 
 const SCALAR_CORS_BRIDGE = 'https://proxy.scalar.com/?scalar_url=';
 
+/**
+ * Normalizes a custom private proxy URL to a base prefix ending with `/iopgps-api`.
+ * Accepts base origin ("https://my-worker.workers.dev") or full suffix (".../iopgps-api").
+ * @param {string} rawUrl
+ * @returns {string}
+ */
+export function normalizeProxyBaseUrl(rawUrl) {
+    let clean = String(rawUrl || '').trim();
+    if (!clean) return '';
+    clean = clean.replace(/\/+$/, '');
+    if (clean.endsWith('/iopgps-api')) {
+        return clean;
+    }
+    return `${clean}/iopgps-api`;
+}
+
+/**
+ * Resolves the active IOPGPS transport mode for the current runtime and GPS config.
+ * Pure & deterministic when `runtimeInfo` is provided.
+ *
+ * @param {Object} [cfg={}]
+ * @param {Object|null} [runtimeInfo=null] - { isBrowser?: boolean, hostname?: string }
+ * @returns {{ mode: 'private-proxy'|'vite-proxy'|'public-bridge'|'direct', apiBase: string, isLocalhost: boolean }}
+ */
+export function resolveProxyMode(cfg = {}, runtimeInfo = null) {
+    const isBrowser = runtimeInfo && typeof runtimeInfo.isBrowser === 'boolean'
+        ? runtimeInfo.isBrowser
+        : isBrowserRuntime();
+
+    const hostname = String(
+        runtimeInfo && runtimeInfo.hostname !== undefined
+            ? runtimeInfo.hostname
+            : (typeof window !== 'undefined' && window.location ? window.location.hostname : '')
+    ).toLowerCase();
+
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+
+    if (!isBrowser) {
+        return { mode: 'direct', apiBase: '', isLocalhost: false };
+    }
+
+    const rawProxyUrl = String(cfg?.proxyUrl || '').trim();
+    if (rawProxyUrl) {
+        return {
+            mode: 'private-proxy',
+            apiBase: normalizeProxyBaseUrl(rawProxyUrl),
+            isLocalhost
+        };
+    }
+
+    if (isLocalhost) {
+        return {
+            mode: 'vite-proxy',
+            apiBase: '/iopgps-api',
+            isLocalhost: true
+        };
+    }
+
+    return {
+        mode: 'public-bridge',
+        apiBase: SCALAR_CORS_BRIDGE,
+        isLocalhost: false
+    };
+}
+
 function buildUpstreamUrl(pathWithQuery, token = '', zoneId = 'America/Bogota') {
     const baseUrl = pathWithQuery.startsWith('/open/')
         ? `https://open.iopgps.com${pathWithQuery.replace(/^\/open/, '')}`
@@ -249,13 +327,49 @@ function buildUpstreamUrl(pathWithQuery, token = '', zoneId = 'America/Bogota') 
 
 /**
  * Authenticates against IOPGPS and returns { accessToken, accountId, accountName }.
- * Works seamlessly on Firebase Spark Hosting (via Scalar CORS Bridge), Vite dev proxy, and Node.js.
+ * Supports private Cloudflare Worker proxy, Vite local dev proxy, Scalar CORS bridge fallback, and Node.js direct mode.
+ * Always hashes the password client-side with buildIopgpsPasswordHash before transport.
  * @param {Object} [customCreds]
  * @returns {Promise<{ accessToken: string, accountId: number, accountName: string }>}
  */
 export async function loginIopgps(customCreds = null) {
     const cfg = customCreds ? { ...getGpsConfig(), ...customCreds } : getGpsConfig();
     const hashedPassword = buildIopgpsPasswordHash(cfg.password);
+    const proxy = resolveProxyMode(cfg);
+
+    if (proxy.mode === 'private-proxy' || proxy.mode === 'vite-proxy') {
+        const res = await fetch(`${proxy.apiBase}/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                'x-iopgps-zone': cfg.zoneId || 'America/Bogota'
+            },
+            body: JSON.stringify({
+                username: cfg.username,
+                password: hashedPassword,
+                isPreHashed: true
+            })
+        });
+
+        if (!res.ok) {
+            throw new Error(`Error HTTP ${res.status} al autenticar GPS`);
+        }
+
+        const data = await res.json();
+        const code = data?.code ?? data?.raw?.resultBean?.code ?? data?.raw?.code ?? -1;
+        if (code !== 0 && code !== 1) {
+            throw new Error(data?.raw?.resultBean?.result || data?.message || 'Credenciales GPS inválidas');
+        }
+        const finalToken = data?.accessToken || data?.raw?.accessToken || '';
+        if (!finalToken) {
+            throw new Error('No se recibió token de sesión GPS');
+        }
+        return {
+            accessToken: finalToken,
+            accountId: data.accountId || cfg.accountId,
+            accountName: data.accountName || cfg.username
+        };
+    }
 
     const formBody = new URLSearchParams({
         username: cfg.username,
@@ -265,8 +379,8 @@ export async function loginIopgps(customCreds = null) {
         domain: 'iopgps.com'
     });
 
-    if (isBrowserRuntime()) {
-        // Primary: Direct HTTPS CORS bridge compatible with Firebase Spark Hosting (octane-86001.web.app)
+    if (proxy.mode === 'public-bridge') {
+        // Fallback: Direct HTTPS CORS bridge for hosted environments without private proxy
         const targetLoginUrl = `https://iopgps.com/login?v=${Date.now()}`;
         const res = await fetch(`${SCALAR_CORS_BRIDGE}${encodeURIComponent(targetLoginUrl)}`, {
             method: 'POST',
@@ -363,21 +477,27 @@ export async function fetchIopgps(pathWithQuery, options = {}) {
     }
 
     const method = options.method || 'GET';
-    const isBrowser = isBrowserRuntime();
-    const upstreamUrl = buildUpstreamUrl(pathWithQuery, token, cfg.zoneId);
-    const url = isBrowser
-        ? `${SCALAR_CORS_BRIDGE}${encodeURIComponent(upstreamUrl)}`
-        : upstreamUrl;
+    const proxy = resolveProxyMode(cfg);
+    const normalizedPath = pathWithQuery.startsWith('/') ? pathWithQuery : `/${pathWithQuery}`;
 
+    let url = '';
     const headers = {
         'Accept': 'application/json',
-        'Content-Type': 'application/json; charset=utf-8',
-        'accessToken': token
+        'Content-Type': 'application/json; charset=utf-8'
     };
 
-    if (isBrowser) {
+    if (proxy.mode === 'private-proxy' || proxy.mode === 'vite-proxy') {
+        url = `${proxy.apiBase}${normalizedPath}`;
+        headers['x-iopgps-token'] = token;
+        headers['x-iopgps-zone'] = cfg.zoneId || 'America/Bogota';
+    } else if (proxy.mode === 'public-bridge') {
+        const upstreamUrl = buildUpstreamUrl(normalizedPath, token, cfg.zoneId);
+        url = `${SCALAR_CORS_BRIDGE}${encodeURIComponent(upstreamUrl)}`;
+        headers['accessToken'] = token;
         headers['X-Scalar-Cookie'] = `USER_TOKEN=${token}; accessToken=${token}; zoneId=${cfg.zoneId}`;
     } else {
+        url = buildUpstreamUrl(normalizedPath, token, cfg.zoneId);
+        headers['accessToken'] = token;
         headers['Cookie'] = `USER_TOKEN=${token}; accessToken=${token}; zoneId=${cfg.zoneId}`;
     }
 
@@ -921,14 +1041,16 @@ export function groupTripsByDay(trips = [], options = {}) {
         const sec = Number(t.durationSec ?? t.tripTimeSec) || 0;
 
         // Ensure fuel estimates exist (rehydrate if loaded from older cache)
-        let gallons = Number(t.estGallons) || 0;
-        let costCop = Number(t.estCostCop) || 0;
-        if ((!gallons || !costCop) && km > 0) {
-            gallons = Number((km / baseEff).toFixed(3));
-            costCop = Math.round(gallons * fuelPriceCop);
-            t.estGallons = gallons;
-            t.estCostCop = costCop;
+        let rawGallons = Number(t.estGallons) || 0;
+        let rawCostCop = Number(t.estCostCop) || 0;
+        if ((!rawGallons || !rawCostCop) && km > 0) {
+            rawGallons = Number((km / baseEff).toFixed(3));
+            rawCostCop = Math.round(rawGallons * fuelPriceCop);
+            t.estGallons = rawGallons;
+            t.estCostCop = rawCostCop;
         }
+        const gallons = Number(t.reconciledGallons ?? rawGallons) || 0;
+        const costCop = Number(t.reconciledCostCop ?? rawCostCop) || 0;
 
         dEntry.trips.push(t);
         dEntry.totalKm += km;
@@ -998,8 +1120,8 @@ export function computeTripsSummary(trips = [], rawIdles = [], options = {}) {
             t.estCostCop = c;
         }
 
-        totalEstGallons += g;
-        totalEstCostCop += c;
+        totalEstGallons += Number(t.reconciledGallons ?? g) || 0;
+        totalEstCostCop += Number(t.reconciledCostCop ?? c) || 0;
 
         if (Array.isArray(t.trackPoints) && t.trackPoints.length > 0) {
             for (const pt of t.trackPoints) {
@@ -1068,6 +1190,346 @@ export function getCachedGpsTrips(startDateStr, endDateStr, profile = null) {
     return trips.sort((a, b) => (Number(b.startTimeMs) || 0) - (Number(a.startTimeMs) || 0));
 }
 
+function resolveStopCoords(trip, which = 'end') {
+    if (!trip || typeof trip !== 'object') return null;
+    if (which === 'start') {
+        const lat = Number(trip.startLat ?? trip.trackPoints?.[0]?.lat);
+        const lng = Number(trip.startLng ?? trip.trackPoints?.[0]?.lng);
+        if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+            return { lat, lng };
+        }
+        return null;
+    }
+    const lastPt = Array.isArray(trip.trackPoints) && trip.trackPoints.length > 0
+        ? trip.trackPoints[trip.trackPoints.length - 1]
+        : null;
+    const lat = Number(trip.endLat ?? lastPt?.lat);
+    const lng = Number(trip.endLng ?? lastPt?.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+        return { lat, lng };
+    }
+    return null;
+}
+
+function resolveLogTimestampMs(log) {
+    if (!log) return NaN;
+    if (Number.isFinite(Number(log.timestampMs))) return Number(log.timestampMs);
+    if (log.date && log.time && /^\d{4}-\d{2}-\d{2}$/.test(String(log.date).slice(0, 10)) && /^\d{1,2}:\d{2}/.test(String(log.time))) {
+        const ms = Date.parse(`${String(log.date).slice(0, 10)}T${String(log.time).slice(0, 5)}:00`);
+        if (Number.isFinite(ms)) return ms;
+    }
+    if (log.createdAt) {
+        const ms = Date.parse(log.createdAt);
+        if (Number.isFinite(ms)) return ms;
+    }
+    return NaN;
+}
+
+/**
+ * Pure geofence stop detector and deduplicator.
+ * Inspects idle reports, stationary gaps between consecutive trips, and live parked state
+ * against `profile.learnedGasStations`, deduplicating via `gpsCache.notifiedStopIds`
+ * (ring-buffered to latest 60) and suppressing stops within 2 hours of an existing refuel log.
+ *
+ * @param {Object} params
+ * @returns {{ matchedStop: Object|null, station: Object|null, updatedNotifiedStopIds: Array<string>, pendingStationMatch: Object|null }}
+ */
+export function detectAndProcessStationStops({
+    trips = [],
+    idles = [],
+    live = null,
+    profile = {},
+    telemetryLogs = [],
+    nowMs = Date.now()
+} = {}) {
+    const stations = Array.isArray(profile?.learnedGasStations) ? profile.learnedGasStations : [];
+    const existingNotified = Array.isArray(profile?.gpsCache?.notifiedStopIds)
+        ? profile.gpsCache.notifiedStopIds.map(String)
+        : [];
+
+    if (stations.length === 0) {
+        return {
+            matchedStop: null,
+            station: null,
+            updatedNotifiedStopIds: existingNotified.slice(-60),
+            pendingStationMatch: null
+        };
+    }
+
+    const candidates = [];
+
+    // 1. Candidate stops from stayAccOn / idle reports
+    if (Array.isArray(idles)) {
+        for (const idle of idles) {
+            if (!idle || typeof idle !== 'object') continue;
+            const lat = Number(idle.lat ?? idle.latitude);
+            const lng = Number(idle.lng ?? idle.longitude ?? idle.lon);
+            const duration = Number(idle.durationSeconds ?? idle.duration ?? idle.durationSec ?? 0);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0) || duration < 120) continue;
+            const startMs = Number(idle.startTimeMs ?? idle.startTime ?? nowMs);
+            candidates.push({
+                id: String(idle.id || `idle_${startMs}_${Math.round(lat * 10000)}_${Math.round(lng * 10000)}`),
+                lat,
+                lng,
+                durationSeconds: duration,
+                startTimeMs: startMs,
+                odometer: idle.odometer ?? live?.totalMile
+            });
+        }
+    }
+
+    // 2. Candidate stops from gaps between consecutive trips (<= 4h and < 120m drift)
+    if (Array.isArray(trips) && trips.length >= 2) {
+        const sortedTrips = [...trips]
+            .filter(t => t && Number(t.startTimeMs) > 0 && Number(t.endTimeMs) > 0)
+            .sort((a, b) => Number(a.startTimeMs) - Number(b.startTimeMs));
+
+        for (let i = 0; i < sortedTrips.length - 1; i++) {
+            const t1 = sortedTrips[i];
+            const t2 = sortedTrips[i + 1];
+            const gapMs = Number(t2.startTimeMs) - Number(t1.endTimeMs);
+            const gapSec = Math.round(gapMs / 1000);
+            if (gapSec < 120 || gapMs > 4 * 3600 * 1000) continue;
+
+            const endCoords = resolveStopCoords(t1, 'end');
+            if (!endCoords) continue;
+            const startCoords = resolveStopCoords(t2, 'start');
+            if (startCoords) {
+                const driftM = calculateDistanceMeters(endCoords.lat, endCoords.lng, startCoords.lat, startCoords.lng);
+                if (driftM >= 120) continue;
+            }
+
+            candidates.push({
+                id: `gap_${t1.endTimeMs}_${t2.startTimeMs}`,
+                lat: endCoords.lat,
+                lng: endCoords.lng,
+                durationSeconds: gapSec,
+                startTimeMs: Number(t1.endTimeMs),
+                odometer: live?.totalMile
+            });
+        }
+    }
+
+    // 3. Candidate stop from live stationary vehicle snapshot
+    if (live && (!live.accStatus || Number(live.speed) === 0)) {
+        const lat = Number(live.lat ?? live.latitude);
+        const lng = Number(live.lng ?? live.longitude ?? live.lon);
+        const liveDuration = Number(live.idleDurationSec ?? live.stayTimeSec ?? live.stopDurationSec ?? 0);
+        if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0) && liveDuration >= 120) {
+            const stopTs = Number(live.gpsTimeMs) || nowMs;
+            candidates.push({
+                id: String(live.stopId || `live_${live.date || 'today'}_${Math.round(lat * 10000)}_${Math.round(lng * 10000)}`),
+                lat,
+                lng,
+                durationSeconds: liveDuration,
+                startTimeMs: stopTs,
+                odometer: live.totalMile
+            });
+        }
+    }
+
+    if (candidates.length === 0) {
+        return {
+            matchedStop: null,
+            station: null,
+            updatedNotifiedStopIds: existingNotified.slice(-60),
+            pendingStationMatch: null
+        };
+    }
+
+    // Check most recent candidate stops first
+    candidates.sort((a, b) => (Number(b.startTimeMs) || 0) - (Number(a.startTimeMs) || 0));
+
+    const refuelTimestamps = (Array.isArray(telemetryLogs) ? telemetryLogs : [])
+        .filter(l => l && (Number(l.gallons_added) > 0 || l.is_full_tank || l.isFullTank))
+        .map(resolveLogTimestampMs)
+        .filter(ms => Number.isFinite(ms));
+
+    const TWO_HOURS_MS = 2 * 3600 * 1000;
+
+    for (const stop of candidates) {
+        const station = checkStopNearStation(stop, stations);
+        if (!station) continue;
+
+        const stopId = String(stop.id);
+        if (existingNotified.includes(stopId)) continue;
+
+        const stopMs = Number(stop.startTimeMs) || nowMs;
+        const alreadyRefueledNearby = refuelTimestamps.some(rMs => Math.abs(stopMs - rMs) <= TWO_HOURS_MS);
+        if (alreadyRefueledNearby) continue;
+
+        const updatedNotifiedStopIds = [...existingNotified, stopId].slice(-60);
+        const pendingStationMatch = {
+            stationId: station.id,
+            stationName: station.name || 'Estación de Servicio',
+            stopId,
+            detectedAt: new Date(stopMs).toISOString(),
+            odo: stop.odometer !== undefined && stop.odometer !== null ? Number(stop.odometer) : undefined
+        };
+
+        return {
+            matchedStop: stop,
+            station,
+            updatedNotifiedStopIds,
+            pendingStationMatch
+        };
+    }
+
+    return {
+        matchedStop: null,
+        station: null,
+        updatedNotifiedStopIds: existingNotified.slice(-60),
+        pendingStationMatch: null
+    };
+}
+
+/**
+ * Pure 10-second trackpoint kinematic extractor.
+ * Computes hard accelerations/brakes, kinetic acceleration/brake energy (MJ),
+ * lateral cornering stress events, acceleration variance, and moving/stopped times.
+ *
+ * @param {Array} [rawPts=[]]
+ * @param {number} [massKg=1045]
+ * @returns {Object}
+ */
+export function extractTripKinematics(rawPts = [], massKg = 1045) {
+    const pts = Array.isArray(rawPts) ? rawPts : [];
+    const safeMass = Number(massKg) > 0 ? Number(massKg) : 1045;
+
+    let hardAccels = 0;
+    let hardBrakes = 0;
+    let tripSlowPts = 0;
+    let tripMovePts = 0;
+    let movingTimeSec = 0;
+    let stoppedTimeSec = 0;
+    let accelEnergyJ = 0;
+    let brakeEnergyJ = 0;
+    let lateralStressEvents = 0;
+    const accelSamples = [];
+
+    for (let i = 0; i < pts.length; i++) {
+        const vKmh = Number(pts[i]['12']) || 0;
+        const isMoving = Number(pts[i]['13']) === 1 || vKmh > 0;
+        const dt = i > 0
+            ? Math.min(30, Math.max(1, (Number(pts[i]['7']) || 0) - (Number(pts[i - 1]['7']) || 0)))
+            : 10;
+
+        if (isMoving) {
+            tripMovePts++;
+            movingTimeSec += dt;
+            if (vKmh < 18) tripSlowPts++;
+        } else {
+            stoppedTimeSec += dt;
+        }
+
+        if (i > 0) {
+            const prevV = Number(pts[i - 1]['12']) || 0;
+            const pointDt = (Number(pts[i]['7']) || 0) - (Number(pts[i - 1]['7']) || 0);
+            if (pointDt > 0 && pointDt <= 30) {
+                const v1 = prevV / 3.6;
+                const v2 = vKmh / 3.6;
+                const dvMs = v2 - v1;
+                const accelMs2 = dvMs / pointDt;
+                accelSamples.push(accelMs2);
+                if (accelMs2 >= 2.1) hardAccels++;
+                if (accelMs2 <= -2.3) hardBrakes++;
+
+                if (v2 > v1) {
+                    accelEnergyJ += 0.5 * safeMass * (v2 * v2 - v1 * v1);
+                } else if (v2 < v1) {
+                    brakeEnergyJ += 0.5 * safeMass * (v1 * v1 - v2 * v2);
+                }
+
+                const h1 = Number(pts[i - 1]['4']) || 0;
+                const h2 = Number(pts[i]['4']) || 0;
+                const dDeg = Math.abs(((h2 - h1 + 540) % 360) - 180);
+                const latAccel = v2 * ((dDeg * Math.PI / 180) / pointDt);
+                if (latAccel >= 2.5 && vKmh >= 15) {
+                    lateralStressEvents++;
+                }
+            }
+        }
+    }
+
+    let accelVariance = 0;
+    if (accelSamples.length >= 2) {
+        const mean = accelSamples.reduce((a, b) => a + b, 0) / accelSamples.length;
+        const sqSum = accelSamples.reduce((acc, x) => acc + (x - mean) * (x - mean), 0);
+        accelVariance = Number((sqSum / (accelSamples.length - 1)).toFixed(4));
+    }
+
+    return {
+        hardAccels,
+        hardBrakes,
+        tripSlowPts,
+        tripMovePts,
+        movingTimeSec,
+        stoppedTimeSec,
+        accelEnergyMj: Number((accelEnergyJ / 1e6).toFixed(3)),
+        brakeEnergyMj: Number((brakeEnergyJ / 1e6).toFixed(3)),
+        lateralStressEvents,
+        accelVariance
+    };
+}
+
+/**
+ * Reconciles cached trips grouped by date against closed full-tank cycles.
+ * For each closed full cycle (`startDate` -> `endDate`, `gals > 0`), collects trips in
+ * `(startDate, endDate]`, applies `reconcileClosedCycleTrips`, and returns a cloned map
+ * with `isCalibrated: true`, `reconciledGallons`, and `reconciledCostCop`.
+ *
+ * @param {Object} [tripsByDate={}]
+ * @param {Array<Object>} [closedCycles=[]]
+ * @param {number} [fuelPriceCop=16000]
+ * @returns {Object}
+ */
+export function reconcileTripsAgainstClosedCycles(tripsByDate = {}, closedCycles = [], fuelPriceCop = 16000) {
+    if (!tripsByDate || typeof tripsByDate !== 'object') return {};
+    const cloned = {};
+    for (const dateKey of Object.keys(tripsByDate)) {
+        const list = tripsByDate[dateKey];
+        cloned[dateKey] = Array.isArray(list) ? list.map(t => (t && typeof t === 'object' ? { ...t } : t)) : list;
+    }
+
+    if (!Array.isArray(closedCycles) || closedCycles.length === 0) {
+        return cloned;
+    }
+
+    for (const cycle of closedCycles) {
+        if (!cycle || cycle.isFull === false) continue;
+        const pumpGals = Number(cycle.gals ?? cycle.gallons) || 0;
+        const startDate = cycle.startDate ? String(cycle.startDate).slice(0, 10) : '';
+        const endDate = cycle.endDate ? String(cycle.endDate).slice(0, 10) : '';
+        if (pumpGals <= 0 || !startDate || !endDate) continue;
+
+        const refs = [];
+        for (const dateKey of Object.keys(cloned).sort()) {
+            const inWindow = startDate === endDate
+                ? dateKey === endDate
+                : (dateKey > startDate && dateKey <= endDate);
+            if (!inWindow) continue;
+
+            const dayList = cloned[dateKey];
+            if (!Array.isArray(dayList)) continue;
+            dayList.forEach((t, idx) => {
+                if (t && typeof t === 'object') {
+                    refs.push({ dateKey, idx, trip: t });
+                }
+            });
+        }
+
+        if (refs.length === 0) continue;
+        const reconciled = reconcileClosedCycleTrips(refs.map(r => r.trip), pumpGals, fuelPriceCop);
+        refs.forEach((r, i) => {
+            if (reconciled[i]) {
+                cloned[r.dateKey][r.idx] = reconciled[i];
+            }
+        });
+    }
+
+    return cloned;
+}
+
 /**
  * Fetches point-to-point trips (/rest/device/track/{imei}/travel) and computes physical
  * kinematics (accelerations, braking, traffic congestion, and solar A/C load) for a date range.
@@ -1122,9 +1584,22 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
     });
 
     if (!forceRefresh && allDaysCached) {
-        const cachedTrips = getCachedGpsTrips(startDateStr, endDateStr, profile);
+        const engineSnap = store.getState()?.telemetryEngineResults;
+        const closedCycles = engineSnap?.closedCycles || engineSnap?.allClosedCycles || engineSnap?.fullEraCycles || [];
         const fuelPriceCop = Number(profile?.fuelPriceCop) || 16000;
-        const baseEff = Number(profile?.benchmarkEff) || Number(profile?.defaultEfficiencyKmGal) || 33.71;
+        const baseEff = Number(engineSnap?.adaptiveEff) ||
+            Number(profile?.benchmarkEff) ||
+            Number(profile?.defaultEfficiencyKmGal) ||
+            33.71;
+
+        const reconciledMap = closedCycles.length > 0
+            ? reconcileTripsAgainstClosedCycles(profile?.gpsCache?.tripsByDate || {}, closedCycles, fuelPriceCop)
+            : (profile?.gpsCache?.tripsByDate || {});
+        const cachedTrips = getCachedGpsTrips(startDateStr, endDateStr, {
+            ...profile,
+            gpsCache: { ...(profile?.gpsCache || {}), tripsByDate: reconciledMap }
+        });
+
         // Re-hydrate any missing cost/gallons in cached trips from earlier versions
         for (const t of cachedTrips) {
             const km = Number(t.distanceKm ?? t.mileageKm) || 0;
@@ -1152,8 +1627,12 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
     const rawTrips = Array.isArray(travelRes?.data) ? travelRes.data : [];
     const rawIdles = Array.isArray(idleRes?.data) ? idleRes.data : [];
 
-    const baseEff = Number(profile?.benchmarkEff) || Number(profile?.defaultEfficiencyKmGal) || 33.71;
+    const baseEff = Number(store.getState()?.telemetryEngineResults?.adaptiveEff) ||
+        Number(profile?.benchmarkEff) ||
+        Number(profile?.defaultEfficiencyKmGal) ||
+        33.71;
     const fuelPriceCop = Number(profile?.fuelPriceCop) || 16000;
+    const massKg = (Number(profile?.curbWeightKg) || 970) + 75;
 
     const trips = rawTrips.map((t, idx) => {
         const startMs = Number(t.startTime) || 0;
@@ -1171,39 +1650,17 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
 
         // Analyze 10-second kinematic breadcrumb points
         const rawPts = Array.isArray(t.deviceTrackPoints) ? t.deviceTrackPoints : [];
-        let hardAccels = 0;
-        let hardBrakes = 0;
-        let tripSlowPts = 0;
-        let tripMovePts = 0;
-        let movingTimeSec = 0;
-        let stoppedTimeSec = 0;
-
-        for (let i = 0; i < rawPts.length; i++) {
-            const vKmh = Number(rawPts[i]['12']) || 0;
-            const isMoving = Number(rawPts[i]['13']) === 1 || vKmh > 0;
-            const dt = i > 0
-                ? Math.min(30, Math.max(1, (Number(rawPts[i]['7']) || 0) - (Number(rawPts[i - 1]['7']) || 0)))
-                : 10;
-
-            if (isMoving) {
-                tripMovePts++;
-                movingTimeSec += dt;
-                if (vKmh < 18) tripSlowPts++;
-            } else {
-                stoppedTimeSec += dt;
-            }
-
-            if (i > 0) {
-                const prevV = Number(rawPts[i - 1]['12']) || 0;
-                const pointDt = (Number(rawPts[i]['7']) || 0) - (Number(rawPts[i - 1]['7']) || 0);
-                if (pointDt > 0 && pointDt <= 30) {
-                    const dvMs = (vKmh - prevV) / 3.6;
-                    const accelMs2 = dvMs / pointDt;
-                    if (accelMs2 >= 2.1) hardAccels++;
-                    if (accelMs2 <= -2.3) hardBrakes++;
-                }
-            }
-        }
+        const kin = extractTripKinematics(rawPts, massKg);
+        const hardAccels = kin.hardAccels;
+        const hardBrakes = kin.hardBrakes;
+        const tripSlowPts = kin.tripSlowPts;
+        const tripMovePts = kin.tripMovePts;
+        let movingTimeSec = kin.movingTimeSec;
+        const stoppedTimeSec = kin.stoppedTimeSec;
+        const accelEnergyMj = kin.accelEnergyMj;
+        const brakeEnergyMj = kin.brakeEnergyMj;
+        const lateralStressEvents = kin.lateralStressEvents;
+        const accelVariance = kin.accelVariance;
 
         if (stoppedTimeSec === 0 && movingTimeSec === 0) {
             movingTimeSec = tripSec;
@@ -1232,6 +1689,9 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
             heading: Number(pt['4']) || 0
         })).filter(p => p.lat !== 0 || p.lng !== 0);
 
+        const firstPt = trackPoints.length > 0 ? trackPoints[0] : null;
+        const lastPt = trackPoints.length > 0 ? trackPoints[trackPoints.length - 1] : null;
+
         return {
             id: `trip_${startMs}_${idx}`,
             date: dateYmd,
@@ -1245,6 +1705,10 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
             endAddress: formatCleanGpsAddress(t.endAddress),
             rawStartAddress: t.startAddress || '',
             rawEndAddress: t.endAddress || '',
+            startLat: firstPt ? firstPt.lat : null,
+            startLng: firstPt ? firstPt.lng : null,
+            endLat: lastPt ? lastPt.lat : null,
+            endLng: lastPt ? lastPt.lng : null,
             distanceKm: Number(distKm.toFixed(2)),
             mileageKm: Number(distKm.toFixed(2)),
             durationSec: tripSec,
@@ -1260,6 +1724,10 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
             hardAccels,
             hardAccelCount: hardAccels,
             hardBrakes,
+            brakeEnergyMj,
+            accelEnergyMj,
+            lateralStressEvents,
+            accelVariance,
             trafficPct,
             baseSeverity: Number(baseSeverity.toFixed(3)),
             tripSeverity: Number(baseSeverity.toFixed(3)),
@@ -1285,28 +1753,59 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
         }
     }
 
+    const engineSnap = store.getState()?.telemetryEngineResults;
+    const closedCycles = engineSnap?.closedCycles || engineSnap?.allClosedCycles || engineSnap?.fullEraCycles || [];
+    let finalTrips = trips;
+
     if (profile) {
-        const mergedTripsByDate = {
+        let mergedTripsByDate = {
             ...(profile.gpsCache?.tripsByDate || {}),
             ...newTripsByDate
         };
+        if (closedCycles.length > 0) {
+            mergedTripsByDate = reconcileTripsAgainstClosedCycles(mergedTripsByDate, closedCycles, fuelPriceCop);
+            finalTrips = getCachedGpsTrips(startDateStr, endDateStr, {
+                ...profile,
+                gpsCache: { ...(profile.gpsCache || {}), tripsByDate: mergedTripsByDate }
+            });
+        }
+        const logs = await getTelemetryLogs().catch(() => []);
+        const stationMatch = detectAndProcessStationStops({
+            trips: finalTrips,
+            idles: rawIdles,
+            live: profile?.gpsCache?.live || null,
+            profile,
+            telemetryLogs: logs
+        });
+
         const updatedGpsCache = {
             ...(profile.gpsCache || {}),
             tripsByDate: mergedTripsByDate,
             lastTripsSyncedAt: new Date().toISOString(),
-            lastTripsSyncedDate: todayStr
+            lastTripsSyncedDate: todayStr,
+            ...(stationMatch.matchedStop ? {
+                notifiedStopIds: stationMatch.updatedNotifiedStopIds,
+                pendingStationMatch: stationMatch.pendingStationMatch
+            } : {})
         };
         const updatedProfile = await saveVehicleProfile({
             ...profile,
             gpsCache: updatedGpsCache
         }).catch(() => profile);
         store.setState({ vehicleProfile: updatedProfile });
+
+        if (stationMatch.matchedStop && stationMatch.station && cfg.stationAlertsEnabled === true) {
+            notifyGasStationStop(stationMatch.matchedStop, stationMatch.station).catch(() => {});
+        }
+    } else if (closedCycles.length > 0) {
+        const reconciledMap = reconcileTripsAgainstClosedCycles(newTripsByDate, closedCycles, fuelPriceCop);
+        finalTrips = Object.values(reconciledMap).flat().sort((a, b) => (Number(b.startTimeMs) || 0) - (Number(a.startTimeMs) || 0));
     }
 
-    const summary = computeTripsSummary(trips, rawIdles, { fuelPriceCop, baseEff });
+    const summary = computeTripsSummary(finalTrips, rawIdles, { fuelPriceCop, baseEff });
 
     return {
-        trips,
+        trips: finalTrips,
         summary,
         fromCache: false
     };
@@ -1354,7 +1853,9 @@ export async function syncGpsTelemetry(options = {}) {
                 password: cfg.password,
                 imei: cfg.imei,
                 accountId: cfg.accountId,
-                installStartDate: cfg.installStartDate || cfg.installDate
+                installStartDate: cfg.installStartDate || cfg.installDate,
+                proxyUrl: cfg.proxyUrl || '',
+                stationAlertsEnabled: Boolean(cfg.stationAlertsEnabled)
             });
 
             const todayStr = todayLocalYmd();
@@ -1415,7 +1916,7 @@ export async function syncGpsTelemetry(options = {}) {
                 lastSyncedAt: new Date().toISOString()
             };
 
-            const updatedProfile = await saveVehicleProfile({
+            let updatedProfile = await saveVehicleProfile({
                 ...profile,
                 gpsConfig: cfg,
                 gpsCache
@@ -1429,6 +1930,35 @@ export async function syncGpsTelemetry(options = {}) {
                 fuelPriceCop: updatedProfile.fuelPriceCop || stateSnap.fuelPriceCop
             });
 
+            // Persist learned physicalSensitivity if changed by >= 0.005, and check station geofence stops
+            const prevSensitivity = Number(updatedProfile?.gpsCache?.physicalSensitivity) || 1.0;
+            const nextSensitivity = Number(engineResults?.learnedSensitivity) || 1.0;
+            const sensitivityChanged = Math.abs(nextSensitivity - prevSensitivity) >= 0.005;
+
+            const todayCachedTrips = updatedProfile?.gpsCache?.tripsByDate?.[todayStr] || [];
+            const stationMatch = detectAndProcessStationStops({
+                trips: todayCachedTrips,
+                idles: [],
+                live,
+                profile: updatedProfile,
+                telemetryLogs: logs
+            });
+
+            if (sensitivityChanged || stationMatch.matchedStop) {
+                const enrichedCache = {
+                    ...(updatedProfile.gpsCache || gpsCache),
+                    ...(sensitivityChanged ? { physicalSensitivity: nextSensitivity } : {}),
+                    ...(stationMatch.matchedStop ? {
+                        notifiedStopIds: stationMatch.updatedNotifiedStopIds,
+                        pendingStationMatch: stationMatch.pendingStationMatch
+                    } : {})
+                };
+                updatedProfile = await saveVehicleProfile({
+                    ...updatedProfile,
+                    gpsCache: enrichedCache
+                }).catch(() => updatedProfile);
+            }
+
             store.setState({
                 vehicleProfile: updatedProfile,
                 telemetryLogs: logs,
@@ -1436,6 +1966,11 @@ export async function syncGpsTelemetry(options = {}) {
                 gpsLive: live
             });
 
+            if (stationMatch.matchedStop && stationMatch.station && cfg.stationAlertsEnabled === true) {
+                notifyGasStationStop(stationMatch.matchedStop, stationMatch.station).catch(() => {});
+            }
+
+            refreshAlerts().catch(() => {});
             triggerCloudSync();
 
             if (!options.silent) {

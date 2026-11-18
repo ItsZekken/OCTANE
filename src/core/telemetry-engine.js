@@ -12,6 +12,8 @@
  */
 
 import { parseFuelVolume, parseIntegerMetric } from './number-utils.js';
+import { localYmd } from './date-utils.js';
+import { calibrateVehicleFuelModel, decomposeFuelCost } from './fuel-physics-engine.js';
 
 export const GAL_TO_L = 3.78541;
 export const L_TO_GAL = 1 / 3.78541;
@@ -353,6 +355,48 @@ export function computeCyclePhysicalTelemetry(startDate, endDate, gpsDaysMap = {
 }
 
 /**
+ * Computes average physical severity multiplier per weekday (Mon=0 .. Sun=6) from GPS daily records.
+ * Uses a weekday's average severity when at least 2 active GPS samples exist for that weekday,
+ * otherwise falls back to 1.0.
+ *
+ * @param {Object|null} gpsDaysMap
+ * @param {number} [sensitivity=1.0]
+ * @returns {Array<number>} Array of 7 severity multipliers [Mon..Sun]
+ */
+export function computeWeekdaySeverity(gpsDaysMap = null, sensitivity = 1.0) {
+    const result = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+    if (!gpsDaysMap || typeof gpsDaysMap !== 'object') return result;
+
+    const buckets = [[], [], [], [], [], [], []];
+    for (const dateStr of Object.keys(gpsDaysMap)) {
+        const rec = gpsDaysMap[dateStr];
+        if (!rec) continue;
+        const km = Number(rec.km ?? rec.miles) || 0;
+        const runTimeSec = Number(rec.runTimeSec) || 0;
+        if (km <= 0 && runTimeSec <= 0) continue;
+
+        const dt = new Date(dateStr + 'T12:00:00');
+        if (isNaN(dt.getTime())) continue;
+        const w = dt.getDay();
+        const idx = w === 0 ? 6 : w - 1; // 0=LUN, 6=DOM
+
+        const dayPhys = computeCyclePhysicalTelemetry(dateStr, dateStr, gpsDaysMap, sensitivity);
+        if (dayPhys && Number.isFinite(dayPhys.severityFactor) && dayPhys.severityFactor > 0) {
+            buckets[idx].push(dayPhys.severityFactor);
+        }
+    }
+
+    for (let i = 0; i < 7; i++) {
+        if (buckets[i].length >= 2) {
+            const avg = buckets[i].reduce((a, b) => a + b, 0) / buckets[i].length;
+            result[i] = Number(avg.toFixed(3));
+        }
+    }
+
+    return result;
+}
+
+/**
  * Distributes kilometers across intermediate days between discrete readings.
  * When GPS daily telemetry (`gpsDaysMap`) is available for an interval, distributes
  * the exact physical odometer delta (`dKm`) proportionally to the real GPS daily curve
@@ -690,55 +734,95 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
     activeGal = Math.min(tankMaxGal, Math.max(0, Number.isFinite(activeGal) ? activeGal : 0));
     const kmDriven = Math.max(0, effectiveLatestOdo - startOdo);
     const activePct = tankMaxGal > 0 ? (activeGal / tankMaxGal) * 100 : 0;
-    const autonomyKm = Math.round(activeGal * safeEff);
-    const reserveKm = Math.max(0, Math.round(Math.max(0, activeGal - reserveGal) * safeEff));
+
+    // Consistent cycle physical severity across burned fuel and remaining autonomy/reserve
+    const projEff = (activePhysicalTelemetry?.severityFactor > 0)
+        ? (safeEff / activePhysicalTelemetry.severityFactor)
+        : safeEff;
+    const autonomyKm = Math.round(activeGal * projEff);
+    const reserveKm = Math.max(0, Math.round(Math.max(0, activeGal - reserveGal) * projEff));
     const isReserve = activeGal <= reserveGal || activePct <= 14.5;
 
-    // Projection of remaining days based on Weekly DNA pattern
-    let autonomyDays = 0;
-    let reserveDays = 0;
+    if (activePhysicalTelemetry) {
+        const activeBurnedGal = projEff > 0 && kmDriven > 0 ? (kmDriven / projEff) : 0;
+        activePhysicalTelemetry.invisibleTax = decomposeFuelCost(activePhysicalTelemetry, {
+            totalGallons: activeBurnedGal,
+            fuelPriceCop,
+            priors: options.fuelPhysicsPriors
+        });
+    }
+
+    // Day-by-day gallon simulation based on Weekly DNA & Weekday GPS Severity, subtracting todayKm
+    const simNow = options.now instanceof Date ? options.now : new Date();
+    const todayStr = localYmd(simNow);
+    const todayKm = Number(gpsDaysMap?.[todayStr]?.km ?? gpsDaysMap?.[todayStr]?.miles ?? vehicleProfile?.gpsCache?.live?.todayMile) || 0;
+    const weekdaySeverity = computeWeekdaySeverity(gpsDaysMap, physicalSensitivity);
     const routineDaily = Number(vehicleProfile.routineDailyKm) || 24;
     const fallbackDaily = avgDailyKm > 0 ? avgDailyKm : routineDaily;
 
-    if (autonomyKm > 0) {
-        let remKm = autonomyKm;
-        const simDate = new Date();
-        let guard = 0;
-        while (remKm > 0 && guard < 730) {
-            guard++;
-            autonomyDays++;
+    const simulateFuelDays = (fuelGal) => {
+        if (!Number.isFinite(fuelGal) || fuelGal <= 0 || !Number.isFinite(safeEff) || safeEff <= 0) {
+            return { days: 0, date: null };
+        }
+        let remGal = fuelGal;
+        let dayOffset = 0;
+        let finalDateStr = todayStr;
+
+        while (remGal > 0 && dayOffset < 730) {
+            const simDate = new Date(simNow.getFullYear(), simNow.getMonth(), simNow.getDate() + dayOffset, 12, 0, 0);
+            finalDateStr = localYmd(simDate);
             const w = simDate.getDay();
             const idx = w === 0 ? 6 : w - 1;
             const plannedKm = (Array.isArray(weekdayDNA) && weekdayDNA[idx] && weekdayDNA[idx].avgKm > 0)
                 ? weekdayDNA[idx].avgKm
                 : fallbackDaily;
-            remKm -= Math.max(1, plannedKm);
-            simDate.setDate(simDate.getDate() + 1);
+            const kmForDay = dayOffset === 0
+                ? Math.max(0, plannedKm - todayKm)
+                : Math.max(1, plannedKm);
+
+            if (kmForDay > 0) {
+                const effToday = safeEff / (weekdaySeverity[idx] || 1.0);
+                const galBurn = effToday > 0 ? (kmForDay / effToday) : 0;
+                remGal -= galBurn;
+            }
+
+            if (remGal <= 0) {
+                return { days: dayOffset, date: finalDateStr };
+            }
+            dayOffset++;
+        }
+
+        return { days: dayOffset, date: finalDateStr };
+    };
+
+    const autonomySim = simulateFuelDays(activeGal);
+    const autonomyDays = autonomySim.days;
+    const autonomyDate = autonomySim.date;
+
+    const galAboveReserve = Math.max(0, activeGal - reserveGal);
+    let reserveDays = 0;
+    let reserveDate = null;
+    if (safeEff > 0 && activeGal > 0) {
+        if (galAboveReserve <= 0) {
+            reserveDays = 0;
+            reserveDate = todayStr;
+        } else {
+            const reserveSim = simulateFuelDays(galAboveReserve);
+            reserveDays = reserveSim.days;
+            reserveDate = reserveSim.date;
         }
     }
 
-    if (reserveKm > 0) {
-        let remKm = reserveKm;
-        const simDate = new Date();
-        let guard = 0;
-        while (remKm > 0 && guard < 730) {
-            guard++;
-            reserveDays++;
-            const w = simDate.getDay();
-            const idx = w === 0 ? 6 : w - 1;
-            const plannedKm = (Array.isArray(weekdayDNA) && weekdayDNA[idx] && weekdayDNA[idx].avgKm > 0)
-                ? weekdayDNA[idx].avgKm
-                : fallbackDaily;
-            remKm -= Math.max(1, plannedKm);
-            simDate.setDate(simDate.getDate() + 1);
-        }
-    }
+    const reserveDateLabel = (reserveDays <= 0 || !reserveDate)
+        ? 'HOY'
+        : formatDateWithWeekday(reserveDate);
 
     return {
         latest,
         liveOdometer: effectiveLatestOdo,
         gpsExtraKm,
         physicalTelemetry: activePhysicalTelemetry,
+        weekdaySeverity,
         activeGal: Number(activeGal.toFixed(3)),
         startOdo,
         startDate,
@@ -750,7 +834,10 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
         tankMaxGal: Number(tankMaxGal.toFixed(2)),
         isReserve,
         autonomyDays,
+        autonomyDate,
         reserveDays,
+        reserveDate,
+        reserveDateLabel,
         adaptiveEff: Number(safeEff.toFixed(2)),
         fuelValueCop: Math.round(activeGal * fuelPriceCop),
         v_odo: Number(v_odo.toFixed(3)),
@@ -758,7 +845,7 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
         calibratedGaugePct: gaugePct,
         fusedGal: Number(fusedGal.toFixed(3)),
         fusedPct: Number(((fusedGal / tankMaxGal) * 100).toFixed(1)),
-        fusedAutonomyKm: Math.round(fusedGal * safeEff)
+        fusedAutonomyKm: Math.round(fusedGal * projEff)
     };
 }
 
@@ -857,6 +944,8 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
             activeTankState: null,
             scopedRecords: [],
             weekdayDNA: calculateWeekdayDNA([]),
+            learnedSensitivity: Number(vehicleProfile?.gpsCache?.physicalSensitivity) || 1.0,
+            fuelPhysicsModel: calibrateVehicleFuelModel([], { tripsByDate: vehicleProfile?.gpsCache?.tripsByDate }),
             stats: {
                 totalKm: 0,
                 totalGallons: 0,
@@ -1040,6 +1129,20 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
         });
     }
 
+    const fuelPhysicsModel = calibrateVehicleFuelModel(allClosedCycles, {
+        tripsByDate: vehicleProfile?.gpsCache?.tripsByDate
+    });
+
+    allClosedCycles.forEach(cycle => {
+        if (cycle.physicalTelemetry) {
+            cycle.physicalTelemetry.invisibleTax = decomposeFuelCost(cycle.physicalTelemetry, {
+                totalGallons: cycle.gals,
+                fuelPriceCop,
+                priors: fuelPhysicsModel.coeffs
+            });
+        }
+    });
+
     // Unified Stage 02: returns up to 7 latest closed cycles (Full or Compensated Partial)
     const fullEraCycles = allClosedCycles.slice(-7);
 
@@ -1096,7 +1199,7 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
         vehicleProfile,
         weekdayDNA,
         avgDailyKm,
-        { ...options, gpsDaysMap, physicalSensitivity: learnedSensitivity }
+        { ...options, gpsDaysMap, physicalSensitivity: learnedSensitivity, fuelPhysicsPriors: fuelPhysicsModel.coeffs }
     );
 
     // Scoped records (Active telemetry calibration)
@@ -1135,6 +1238,8 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
         lastRefuelIndex,
         scopedRecords,
         weekdayDNA,
+        learnedSensitivity,
+        fuelPhysicsModel,
         stats: {
             totalKm: totalDistance,
             totalGallons: Number(scopedGals.toFixed(2)),

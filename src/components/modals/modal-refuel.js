@@ -42,6 +42,111 @@ let modalRootEl = null;
 const GAL_TO_L = 3.78541;
 
 /**
+ * Aggregates GPS cycle telemetry from `gpsCache.days` and `gpsCache.tripsByDate`
+ * between `prevLog?.date` and `refuelDate` to populate real refuel telemetry metrics.
+ * Returns zeros if no GPS data covers the window.
+ *
+ * @param {Object} [params={}]
+ * @param {Object|null} [params.prevLog=null]
+ * @param {string} [params.refuelDate='']
+ * @param {Object|null} [params.gpsCache=null]
+ * @param {Object|null} [params.matchedStation=null]
+ * @returns {Object}
+ */
+export function buildRefuelTelemetryEnrichment({
+  prevLog = null,
+  refuelDate = '',
+  gpsCache = null,
+  matchedStation = null
+} = {}) {
+  const endDate = String(refuelDate || '').slice(0, 10);
+  const startDate = prevLog?.date ? String(prevLog.date).slice(0, 10) : endDate;
+
+  const base = {
+    duration_seconds: 0,
+    idle_seconds: 0,
+    idle_ratio: 0,
+    acceleration_variance: 0,
+    max_speed_kmh: 0,
+    thermal_stress_score: 0,
+    ...(matchedStation?.id ? { stationId: matchedStation.id } : {}),
+    ...(matchedStation?.name ? { stationName: matchedStation.name } : {})
+  };
+
+  if (!gpsCache || typeof gpsCache !== 'object' || !endDate || startDate > endDate) {
+    return base;
+  }
+
+  const daysMap = (gpsCache.days && typeof gpsCache.days === 'object') ? gpsCache.days : {};
+  const tripsByDate = (gpsCache.tripsByDate && typeof gpsCache.tripsByDate === 'object') ? gpsCache.tripsByDate : {};
+
+  let dayRunSec = 0;
+  let dayIdleSec = 0;
+  for (const dateKey of Object.keys(daysMap)) {
+    if (dateKey >= startDate && dateKey <= endDate) {
+      const rec = daysMap[dateKey];
+      if (!rec) continue;
+      dayRunSec += Number(rec.runTimeSec) || 0;
+      dayIdleSec += Number(rec.idleAccOnSec) || 0;
+    }
+  }
+
+  let tripRunSec = 0;
+  let tripIdleSec = 0;
+  let maxSpeed = 0;
+  const accelVariances = [];
+  const thermalScores = [];
+
+  for (const dateKey of Object.keys(tripsByDate)) {
+    if (dateKey >= startDate && dateKey <= endDate) {
+      const dayTrips = tripsByDate[dateKey];
+      if (!Array.isArray(dayTrips)) continue;
+      for (const trip of dayTrips) {
+        if (!trip || typeof trip !== 'object') continue;
+        tripRunSec += Number(trip.durationSec ?? trip.tripTimeSec) || 0;
+        tripIdleSec += Number(trip.stoppedTimeSec) || 0;
+        const tMax = Number(trip.maxSpeedKmh ?? trip.speedMax) || 0;
+        if (tMax > maxSpeed) maxSpeed = tMax;
+        const tVar = Number(trip.accelVariance);
+        if (Number.isFinite(tVar) && tVar > 0) {
+          accelVariances.push(tVar);
+        }
+        const coldPct = Number(trip.coldPenaltyPct);
+        if (Number.isFinite(coldPct) && coldPct >= 0) {
+          thermalScores.push(coldPct);
+        } else if (Number.isFinite(Number(trip.tripSeverity)) && Number(trip.tripSeverity) > 1) {
+          thermalScores.push((Number(trip.tripSeverity) - 1) * 100);
+        }
+      }
+    }
+  }
+
+  const duration_seconds = Math.round(dayRunSec > 0 ? dayRunSec : tripRunSec);
+  const idle_seconds = Math.round(dayIdleSec > 0 ? dayIdleSec : tripIdleSec);
+  const idle_ratio = duration_seconds > 0
+    ? Number(Math.min(1, idle_seconds / duration_seconds).toFixed(3))
+    : 0;
+  const acceleration_variance = accelVariances.length > 0
+    ? Number((accelVariances.reduce((a, b) => a + b, 0) / accelVariances.length).toFixed(4))
+    : 0;
+  const max_speed_kmh = Math.round(maxSpeed);
+  const thermal_stress_score = thermalScores.length > 0
+    ? Number((thermalScores.reduce((a, b) => a + b, 0) / thermalScores.length).toFixed(2))
+    : 0;
+
+  return {
+    duration_seconds,
+    idle_seconds,
+    idle_ratio,
+    acceleration_variance,
+    max_speed_kmh,
+    thermal_stress_score,
+    ...(matchedStation?.id ? { stationId: matchedStation.id } : {}),
+    ...(matchedStation?.name ? { stationName: matchedStation.name } : {})
+  };
+}
+
+/**
  * Initializes the Refuel modal root element in the DOM.
  */
 export function initRefuelModal() {
@@ -102,16 +207,17 @@ export async function openRefuelModal(options = {}) {
   let latestOdo = 0;
   let latestPct = 50;
   let hasLogs = false;
+  let sortedLogs = [];
 
   try {
     const logs = await getTelemetryLogs();
     if (Array.isArray(logs) && logs.length > 0) {
       hasLogs = true;
-      const sorted = [...logs].sort((a, b) => {
+      sortedLogs = [...logs].sort((a, b) => {
         if (a.date !== b.date) return a.date > b.date ? 1 : -1;
         return (Number(a.odometer_reading) || 0) - (Number(b.odometer_reading) || 0);
       });
-      latestLog = sorted[sorted.length - 1];
+      latestLog = sortedLogs[sortedLogs.length - 1];
       if (latestLog) {
         if (!isNaN(Number(latestLog.odometer_reading))) {
           latestOdo = Number(latestLog.odometer_reading);
@@ -682,6 +788,53 @@ export async function openRefuelModal(options = {}) {
         ? editLog.distance_km
         : ((hasLogs && latestOdo > 0) ? Math.max(0, odoVal - latestOdo) : 0);
 
+      // Resolve previous log before this refuel to window GPS telemetry enrichment
+      const priorLogs = sortedLogs.filter(l => (!existingId || l.id !== existingId) && l.date <= dateVal);
+      const prevLog = priorLogs.length > 0 ? priorLogs[priorLogs.length - 1] : null;
+
+      // Learn gas station geofence or resolve recent pendingStationMatch (within 6h) BEFORE building logPayload
+      let matchedStation = null;
+      let profileDirty = false;
+      const rawCoords = options.coords || options.gpsStop || options.stop?.coords || options.stop || options.location || (
+        profile?.gpsCache?.live?.lat && profile?.gpsCache?.live?.lng
+          ? { lat: profile.gpsCache.live.lat, lng: profile.gpsCache.live.lng }
+          : null
+      );
+      if (rawCoords) {
+        const cLat = Number(rawCoords.lat ?? rawCoords.latitude);
+        const cLng = Number(rawCoords.lng ?? rawCoords.longitude ?? rawCoords.lon);
+        if (!isNaN(cLat) && !isNaN(cLng) && (cLat !== 0 || cLng !== 0)) {
+          const stationName = options.stationName || options.stop?.name || options.name;
+          matchedStation = learnGasStation(profile, { lat: cLat, lng: cLng }, stationName);
+          profileDirty = true;
+        }
+      }
+      if (!matchedStation && profile?.gpsCache?.pendingStationMatch) {
+        const pending = profile.gpsCache.pendingStationMatch;
+        const detectedMs = Date.parse(pending.detectedAt || '');
+        if (Number.isFinite(detectedMs) && (Date.now() - detectedMs) <= 6 * 3600 * 1000) {
+          matchedStation = {
+            id: pending.stationId,
+            name: pending.stationName
+          };
+        }
+      }
+
+      if (!isEditing && profile?.gpsCache?.pendingStationMatch) {
+        profile.gpsCache = {
+          ...profile.gpsCache,
+          pendingStationMatch: null
+        };
+        profileDirty = true;
+      }
+
+      const enrichment = buildRefuelTelemetryEnrichment({
+        prevLog,
+        refuelDate: dateVal,
+        gpsCache: profile?.gpsCache || null,
+        matchedStation
+      });
+
       const logPayload = {
         ...(editLog || {}),
         date: dateVal,
@@ -694,12 +847,14 @@ export async function openRefuelModal(options = {}) {
         is_full_tank: isFullTank,
         total_cost_cop: Math.round(totalVal),
         distance_km: deltaKm,
-        duration_seconds: editLog?.duration_seconds || 0,
-        idle_seconds: editLog?.idle_seconds || 0,
-        idle_ratio: editLog?.idle_ratio || 0,
-        acceleration_variance: editLog?.acceleration_variance || 0,
-        max_speed_kmh: editLog?.max_speed_kmh || 0,
-        thermal_stress_score: editLog?.thermal_stress_score || 0,
+        duration_seconds: editLog?.duration_seconds || enrichment.duration_seconds,
+        idle_seconds: editLog?.idle_seconds || enrichment.idle_seconds,
+        idle_ratio: editLog?.idle_ratio || enrichment.idle_ratio,
+        acceleration_variance: editLog?.acceleration_variance || enrichment.acceleration_variance,
+        max_speed_kmh: editLog?.max_speed_kmh || enrichment.max_speed_kmh,
+        thermal_stress_score: editLog?.thermal_stress_score || enrichment.thermal_stress_score,
+        ...(enrichment.stationId ? { stationId: enrichment.stationId } : {}),
+        ...(enrichment.stationName ? { stationName: enrichment.stationName } : {}),
         updatedAt: new Date().toISOString()
       };
 
@@ -710,27 +865,13 @@ export async function openRefuelModal(options = {}) {
         await addTelemetryLog(logPayload);
       }
 
-      // Grab coordinates from GPS stop, options, or GPS cache to learn gas station geofence
-      const rawCoords = options.coords || options.gpsStop || options.stop?.coords || options.stop || options.location || (
-        profile?.gpsCache?.live?.lat && profile?.gpsCache?.live?.lng
-          ? { lat: profile.gpsCache.live.lat, lng: profile.gpsCache.live.lng }
-          : null
-      );
-      if (rawCoords) {
-        const cLat = Number(rawCoords.lat ?? rawCoords.latitude);
-        const cLng = Number(rawCoords.lng ?? rawCoords.longitude ?? rawCoords.lon);
-        if (!isNaN(cLat) && !isNaN(cLng) && (cLat !== 0 || cLng !== 0)) {
-          const stationName = options.stationName || options.stop?.name || options.name;
-          learnGasStation(profile, { lat: cLat, lng: cLng }, stationName);
-          try {
-            await saveVehicleProfile(profile);
-          } catch (_) {}
-        }
-      }
-
       // Update vehicle profile fuel price if modified
       if (priceVal > 0 && priceVal !== profile.fuelPriceCop) {
         profile.fuelPriceCop = priceVal;
+        profileDirty = true;
+      }
+
+      if (profileDirty) {
         try {
           await saveVehicleProfile(profile);
         } catch (_) {}

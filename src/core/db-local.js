@@ -301,9 +301,16 @@ export async function getVehicleProfile() {
  */
 export async function saveVehicleProfile(profile) {
     const current = await getVehicleProfile();
+    const mergedGpsCache = (current?.gpsCache || profile?.gpsCache)
+        ? {
+            ...(current?.gpsCache || {}),
+            ...(profile?.gpsCache || {}),
+        }
+        : undefined;
     const updated = {
         ...current,
         ...profile,
+        ...(mergedGpsCache !== undefined ? { gpsCache: mergedGpsCache } : {}),
         id: 'main',
         updatedAt: new Date().toISOString(),
     };
@@ -879,6 +886,115 @@ export async function exportAllStores() {
 }
 
 /**
+ * Merges an incoming cloud vehicle_profile over a local vehicle_profile without losing
+ * local-only secrets (`gpsConfig.password`), heavy geometry (`trackPoints`), or local caches
+ * (`voltageHistory`, `notifiedStopIds`, older `tripsByDate` dates pruned from cloud).
+ *
+ * @param {Object} local
+ * @param {Object} incoming
+ * @returns {Object}
+ */
+export function mergeVehicleProfileRecords(local, incoming) {
+    if (!local || typeof local !== 'object') return incoming;
+    if (!incoming || typeof incoming !== 'object') return local;
+
+    const merged = JSON.parse(JSON.stringify(incoming));
+
+    // Preserve local GPS password when cloud payload scrubbed it
+    if (local.gpsConfig && typeof local.gpsConfig === 'object' && local.gpsConfig.password) {
+        merged.gpsConfig = {
+            ...(merged.gpsConfig || {}),
+            password: merged.gpsConfig?.password ? merged.gpsConfig.password : local.gpsConfig.password,
+        };
+    }
+
+    const localCache = local.gpsCache;
+    if (localCache && typeof localCache === 'object') {
+        const incomingCache = (merged.gpsCache && typeof merged.gpsCache === 'object') ? merged.gpsCache : {};
+        const nextCache = { ...incomingCache };
+
+        // Preserve local trackPoints inside tripsByDate[date] and any pruned local dates
+        if (localCache.tripsByDate && typeof localCache.tripsByDate === 'object') {
+            const nextTripsByDate = (nextCache.tripsByDate && typeof nextCache.tripsByDate === 'object')
+                ? { ...nextCache.tripsByDate }
+                : {};
+
+            for (const dateKey of Object.keys(localCache.tripsByDate)) {
+                const localDayTrips = localCache.tripsByDate[dateKey];
+                const incomingDayTrips = nextTripsByDate[dateKey];
+
+                if (!Array.isArray(incomingDayTrips)) {
+                    if (Array.isArray(localDayTrips)) {
+                        nextTripsByDate[dateKey] = JSON.parse(JSON.stringify(localDayTrips));
+                    }
+                    continue;
+                }
+
+                if (Array.isArray(localDayTrips) && localDayTrips.length > 0) {
+                    const localById = new Map();
+                    for (const lt of localDayTrips) {
+                        if (lt && lt.id) localById.set(lt.id, lt);
+                    }
+
+                    nextTripsByDate[dateKey] = incomingDayTrips.map((trip, idx) => {
+                        if (!trip || typeof trip !== 'object') return trip;
+                        if (Array.isArray(trip.trackPoints) && trip.trackPoints.length > 0) {
+                            return trip;
+                        }
+                        let match = trip.id ? localById.get(trip.id) : null;
+                        if (!match && trip.startTimeMs) {
+                            match = localDayTrips.find(lt => lt && lt.startTimeMs === trip.startTimeMs);
+                        }
+                        if (!match && localDayTrips[idx] && Array.isArray(localDayTrips[idx].trackPoints)) {
+                            match = localDayTrips[idx];
+                        }
+                        if (match && Array.isArray(match.trackPoints) && match.trackPoints.length > 0) {
+                            return { ...trip, trackPoints: JSON.parse(JSON.stringify(match.trackPoints)) };
+                        }
+                        return trip;
+                    });
+                }
+            }
+
+            nextCache.tripsByDate = nextTripsByDate;
+        }
+
+        // Preserve local voltageHistory samples without dropping local history
+        if (Array.isArray(localCache.voltageHistory) && localCache.voltageHistory.length > 0) {
+            if (!Array.isArray(nextCache.voltageHistory) || nextCache.voltageHistory.length === 0) {
+                nextCache.voltageHistory = JSON.parse(JSON.stringify(localCache.voltageHistory));
+            } else {
+                const seen = new Set();
+                const combined = [];
+                for (const sample of [...localCache.voltageHistory, ...nextCache.voltageHistory]) {
+                    const key = (sample && typeof sample === 'object')
+                        ? String(sample.t ?? sample.ts ?? sample.timestamp ?? sample.time ?? JSON.stringify(sample))
+                        : String(sample);
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        combined.push(sample);
+                    }
+                }
+                nextCache.voltageHistory = combined;
+            }
+        }
+
+        // Preserve local notifiedStopIds without dropping deduplication history
+        if (Array.isArray(localCache.notifiedStopIds) && localCache.notifiedStopIds.length > 0) {
+            if (!Array.isArray(nextCache.notifiedStopIds) || nextCache.notifiedStopIds.length === 0) {
+                nextCache.notifiedStopIds = [...localCache.notifiedStopIds];
+            } else {
+                nextCache.notifiedStopIds = Array.from(new Set([...localCache.notifiedStopIds, ...nextCache.notifiedStopIds]));
+            }
+        }
+
+        merged.gpsCache = nextCache;
+    }
+
+    return merged;
+}
+
+/**
  * Restores or merges all 7 stores from a master snapshot object.
  * When options.merge is true (e.g. during cloud sync pull), existing local
  * entries are safely preserved and not wiped out.
@@ -944,7 +1060,10 @@ export async function importAllStores(snapshot, options = { merge: false }) {
                 const localTs = local && local.updatedAt ? Date.parse(local.updatedAt) : 0;
                 const incomingTs = item.updatedAt ? Date.parse(item.updatedAt) : 0;
                 if (local && localTs > incomingTs) return; // lo local es más nuevo: se conserva
-                if (!tombStore) { store.put(item); return; }
+                const itemToStore = (store.name === STORES.VEHICLE_PROFILE && local)
+                    ? mergeVehicleProfileRecords(local, item)
+                    : item;
+                if (!tombStore) { store.put(itemToStore); return; }
                 const tkey = store.name + ':' + id;
                 const treq = tombStore.get(tkey);
                 treq.onsuccess = () => {
@@ -952,7 +1071,7 @@ export async function importAllStores(snapshot, options = { merge: false }) {
                     const tTs = tomb ? Date.parse(tomb.deletedAt) || 0 : 0;
                     if (tomb && tTs >= incomingTs) return; // borrado después de esa versión: no resucita
                     if (tomb) tombStore.delete(tkey); // editado después del borrado: gana el registro
-                    store.put(item);
+                    store.put(itemToStore);
                 };
             };
         };

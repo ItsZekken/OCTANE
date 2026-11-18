@@ -240,6 +240,135 @@ export function resolveDiagnosticPeriod(periodFilter = 'this_month', rideSession
   };
 }
 
+const TIME_SLOTS = [
+  { key: 'madrugada', label: 'MADRUGADA', range: '00–05', minHour: 0, maxHour: 5 },
+  { key: 'manana', label: 'MAÑANA', range: '06–11', minHour: 6, maxHour: 11 },
+  { key: 'tarde', label: 'TARDE', range: '12–17', minHour: 12, maxHour: 17 },
+  { key: 'noche', label: 'NOCHE', range: '18–23', minHour: 18, maxHour: 23 }
+];
+
+function extractLocalHour(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  if (typeof obj.time === 'string' && /^\d{1,2}:\d{2}/.test(obj.time.trim())) {
+    const h = parseInt(obj.time.trim().split(':')[0], 10);
+    if (Number.isFinite(h) && h >= 0 && h <= 23) return h;
+  }
+  if (typeof obj.startTimeHm === 'string' && /^\d{1,2}:\d{2}/.test(obj.startTimeHm.trim())) {
+    const h = parseInt(obj.startTimeHm.trim().split(':')[0], 10);
+    if (Number.isFinite(h) && h >= 0 && h <= 23) return h;
+  }
+  if (obj.createdAt) {
+    const d = new Date(obj.createdAt);
+    if (!isNaN(d.getTime())) return d.getHours();
+  }
+  return null;
+}
+
+/**
+ * Classifies timestamped ride sessions into 4 circadian slots (MADRUGADA, MAÑANA, TARDE, NOCHE)
+ * and enriches slot duration using matching GPS trips on the same date & time window when available.
+ *
+ * @param {Array} [rideSessions=[]]
+ * @param {Object} [tripsByDate={}]
+ * @param {Object} [options={}]
+ * @returns {{ slots: Array<Object>, hasTimestampedData: boolean }}
+ */
+export function buildTimeSlotMatrix(rideSessions = [], tripsByDate = {}, options = {}) {
+  const startDate = options.startDate ? String(options.startDate).slice(0, 10) : '';
+  const endDate = options.endDate ? String(options.endDate).slice(0, 10) : '';
+
+  const slotAcc = new Map(TIME_SLOTS.map(s => [s.key, {
+    key: s.key,
+    label: s.label,
+    range: s.range,
+    tripsCount: 0,
+    grossCop: 0,
+    km: 0,
+    gpsDurationSec: 0,
+    activeDates: new Set()
+  }]));
+
+  const resolveSlot = (hour) => TIME_SLOTS.find(s => hour >= s.minHour && hour <= s.maxHour) || null;
+  let totalTimestamped = 0;
+
+  if (Array.isArray(rideSessions)) {
+    for (const s of rideSessions) {
+      if (!s || !s.date || s.type === 'expense' || s.type === 'pass') continue;
+      const d = String(s.date).slice(0, 10);
+      if (startDate && d < startDate) continue;
+      if (endDate && d > endDate) continue;
+
+      if (Array.isArray(s.rides) && s.rides.length > 0) {
+        for (const sub of s.rides) {
+          const hour = extractLocalHour(sub) ?? extractLocalHour(s);
+          if (hour === null) continue;
+          const slotDef = resolveSlot(hour);
+          if (!slotDef) continue;
+          const bucket = slotAcc.get(slotDef.key);
+          bucket.tripsCount += 1;
+          bucket.grossCop += Number(sub.fareCop || sub.netValue || 0);
+          bucket.km += Number(sub.distanceKm || sub.km || 0);
+          bucket.activeDates.add(d);
+          totalTimestamped += 1;
+        }
+      } else {
+        const hour = extractLocalHour(s);
+        if (hour === null) continue;
+        const slotDef = resolveSlot(hour);
+        if (!slotDef) continue;
+        const bucket = slotAcc.get(slotDef.key);
+        const count = Number(s.totalRidesCount) || 1;
+        bucket.tripsCount += count;
+        bucket.grossCop += Number(s.grossEarnings || s.fareCop || s.grossRevenueCop || s.grossIncomeCop || 0);
+        bucket.km += Number(s.distanceKm || s.workKm || s.tripKmTotal || 0);
+        bucket.activeDates.add(d);
+        totalTimestamped += count;
+      }
+    }
+  }
+
+  // Correlate GPS trip duration on dates that had ride activity in each slot
+  if (tripsByDate && typeof tripsByDate === 'object') {
+    for (const bucket of slotAcc.values()) {
+      for (const dateKey of bucket.activeDates) {
+        const dayTrips = tripsByDate[dateKey];
+        if (!Array.isArray(dayTrips)) continue;
+        for (const t of dayTrips) {
+          const tHour = extractLocalHour(t);
+          if (tHour === null) continue;
+          const slotDef = resolveSlot(tHour);
+          if (slotDef && slotDef.key === bucket.key) {
+            bucket.gpsDurationSec += Number(t.durationSec ?? t.tripTimeSec) || 0;
+          }
+        }
+      }
+    }
+  }
+
+  const slots = TIME_SLOTS.map(def => {
+    const b = slotAcc.get(def.key);
+    const workHours = Number((b.gpsDurationSec / 3600).toFixed(2));
+    const ratePerHourCop = workHours >= 0.25 ? Math.round(b.grossCop / workHours) : null;
+    const avgFareCop = b.tripsCount > 0 ? Math.round(b.grossCop / b.tripsCount) : 0;
+    return {
+      key: b.key,
+      label: b.label,
+      range: b.range,
+      tripsCount: b.tripsCount,
+      grossCop: Math.round(b.grossCop),
+      km: Number(b.km.toFixed(1)),
+      workHours,
+      ratePerHourCop,
+      avgFareCop
+    };
+  });
+
+  return {
+    slots,
+    hasTimestampedData: totalTimestamped > 0
+  };
+}
+
 /**
  * Genera el informe financiero y balance operativo transversal completo.
  * 
@@ -337,6 +466,10 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
   const wearReserveCop = Math.round(grossRevenueCop * 0.10);
   const netAfterWearReserveCop = Math.round(freeNetProfitCop - wearReserveCop);
 
+  const hourlyProfitCop = cycleSummary.netProfitPerHourCop ?? null;
+  const gpsWorkHours = Number(cycleSummary.totalGpsWorkHours) || 0;
+  const gpsIdleFuelCop = Number(cycleSummary.totalIdleFuelCop) || 0;
+
   const cashFlow = {
     grossRevenueCop,
     totalExpensesCop,
@@ -344,6 +477,8 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
     activeDaysCount,
     freeNetProfitCop,
     avgProfitPerShift,
+    hourlyProfitCop,
+    gpsWorkHours,
     proj12Days,
     proj15Days,
     proj20Days,
@@ -371,10 +506,11 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
   const fuelPickupCop = Math.round(kmPickup * costPerKmCop);
 
   // Total de kilómetros recorridos por el vehículo en el periodo
-  // Buscamos odómetros de telemetría interpolada si existen
+  // Buscamos odómetros de telemetría interpolada (integrando GPS diario si existe)
+  const gpsDaysMap = vehicleProfile?.gpsCache?.days || null;
   let totalCarKmFromTelemetry = 0;
   try {
-    const dailySeries = buildInterpolatedDailySeries(telemetryLogs);
+    const dailySeries = buildInterpolatedDailySeries(telemetryLogs, gpsDaysMap);
     const inRangeDaily = dailySeries.filter(d => d.date >= startDate && d.date <= endDate);
     totalCarKmFromTelemetry = inRangeDaily.reduce((acc, d) => acc + (Number(d.km) || 0), 0);
   } catch (_) {}
@@ -389,7 +525,7 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
 
   const fuelBaseCop = Math.round(kmBase * costPerKmCop);
   const totalCarKm = Number((kmBase + kmRides + kmPickup).toFixed(1));
-  const totalCarFuelCop = fuelBaseCop + fuelRidesCop + fuelPickupCop;
+  const totalCarFuelCop = fuelBaseCop + fuelRidesCop + fuelPickupCop + gpsIdleFuelCop;
 
   // Porcentajes de cada rubro de gasolina
   const pctBase = totalCarFuelCop > 0 ? Math.round((fuelBaseCop / totalCarFuelCop) * 100) : 0;
@@ -406,6 +542,7 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
     kmPickup,
     fuelPickupCop,
     pctPickup,
+    gpsIdleFuelCop,
     totalCarKm,
     totalCarFuelCop,
     effKmGal,
@@ -514,19 +651,24 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
   platformBreakdown.sort((a, b) => b.ratePerKmCop - a.ratePerKmCop);
 
   // -------------------------------------------------------------------------
-  // 4. DETECTOR DE ANOMALÍAS (dataAnomalies)
+  // 4. DETECTOR DE ANOMALÍAS (dataAnomalies) & MATRIZ DE FRANJAS HORARIAS
   // -------------------------------------------------------------------------
   const dataAnomalies = detectRideAnomalies(rideSessions);
+  const timeSlotMatrix = buildTimeSlotMatrix(
+    periodRides,
+    vehicleProfile?.gpsCache?.tripsByDate || {},
+    { startDate, endDate, costPerKmCop }
+  );
 
-  // Odómetro actual del vehículo para el reporte de impresión
-  let currentOdo = 0;
+  // Odómetro actual del vehículo para el reporte de impresión (incluyendo GPS en vivo)
+  let odoFromLogs = 0;
   if (telemetryLogs.length > 0) {
     const sortedLogs = [...telemetryLogs].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    currentOdo = Number(sortedLogs[sortedLogs.length - 1].odometer_reading) || 0;
+    odoFromLogs = Number(sortedLogs[sortedLogs.length - 1].odometer_reading) || 0;
   }
-  if (!currentOdo && vehicleProfile.currentOdometer) {
-    currentOdo = Number(vehicleProfile.currentOdometer) || 0;
-  }
+  const profileOdo = Number(vehicleProfile.currentOdometer) || 0;
+  const gpsOdo = Number(vehicleProfile?.gpsCache?.live?.totalMile) || 0;
+  const currentOdo = Math.max(odoFromLogs, profileOdo, gpsOdo, 0);
 
   return {
     periodKey,
@@ -546,6 +688,10 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
     fuelBreakdown,
     pocketBalance,
     platformBreakdown,
-    dataAnomalies
+    dataAnomalies,
+    hourlyProfitCop,
+    gpsWorkHours,
+    gpsIdleFuelCop,
+    timeSlotMatrix
   };
 }

@@ -85,21 +85,97 @@ export function calculateCostPerKm(options = {}) {
 }
 
 /**
- * Resolves the odometer delta for a specific calendar date from telemetry logs.
- * Returns closing status and delta.
+ * Learns habitual non-work daily routine kilometers per weekday (Mon=0..Sun=6) from GPS days
+ * where no ride sessions occurred. Falls back to overall non-ride average (>= 3 days) or
+ * `fallbackRoutineKm`.
+ *
+ * @param {Object|null} gpsDaysMap
+ * @param {Array} [rideSessions=[]]
+ * @param {number} [fallbackRoutineKm=DEFAULT_ROUTINE_DAILY_KM]
+ * @returns {{ byWeekday: Array<number>, avgRoutineKm: number, learnedDaysCount: number, isGpsLearned: boolean }}
+ */
+export function learnRoutineDailyKmByWeekday(gpsDaysMap = null, rideSessions = [], fallbackRoutineKm = DEFAULT_ROUTINE_DAILY_KM) {
+    const fallback = Number(fallbackRoutineKm) > 0 ? Number(fallbackRoutineKm) : DEFAULT_ROUTINE_DAILY_KM;
+    const defaultResult = {
+        byWeekday: [fallback, fallback, fallback, fallback, fallback, fallback, fallback],
+        avgRoutineKm: fallback,
+        learnedDaysCount: 0,
+        isGpsLearned: false
+    };
+
+    if (!gpsDaysMap || typeof gpsDaysMap !== 'object') {
+        return defaultResult;
+    }
+
+    const rideDates = new Set();
+    if (Array.isArray(rideSessions)) {
+        for (const s of rideSessions) {
+            if (!s || !s.date || s.type === 'expense' || s.type === 'pass') continue;
+            rideDates.add(String(s.date).slice(0, 10));
+        }
+    }
+
+    const buckets = [[], [], [], [], [], [], []];
+    const allNonRideKm = [];
+
+    for (const dateKey of Object.keys(gpsDaysMap)) {
+        const cleanDate = String(dateKey).slice(0, 10);
+        if (rideDates.has(cleanDate)) continue;
+        const rec = gpsDaysMap[dateKey];
+        if (!rec) continue;
+        const km = Number(rec.km ?? rec.miles) || 0;
+        if (km <= 0) continue;
+
+        const dt = new Date(`${cleanDate}T12:00:00`);
+        if (isNaN(dt.getTime())) continue;
+        const w = dt.getDay();
+        const idx = w === 0 ? 6 : w - 1; // 0=LUN..6=DOM
+        buckets[idx].push(km);
+        allNonRideKm.push(km);
+    }
+
+    if (allNonRideKm.length < 3) {
+        return {
+            ...defaultResult,
+            learnedDaysCount: allNonRideKm.length
+        };
+    }
+
+    const overallAvg = Number((allNonRideKm.reduce((a, b) => a + b, 0) / allNonRideKm.length).toFixed(1));
+    const byWeekday = buckets.map((arr) => {
+        if (arr.length >= 3) {
+            return Number((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1));
+        }
+        return overallAvg;
+    });
+
+    return {
+        byWeekday,
+        avgRoutineKm: overallAvg,
+        learnedDaysCount: allNonRideKm.length,
+        isGpsLearned: true
+    };
+}
+
+/**
+ * Resolves the odometer delta for a specific calendar date from explicit fallback,
+ * GPS daily telemetry (`gpsDaysMap`), or manual telemetry logs.
+ * Returns closing status, delta, and source metadata.
  * 
  * @param {string} date - 'YYYY-MM-DD'
  * @param {Array} [telemetryLogs=[]]
  * @param {number|null} [fallbackDelta=null]
- * @returns {{ deltaOdo: number, hasClosing: boolean, isPendingOdometer: boolean, startOdo: number|null, endOdo: number|null }}
+ * @param {Object|null} [gpsDaysMap=null]
+ * @returns {{ deltaOdo: number, hasClosing: boolean, isPendingOdometer: boolean, source: string, startOdo: number|null, endOdo: number|null, daysElapsed: number, isMultiDaySpan: boolean, prevDate: string|null }}
  */
-export function resolveDayOdometerDelta(date, telemetryLogs = [], fallbackDelta = null) {
+export function resolveDayOdometerDelta(date, telemetryLogs = [], fallbackDelta = null, gpsDaysMap = null) {
     if (fallbackDelta !== null && fallbackDelta !== undefined && !isNaN(Number(fallbackDelta))) {
         const d = Math.max(0, Number(fallbackDelta));
         return {
             deltaOdo: d,
             hasClosing: true,
             isPendingOdometer: false,
+            source: 'manual',
             startOdo: null,
             endOdo: null,
             daysElapsed: 1,
@@ -108,11 +184,34 @@ export function resolveDayOdometerDelta(date, telemetryLogs = [], fallbackDelta 
         };
     }
 
-    if (!date || !Array.isArray(telemetryLogs) || telemetryLogs.length === 0) {
+    const targetDate = date ? String(date).slice(0, 10) : '';
+    if (targetDate && gpsDaysMap && typeof gpsDaysMap === 'object') {
+        const gpsDay = gpsDaysMap[targetDate];
+        const gpsKm = Number(gpsDay?.km ?? gpsDay?.miles) || 0;
+        if (gpsKm > 0) {
+            return {
+                deltaOdo: Number(gpsKm.toFixed(1)),
+                hasClosing: true,
+                isPendingOdometer: false,
+                source: 'gps',
+                startOdo: null,
+                endOdo: null,
+                daysElapsed: 1,
+                isMultiDaySpan: false,
+                prevDate: targetDate,
+                runTimeSec: Number(gpsDay.runTimeSec) || 0,
+                idleAccOnSec: Number(gpsDay.idleAccOnSec) || 0,
+                avgSpeedKmh: Number(gpsDay.avgSpeedKmh) || 0
+            };
+        }
+    }
+
+    if (!targetDate || !Array.isArray(telemetryLogs) || telemetryLogs.length === 0) {
         return {
             deltaOdo: 0,
             hasClosing: false,
             isPendingOdometer: true,
+            source: 'none',
             startOdo: null,
             endOdo: null,
             daysElapsed: 1,
@@ -121,7 +220,6 @@ export function resolveDayOdometerDelta(date, telemetryLogs = [], fallbackDelta 
         };
     }
 
-    const targetDate = String(date).slice(0, 10);
     const sorted = [...telemetryLogs]
         .filter(l => l && l.odometer_reading !== undefined && l.date)
         .sort((a, b) => {
@@ -141,6 +239,7 @@ export function resolveDayOdometerDelta(date, telemetryLogs = [], fallbackDelta 
             deltaOdo: Math.max(0, endOdo - startOdo),
             hasClosing: true,
             isPendingOdometer: false,
+            source: 'odometer',
             startOdo,
             endOdo,
             daysElapsed: 1,
@@ -168,6 +267,7 @@ export function resolveDayOdometerDelta(date, telemetryLogs = [], fallbackDelta 
                 deltaOdo: Math.max(0, targetReading - prevReading),
                 hasClosing: true,
                 isPendingOdometer: false,
+                source: 'odometer',
                 startOdo: prevReading,
                 endOdo: targetReading,
                 daysElapsed,
@@ -179,6 +279,7 @@ export function resolveDayOdometerDelta(date, telemetryLogs = [], fallbackDelta 
             deltaOdo: 0,
             hasClosing: false,
             isPendingOdometer: true,
+            source: 'none',
             startOdo: targetReading,
             endOdo: null,
             daysElapsed: 1,
@@ -191,6 +292,7 @@ export function resolveDayOdometerDelta(date, telemetryLogs = [], fallbackDelta 
         deltaOdo: 0,
         hasClosing: false,
         isPendingOdometer: true,
+        source: 'none',
         startOdo: null,
         endOdo: null,
         daysElapsed: 1,
@@ -495,15 +597,29 @@ export function calculateRidesCycleSummary(params = {}) {
         sessionsByDate[d].push(s);
     });
 
+    const gpsDaysMap = (profile?.gpsCache?.days && typeof profile.gpsCache.days === 'object')
+        ? profile.gpsCache.days
+        : null;
+    const routineProfile = learnRoutineDailyKmByWeekday(gpsDaysMap, rawSessions, routineDailyKm);
+
+    const getDayRoutineKm = (dateStr) => {
+        if (!routineProfile.isGpsLearned) return routineDailyKm;
+        const dt = new Date(`${String(dateStr).slice(0, 10)}T12:00:00`);
+        if (isNaN(dt.getTime())) return routineDailyKm;
+        const w = dt.getDay();
+        const idx = w === 0 ? 6 : w - 1;
+        return routineProfile.byWeekday[idx] ?? routineDailyKm;
+    };
+
     // Compute historical pickup factor from all sessions with single-day closing odometer readings
     let histOdoEffectiveKm = 0;
     let histOdoPickupKm = 0;
 
     rawSessions.forEach(s => {
         const d = String(s.date).slice(0, 10);
-        const odo = resolveDayOdometerDelta(d, rawLogs);
+        const odo = resolveDayOdometerDelta(d, rawLogs, null, gpsDaysMap);
         if (odo.hasClosing && odo.deltaOdo > 0 && !odo.isMultiDaySpan) {
-            const kmWorkReal = Math.max(0, odo.deltaOdo - routineDailyKm);
+            const kmWorkReal = Math.max(0, odo.deltaOdo - getDayRoutineKm(d));
             const declared = Number(s.workKm || s.distanceKm || s.tripKmTotal || 0);
             if (declared > 0) {
                 histOdoEffectiveKm += declared;
@@ -528,6 +644,10 @@ export function calculateRidesCycleSummary(params = {}) {
     let totalPickupKm = 0;
     let totalExtraKm = 0;
     let totalFuelExpenseCop = 0;
+    let totalIdleFuelCop = 0;
+    let totalGpsWorkHours = 0;
+    let gpsOdoDaysCount = 0;
+    let odoManualDaysCount = 0;
     let totalRidesCount = 0;
 
     const dailyBreakdown = {};
@@ -569,10 +689,11 @@ export function calculateRidesCycleSummary(params = {}) {
         });
 
         const dayDeclaredKm = dayEnRouteKm + dayFreeKm;
+        const dayRoutineKm = getDayRoutineKm(dateStr);
 
-        // Apply route credit to en_route km (remplaza viaje habitual, hasta routineDailyKm por jornada)
-        const creditUsed = Math.min(dayEnRouteKm, routineDailyKm);
-        const enRouteDetourKm = Math.max(0, dayEnRouteKm - routineDailyKm); // Desvío excedente que supera la rutina
+        // Apply route credit to en_route km (remplaza viaje habitual, hasta dayRoutineKm por jornada)
+        const creditUsed = Math.min(dayEnRouteKm, dayRoutineKm);
+        const enRouteDetourKm = Math.max(0, dayEnRouteKm - dayRoutineKm); // Desvío excedente que supera la rutina
         const dayEffectiveKm = dayFreeKm + enRouteDetourKm; // Km de carreras que requieren combustible
 
         // Tope Físico Realista de Recogida (Criterios 2 y 3):
@@ -582,26 +703,39 @@ export function calculateRidesCycleSummary(params = {}) {
         const maxAllowedPickupKm = Number(((dayFreeKm * MAX_PICKUP_RATIO) + (enRouteDetourKm * 0.20) + enRoutePickupCap).toFixed(1));
         const defaultExpectedPickupKm = Number(((dayFreeKm * learnedPickupFactor) + (enRouteDetourKm * 0.15) + (enRoutePickupCap * 0.5)).toFixed(1));
 
-        // Resolve day odometer reading
-        const odo = resolveDayOdometerDelta(dateStr, rawLogs);
+        // Resolve day odometer reading (GPS daily telemetry takes priority over manual odometer logs)
+        const odo = resolveDayOdometerDelta(dateStr, rawLogs, null, gpsDaysMap);
         let dayPickupKm = 0;
+        let dayDeadheadSource = 'estimated';
 
         if (odo.hasClosing && odo.deltaOdo > 0) {
             // Criterio 1: Si pasaron múltiples días entre lecturas, deducir la rutina de todos los días transcurridos
             const elapsedDays = Math.max(1, odo.daysElapsed || 1);
-            const multiDayRoutine = elapsedDays * routineDailyKm;
+            const multiDayRoutine = elapsedDays * dayRoutineKm;
             const candidateWorkKm = Math.max(0, odo.deltaOdo - multiDayRoutine);
             const rawPickup = Math.max(0, candidateWorkKm - dayEffectiveKm);
 
             // Criterio 2: Acotamiento estricto contra el tope físico de recogida
             // Cualquier exceso por encima de maxAllowedPickupKm es uso personal del conductor (fines de semana, diligencias)
             dayPickupKm = Math.min(rawPickup, maxAllowedPickupKm);
+            dayDeadheadSource = odo.source === 'gps' ? 'gps' : 'odometer';
+            if (odo.source === 'gps') gpsOdoDaysCount++;
+            else odoManualDaysCount++;
         } else {
             dayPickupKm = defaultExpectedPickupKm;
         }
 
         const dayExtraKm = Number((dayEffectiveKm + dayPickupKm).toFixed(1));
-        const dayFuelCost = Math.round(dayExtraKm * costPerKmCop);
+        let dayIdleWorkFuelCop = 0;
+        let dayGpsWorkHours = 0;
+        if (odo.hasClosing && odo.deltaOdo > 0 && (odo.idleAccOnSec > 0 || odo.runTimeSec > 0)) {
+            const workShare = Math.min(1, dayExtraKm / odo.deltaOdo);
+            if (odo.idleAccOnSec > 0) {
+                dayIdleWorkFuelCop = Math.round(((odo.idleAccOnSec / 3600) * 0.18) * workShare * fuelPriceCop);
+            }
+            dayGpsWorkHours = ((Number(odo.runTimeSec) || 0) + (Number(odo.idleAccOnSec) || 0)) * workShare / 3600;
+        }
+        const dayFuelCost = Math.round(dayExtraKm * costPerKmCop) + dayIdleWorkFuelCop;
 
         dailyBreakdown[dateStr] = {
             date: dateStr,
@@ -614,6 +748,9 @@ export function calculateRidesCycleSummary(params = {}) {
             effectiveKm: dayEffectiveKm,
             pickupKm: dayPickupKm,
             extraKm: dayExtraKm,
+            idleFuelCop: dayIdleWorkFuelCop,
+            gpsWorkHours: Number(dayGpsWorkHours.toFixed(2)),
+            deadheadSource: dayDeadheadSource,
             fuelCostCop: dayFuelCost,
             ridesCount: dayRidesCount,
             hasOdometer: odo.hasClosing
@@ -627,6 +764,8 @@ export function calculateRidesCycleSummary(params = {}) {
         totalEffectiveWorkKm += dayEffectiveKm;
         totalPickupKm += dayPickupKm;
         totalExtraKm += dayExtraKm;
+        totalIdleFuelCop += dayIdleWorkFuelCop;
+        totalGpsWorkHours += dayGpsWorkHours;
         totalFuelExpenseCop += dayFuelCost;
         totalRidesCount += dayRidesCount;
     });
@@ -734,6 +873,13 @@ export function calculateRidesCycleSummary(params = {}) {
         return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
     });
 
+    const netProfitPerHourCop = totalGpsWorkHours >= 0.25
+        ? Math.round(freeNetProfitCop / totalGpsWorkHours)
+        : null;
+    const deadheadSource = gpsOdoDaysCount > 0
+        ? 'gps'
+        : (odoManualDaysCount > 0 ? 'odometer' : 'estimated');
+
     return {
         cycleType,
         cycleLabel,
@@ -774,6 +920,13 @@ export function calculateRidesCycleSummary(params = {}) {
         // 4. Fondo de Desgaste Sugerido
         wearReserveCop,
         wearReservePct: DEFAULT_WEAR_RESERVE_PERCENT,
+        // GPS Unified Telemetry & Profitability
+        netProfitPerHourCop,
+        totalGpsWorkHours: Number(totalGpsWorkHours.toFixed(2)),
+        totalIdleFuelCop,
+        routineProfile,
+        gpsOdoDaysCount,
+        deadheadSource,
         // Activity & Movements
         ridesCount: totalRidesCount,
         totalRidesCount,
