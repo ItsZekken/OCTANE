@@ -2289,7 +2289,7 @@ const CAD_5_TAP_WINDOW_MS = 2200; // 2.2s
 function triggerAmberFlash(stageEl) {
     if (!stageEl) return;
     const flash = document.createElement('div');
-    flash.className = 'absolute inset-0 bg-[#F59E0B]/30 pointer-events-none transition-opacity duration-500 z-30';
+    flash.className = 'absolute inset-0 bg-[var(--accent-amber)]/25 pointer-events-none transition-opacity duration-500 z-30';
     flash.style.opacity = '1';
     stageEl.appendChild(flash);
     requestAnimationFrame(() => {

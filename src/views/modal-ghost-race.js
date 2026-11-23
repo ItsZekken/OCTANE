@@ -3,13 +3,10 @@
  * 
  * Embeds the high-framerate Ghost Race 2D canvas (/ghost-race.html) inside a native
  * full-screen container with precision horology styling:
- * - Top control bar: Brand, Recurrent Route Badge, and Close [ESC / ✕] trigger
  * - Smooth fade transitions and defensive lifecycle management
- * - Listens for window 'message' (OCTANE_CLOSE_GHOST_RACE) and 'Escape' key
+ * - Listens for window 'message' (OCTANE_CLOSE_GHOST_RACE, OCTANE_GHOST_RACE_READY) and 'Escape' key
  * - Recurrent Route Clustering Engine: Detects commute patterns by origin/dest (<= 300m)
  *   and departure window (+- 45 min).
- * 
- * Silencio Verbal Absoluto: Zero <p> tags, zero boxes inside boxes.
  */
 
 import { playHorologyTick } from '../core/telemetry-engine.js';
@@ -19,6 +16,9 @@ let modalRootEl = null;
 let isModalActive = false;
 let boundMessageListener = null;
 let boundKeyDownListener = null;
+let boundStateListener = null;
+let pendingInitPayload = null;
+let hasSentInitPayload = false;
 
 /**
  * Calculates Haversine distance in meters between two lat/lng coordinates.
@@ -261,16 +261,147 @@ function initModalRoot() {
 
     modalRootEl = document.createElement('div');
     modalRootEl.id = 'octane-ghost-race-modal';
-    modalRootEl.className = 'fixed inset-0 z-50 hidden bg-[#09090B] flex flex-col overflow-hidden text-[#F4F4F6] select-none transition-opacity duration-200 opacity-0';
+    modalRootEl.className = 'fixed inset-0 z-50 hidden bg-[var(--bg-void)] flex flex-col overflow-hidden text-[var(--text-primary)] select-none transition-all duration-200 opacity-0';
     document.body.appendChild(modalRootEl);
+}
+
+/**
+ * Resolves the active OCTANE theme ('dark' | 'light').
+ */
+function resolveCurrentTheme() {
+    if (typeof document !== 'undefined') {
+        const attr = document.documentElement.getAttribute('data-theme');
+        if (attr === 'light' || attr === 'dark') return attr;
+    }
+    try {
+        const stored = store.getState()?.theme;
+        if (stored === 'light' || stored === 'dark') return stored;
+    } catch (_) {}
+    return 'dark';
+}
+
+/**
+ * Extracts normalized dynamic Ghost Race trips from gpsCache when a user's
+ * recurrent route has at least 3 complete GPS tracks (>= 10 points each).
+ */
+function extractRecurrentDynamicTrips(activeRoute) {
+    if (!activeRoute || !Array.isArray(activeRoute.tripIds) || activeRoute.tripIds.length < 3) {
+        return null;
+    }
+    try {
+        const profile = store.getState()?.vehicleProfile;
+        const tripsByDate = profile?.gpsCache?.tripsByDate;
+        if (!tripsByDate || typeof tripsByDate !== 'object') return null;
+
+        const idSet = new Set(activeRoute.tripIds.map(String));
+        const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const normalized = [];
+
+        for (const [dateKey, dayTrips] of Object.entries(tripsByDate)) {
+            if (!Array.isArray(dayTrips)) continue;
+            for (const t of dayTrips) {
+                if (!t) continue;
+                const tid = String(t.id || t.startTimeMs || '');
+                if (!idSet.has(tid)) continue;
+                if (!Array.isArray(t.trackPoints) || t.trackPoints.length < 10) continue;
+
+                const firstPt = t.trackPoints[0];
+                const lastPt = t.trackPoints[t.trackPoints.length - 1];
+                const t0 = Number(firstPt.time || firstPt.gpsTime || t.startTimeMs || 0);
+                const tEnd = Number(lastPt.time || lastPt.gpsTime || t.endTimeMs || 0);
+                const isMs = t0 > 1e11;
+                const div = isMs ? 1000 : 1;
+                const durationSec = Math.max(60, Math.round((tEnd - t0) / div) || Number(t.durationSec) || 0);
+                if (durationSec <= 0) continue;
+
+                const pts = [];
+                let maxSpeed = 0;
+                for (const p of t.trackPoints) {
+                    const lat = Number(p.lat);
+                    const lng = Number(p.lng);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+                    const ptTime = Number(p.time || p.gpsTime || t0);
+                    const rel = Math.max(0, Math.round((ptTime - t0) / div));
+                    const spd = Math.max(0, Math.round(Number(p.speed) || 0));
+                    const dir = Math.round(Number(p.course ?? p.heading ?? p.dir) || 0);
+                    if (spd > maxSpeed) maxSpeed = spd;
+                    pts.push([rel, lat, lng, spd, dir]);
+                }
+                if (pts.length < 10) continue;
+
+                const dObj = new Date(`${dateKey}T12:00:00`);
+                const startDateObj = t.startTimeMs ? new Date(Number(t.startTimeMs)) : null;
+                const startSecOfDay = startDateObj
+                    ? startDateObj.getHours() * 3600 + startDateObj.getMinutes() * 60 + startDateObj.getSeconds()
+                    : 26100;
+                const startHm = t.startTimeHm || (startDateObj
+                    ? `${String(startDateObj.getHours()).padStart(2, '0')}:${String(startDateObj.getMinutes()).padStart(2, '0')}`
+                    : '07:15');
+                const distKm = Number((Number(t.distanceKm ?? t.mileageKm ?? 0)).toFixed(2));
+
+                normalized.push({
+                    id: tid,
+                    date: t.date || dateKey,
+                    dayName: Number.isNaN(dObj.getTime()) ? '' : dayNames[dObj.getDay()],
+                    startTime: startHm,
+                    startSecOfDay,
+                    endSecOfDay: startSecOfDay + durationSec,
+                    durationSec,
+                    durationMin: Number((durationSec / 60).toFixed(1)),
+                    distKm,
+                    avgSpeed: durationSec > 0 && distKm > 0 ? Number(((distKm / durationSec) * 3600).toFixed(1)) : 0,
+                    maxSpeed,
+                    routeType: t.routeType || 'Ruta habitual',
+                    pts
+                });
+            }
+        }
+
+        if (normalized.length < 3) return null;
+        normalized.sort((a, b) => a.durationSec - b.durationSec);
+        normalized.forEach((t, idx) => { t.rank = idx + 1; });
+        return normalized;
+    } catch (_) {
+        return null;
+    }
+}
+
+/**
+ * Dispatches the initial payload to the Ghost Race iframe once per session.
+ */
+function postInitPayloadToIframe() {
+    if (hasSentInitPayload || !pendingInitPayload || !modalRootEl) return;
+    const iframe = modalRootEl.querySelector('#ghost-race-iframe');
+    if (!iframe?.contentWindow) return;
+    try {
+        iframe.contentWindow.postMessage(pendingInitPayload, '*');
+        hasSentInitPayload = true;
+        iframe.contentWindow.focus?.();
+    } catch (_) {}
 }
 
 /**
  * Handles incoming postMessage from iframe.
  */
 function handleWindowMessage(e) {
-    if (e.data && e.data.type === 'OCTANE_CLOSE_GHOST_RACE') {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'OCTANE_CLOSE_GHOST_RACE') {
         closeGhostRaceModal();
+    } else if (e.data.type === 'OCTANE_GHOST_RACE_READY') {
+        postInitPayloadToIframe();
+    }
+}
+
+/**
+ * Forwards runtime theme changes while the modal is open.
+ */
+function handleStateUpdate(e) {
+    const nextTheme = e?.detail?.theme;
+    if ((nextTheme === 'light' || nextTheme === 'dark') && modalRootEl && isModalActive) {
+        const iframe = modalRootEl.querySelector('#ghost-race-iframe');
+        try {
+            iframe?.contentWindow?.postMessage({ type: 'OCTANE_THEME_CHANGE', theme: nextTheme }, '*');
+        } catch (_) {}
     }
 }
 
@@ -286,7 +417,7 @@ function handleKeyDown(e) {
 }
 
 /**
- * Opens the Ghost Race full-screen modal.
+ * Opens the Ghost Race full-screen modal (edge-to-edge, single unified chrome).
  * 
  * @param {Object} [options={}] - Optional parameters { route }
  */
@@ -299,7 +430,9 @@ export function openGhostRaceModal(options = {}) {
         playHorologyTick(1200, 0.015, 0.03);
     } catch (_) {}
 
-    // Retrieve active recurrent route from options, localStorage, or fallback
+    const theme = resolveCurrentTheme();
+
+    // Retrieve active recurrent route from options or localStorage
     let activeRoute = options.route || null;
     if (!activeRoute) {
         try {
@@ -308,41 +441,38 @@ export function openGhostRaceModal(options = {}) {
         } catch (_) {}
     }
 
-    const routeTitle = activeRoute?.name || 'LA CEIBA ➔ UNINORTE';
-    const routeCount = activeRoute?.tripsCount ? `${activeRoute.tripsCount} VUELTAS` : '84 TRAYECTOS';
+    const dynamicTrips = extractRecurrentDynamicTrips(activeRoute);
+    const iframeSrc = `/ghost-race.html?theme=${encodeURIComponent(theme)}`;
+
+    hasSentInitPayload = false;
+    pendingInitPayload = {
+        type: 'OCTANE_GHOST_RACE_INIT',
+        theme,
+        route: dynamicTrips ? {
+            name: activeRoute?.name || 'RUTA HABITUAL',
+            startLabel: activeRoute?.startAddress || 'ORIGEN',
+            endLabel: activeRoute?.endAddress || 'DESTINO'
+        } : null,
+        trips: dynamicTrips
+    };
 
     modalRootEl.innerHTML = `
-        <header class="h-11 sm:h-12 bg-[#0E0E11] border-b border-[#1E1E24] px-3 sm:px-4 flex items-center justify-between shrink-0 select-none z-30">
-            <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-2 h-2 rounded-full bg-[#F59E0B] shadow-[0_0_8px_rgba(245,158,11,0.6)]"></div>
-                <div class="flex items-baseline gap-2 min-w-0">
-                    <span class="text-xs font-mono font-bold tracking-widest text-[#F59E0B]">OCTANE</span>
-                    <span class="text-[11px] text-[#8A8A93] font-mono hidden xs:inline tracking-wider">GHOST RACE</span>
-                </div>
-            </div>
-
-            <div id="ghost-race-recurrent-badge" class="flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-[#141418] border border-[#1E1E24] text-[10px] font-mono truncate max-w-[55%] sm:max-w-none">
-                <span class="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse shrink-0"></span>
-                <span class="text-[#F4F4F6] font-semibold uppercase tracking-wider truncate">${routeTitle}</span>
-                <span class="text-[#8A8A93] text-[9px] uppercase tracking-wider hidden sm:inline">· ${routeCount}</span>
-            </div>
-
-            <button id="ghost-race-modal-close" class="h-7 px-2 sm:px-2.5 rounded-full bg-[#141418] border border-[#1E1E24] hover:border-[#EF4444] text-[10px] sm:text-[11px] font-mono text-[#8A8A93] hover:text-[#EF4444] transition-colors flex items-center gap-1.5 cursor-pointer shrink-0" title="Cerrar [ESC]">
-                <span class="text-[9px] tracking-wider opacity-60 hidden sm:inline">ESC</span>
-                <span class="font-bold">✕</span>
-            </button>
-        </header>
-
-        <div class="relative flex-1 w-full min-h-0 bg-[#09090B]">
-            <iframe id="ghost-race-iframe" src="/ghost-race.html" class="w-full h-full border-0 block" allow="accelerometer; gyroscope"></iframe>
+        <div class="relative flex-1 w-full h-full min-h-0 bg-[var(--bg-void)]">
+            <iframe
+                id="ghost-race-iframe"
+                src="${iframeSrc}"
+                class="w-full h-full border-0 block"
+                title="OCTANE Ghost Race"
+                allow="accelerometer; gyroscope"
+            ></iframe>
         </div>
     `;
 
-    const closeBtn = modalRootEl.querySelector('#ghost-race-modal-close');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            closeGhostRaceModal();
-        });
+    const iframe = modalRootEl.querySelector('#ghost-race-iframe');
+    if (iframe) {
+        iframe.addEventListener('load', () => {
+            postInitPayloadToIframe();
+        }, { once: true });
     }
 
     if (!boundMessageListener) {
@@ -355,11 +485,23 @@ export function openGhostRaceModal(options = {}) {
         window.addEventListener('keydown', boundKeyDownListener);
     }
 
+    if (!boundStateListener) {
+        boundStateListener = handleStateUpdate;
+        window.addEventListener('octane:update-state', boundStateListener);
+    }
+
+    // Lock background scroll while full-screen instrument is active
+    try {
+        document.documentElement.style.overflow = 'hidden';
+    } catch (_) {}
+
     // Smooth entry transition
     modalRootEl.classList.remove('hidden');
+    modalRootEl.style.transform = 'scale(0.992)';
     requestAnimationFrame(() => {
         modalRootEl.classList.remove('opacity-0');
         modalRootEl.classList.add('opacity-100');
+        modalRootEl.style.transform = 'scale(1)';
     });
 
     isModalActive = true;
@@ -378,15 +520,21 @@ export function closeGhostRaceModal() {
     } catch (_) {}
 
     isModalActive = false;
+    pendingInitPayload = null;
+    hasSentInitPayload = false;
+
+    try {
+        document.documentElement.style.overflow = '';
+    } catch (_) {}
 
     if (modalRootEl) {
         modalRootEl.classList.remove('opacity-100');
         modalRootEl.classList.add('opacity-0');
+        modalRootEl.style.transform = 'scale(0.992)';
 
         setTimeout(() => {
-            if (modalRootEl) {
+            if (modalRootEl && !isModalActive) {
                 modalRootEl.classList.add('hidden');
-                // Clear iframe src to release resources and stop background canvas rendering
                 const iframe = modalRootEl.querySelector('#ghost-race-iframe');
                 if (iframe) {
                     iframe.src = 'about:blank';
@@ -404,5 +552,10 @@ export function closeGhostRaceModal() {
     if (boundKeyDownListener) {
         window.removeEventListener('keydown', boundKeyDownListener);
         boundKeyDownListener = null;
+    }
+
+    if (boundStateListener) {
+        window.removeEventListener('octane:update-state', boundStateListener);
+        boundStateListener = null;
     }
 }
