@@ -1,136 +1,308 @@
 /**
- * OCTANE // KINETIC — Master JSON Import / Export Engine
- * Dual-format support:
- *   1. Legacy Flat Telemetry Arrays (e.g., spicy_telemetry_pandas_dataset_2.json)
- *   2. Full System Master Snapshots (7 object stores + metadata):
- *      - vehicle_profile (STORES.VEHICLE_PROFILE)
- *      - telemetry_logs (STORES.TELEMETRY_LOGS)
- *      - maintenance_items (STORES.MAINTENANCE_ITEMS)
- *      - free_notes (STORES.FREE_NOTES)
- *      - legal_docs (STORES.LEGAL_DOCS)
- *      - ride_sessions (STORES.RIDE_SESSIONS)
- *      - platform_passes (STORES.PLATFORM_PASSES)
+ * OCTANE // KINETIC — Master Import / Export & AI Digest Orchestrator
+ *
+ * Dual-purpose export architecture:
+ *   1. AI / Human-Readable Exports (zero GPS trackPoints, zero raw coordinates, zero credentials):
+ *      - Structured JSON digest (`exportLlmAnalysisJson`)
+ *      - Readable Markdown report (`exportLlmMarkdownReport`)
+ *      - One-click clipboard copy (`copyLlmReportToClipboard`)
+ *   2. Restorable Full Backup (`exportMasterBackup`):
+ *      - All 7 IndexedDB stores + tombstones + manifest
+ *      - Scrubs `gpsConfig.password` by default
+ *      - Optional `includeGpsTracks` toggle to include or omit heavy route polylines
+ *   3. Safe Pre-Restore Inspection & Import (`inspectBackupFile`, `importFromJSONString`, `importFromFile`):
+ *      - Blocks accidental restoration of AI-only exports
+ *      - Preserves local `gpsConfig.password` when restoring a scrubbed backup
  */
 
 import { localYmd } from './date-utils.js';
 import {
-    STORES,
     exportAllStores,
     importAllStores,
     bulkAddTelemetryLogs,
     getTelemetryLogs,
     getVehicleProfile,
+    saveVehicleProfile,
     getMaintenanceItems,
     normalizeTelemetryLog
 } from './db-local.js';
+import {
+    buildFullBackupPayload,
+    buildLlmAnalysisExport,
+    buildLlmMarkdownReport,
+    inspectBackupPayload,
+    estimateExportSizes,
+    formatByteSize,
+    estimateUtf8Bytes,
+    countSnapshotManifest
+} from './export-engine.js';
 import { store, showToast } from './state.js';
 import { triggerCloudSync } from './firebase-sync.js';
 
+export {
+    buildFullBackupPayload,
+    buildLlmAnalysisExport,
+    buildLlmMarkdownReport,
+    inspectBackupPayload,
+    estimateExportSizes,
+    formatByteSize,
+    countSnapshotManifest
+};
+
+function triggerBrowserDownload(content, fileName, mimeType) {
+    if (typeof document === 'undefined') return;
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+async function copyTextToClipboard(text) {
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(text);
+        return true;
+    }
+    if (typeof document !== 'undefined') {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) return true;
+    }
+    throw new Error('Portapapeles no disponible en este navegador.');
+}
+
+async function readFileAsText(file) {
+    if (!file) throw new Error('No se seleccionó ningún archivo.');
+    if (typeof file.text === 'function') {
+        return file.text();
+    }
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (e) => reject(e.target.error);
+        reader.readAsText(file);
+    });
+}
+
 /**
- * Initiates browser download of full master snapshot containing all 7 stores.
+ * Computes live export sizes and record counts from IndexedDB without downloading anything.
  * @returns {Promise<Object>}
  */
-export async function exportMasterBackup() {
+export async function getExportMetricsSummary() {
+    const snapshot = await exportAllStores();
+    return {
+        manifest: countSnapshotManifest(snapshot),
+        sizes: estimateExportSizes(snapshot)
+    };
+}
+
+/**
+ * Downloads a compact, privacy-safe, AI/LLM-optimized structured JSON digest
+ * (zero GPS trackPoints, zero raw coordinates, zero credentials).
+ * @returns {Promise<{ payload: Object, bytes: number, sizeLabel: string }>}
+ */
+export async function exportLlmAnalysisJson() {
     try {
         const snapshot = await exportAllStores();
-        const jsonString = JSON.stringify(snapshot, null, 2);
+        const payload = buildLlmAnalysisExport(snapshot);
+        const jsonString = JSON.stringify(payload, null, 2);
+        const bytes = estimateUtf8Bytes(jsonString);
+        const sizeLabel = formatByteSize(bytes);
 
-        if (typeof document !== 'undefined') {
-            const blob = new Blob([jsonString], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
+        const dateStr = localYmd(new Date()).replace(/-/g, '');
+        triggerBrowserDownload(jsonString, `octane_analisis_ia_${dateStr}.json`, 'application/json;charset=utf-8');
 
-            const now = new Date();
-            const dateStr = localYmd(now).replace(/-/g, '');
-            const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
-            const fileName = `octane_kinetic_master_backup_${dateStr}_${timeStr}.json`;
-
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        showToast('COPIA DE SEGURIDAD DESCARGADA');
-        return snapshot;
+        showToast(`INFORME IA DESCARGADO · ${sizeLabel}`);
+        return { payload, bytes, sizeLabel };
     } catch (err) {
-        console.error('[OCTANE IO] Failed to export master backup:', err);
-        showToast('ERROR AL EXPORTAR');
+        console.error('[OCTANE IO] Failed to export AI analysis JSON:', err);
+        showToast('ERROR AL EXPORTAR INFORME');
         throw err;
     }
 }
 
 /**
- * Parses a JSON string, automatically detects whether it is a legacy flat array
- * or a master backup snapshot, and applies it to IndexedDB and State.
+ * Downloads a readable Markdown telemetry report for humans and LLMs.
+ * @returns {Promise<{ markdown: string, bytes: number, sizeLabel: string }>}
+ */
+export async function exportLlmMarkdownReport() {
+    try {
+        const snapshot = await exportAllStores();
+        const markdown = buildLlmMarkdownReport(snapshot);
+        const bytes = estimateUtf8Bytes(markdown);
+        const sizeLabel = formatByteSize(bytes);
+
+        const dateStr = localYmd(new Date()).replace(/-/g, '');
+        triggerBrowserDownload(markdown, `octane_informe_ia_${dateStr}.md`, 'text/markdown;charset=utf-8');
+
+        showToast(`RESUMEN DESCARGADO · ${sizeLabel}`);
+        return { markdown, bytes, sizeLabel };
+    } catch (err) {
+        console.error('[OCTANE IO] Failed to export AI Markdown report:', err);
+        showToast('ERROR AL EXPORTAR RESUMEN');
+        throw err;
+    }
+}
+
+/**
+ * Copies the compact readable Markdown report directly to the system clipboard
+ * for instant pasting into any LLM chat.
+ * @returns {Promise<{ markdown: string, bytes: number, sizeLabel: string }>}
+ */
+export async function copyLlmReportToClipboard() {
+    try {
+        const snapshot = await exportAllStores();
+        const markdown = buildLlmMarkdownReport(snapshot);
+        const bytes = estimateUtf8Bytes(markdown);
+        const sizeLabel = formatByteSize(bytes);
+
+        await copyTextToClipboard(markdown);
+        showToast(`RESUMEN COPIADO · ${sizeLabel}`);
+        return { markdown, bytes, sizeLabel };
+    } catch (err) {
+        console.error('[OCTANE IO] Failed to copy AI report:', err);
+        showToast('NO SE PUDO COPIAR AL PORTAPAPELES');
+        throw err;
+    }
+}
+
+/**
+ * Initiates browser download of a restorable full master backup containing all 7 stores.
+ * Scrubs `gpsConfig.password` by default so credentials never leak to disk.
+ *
+ * @param {Object} [options={}]
+ * @param {boolean} [options.includeGpsTracks=true]
+ * @returns {Promise<Object>}
+ */
+export async function exportMasterBackup(options = {}) {
+    try {
+        const includeGpsTracks = options.includeGpsTracks !== false;
+        const snapshot = await exportAllStores();
+        const backup = buildFullBackupPayload(snapshot, {
+            includeGpsTracks,
+            scrubCredentials: true
+        });
+        const jsonString = includeGpsTracks
+            ? JSON.stringify(backup)
+            : JSON.stringify(backup, null, 2);
+        const bytes = estimateUtf8Bytes(jsonString);
+        const sizeLabel = formatByteSize(bytes);
+
+        const now = new Date();
+        const dateStr = localYmd(now).replace(/-/g, '');
+        const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
+        const prefix = includeGpsTracks ? 'octane_respaldo_completo' : 'octane_respaldo_ligero';
+        const fileName = `${prefix}_${dateStr}_${timeStr}.json`;
+
+        triggerBrowserDownload(jsonString, fileName, 'application/json;charset=utf-8');
+        showToast(`RESPALDO DESCARGADO · ${sizeLabel}`);
+        return backup;
+    } catch (err) {
+        console.error('[OCTANE IO] Failed to export master backup:', err);
+        showToast('ERROR AL EXPORTAR RESPALDO');
+        throw err;
+    }
+}
+
+/**
+ * Reads an uploaded file and inspects its structure/manifest before applying any restore.
+ * @param {File} file
+ * @returns {Promise<{ content: string, inspection: Object }>}
+ */
+export async function inspectBackupFile(file) {
+    const content = await readFileAsText(file);
+    const inspection = inspectBackupPayload(content);
+    return { content, inspection };
+}
+
+/**
+ * Parses a JSON string, validates it with `inspectBackupPayload`, and applies it to IndexedDB and State.
+ * Blocks accidental restoration of AI-only exports and preserves local GPS password if backup scrubbed it.
+ *
  * @param {string} jsonString
  * @returns {Promise<Object>} { type: string, count: number }
  */
 export async function importFromJSONString(jsonString) {
-    if (!jsonString || typeof jsonString !== 'string') {
-        throw new Error('El contenido proporcionado no es una cadena JSON válida.');
+    const inspection = inspectBackupPayload(jsonString);
+    if (!inspection.ok) {
+        throw new Error(inspection.error || 'Archivo de respaldo inválido.');
     }
 
-    let parsed;
-    try {
-        parsed = JSON.parse(jsonString);
-    } catch (err) {
-        throw new Error(`Error de sintaxis JSON: ${err.message}`);
-    }
+    const parsed = inspection.parsed;
 
-    // Determine payload format
-    const isMasterSnapshot = Boolean(
-        parsed &&
-        typeof parsed === 'object' &&
-        !Array.isArray(parsed) &&
-        (parsed.version || parsed.stores || (parsed.vehicle_profile && parsed.telemetry_logs) || parsed.ride_sessions || parsed.platform_passes)
-    );
+    if (inspection.kind === 'full_backup') {
+        // Capture local GPS password before overwrite so restoring a scrubbed backup keeps GPS working
+        let existingLocalGpsPassword = '';
+        try {
+            const currentProfile = await getVehicleProfile();
+            existingLocalGpsPassword = currentProfile?.gpsConfig?.password || '';
+        } catch (_) {}
 
-    if (isMasterSnapshot) {
-        // CASE A: Full Master Snapshot
         await importAllStores(parsed);
 
-        const [profile, logs, maintenanceItems] = await Promise.all([
+        let [profile, logs, maintenanceItems] = await Promise.all([
             getVehicleProfile(),
             getTelemetryLogs(),
-            getMaintenanceItems(),
+            getMaintenanceItems()
         ]);
+
+        if (existingLocalGpsPassword && profile && profile.gpsConfig && !profile.gpsConfig.password) {
+            profile = {
+                ...profile,
+                gpsConfig: {
+                    ...profile.gpsConfig,
+                    password: existingLocalGpsPassword
+                }
+            };
+            await saveVehicleProfile(profile);
+        }
 
         store.setState({
             vehicleProfile: profile,
             telemetryLogs: logs,
             maintenanceItems,
             fuelPriceCop: profile.fuelPriceCop || store.getState().fuelPriceCop,
+            selectedCycleIdx: null,
+            warpKm: 0
         });
 
         if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('octane:maintenance-updated', { detail: { items: maintenanceItems } }));
             window.dispatchEvent(new CustomEvent('octane:notes-changed'));
+            window.dispatchEvent(new CustomEvent('octane:update-state', { detail: { restored: true } }));
         }
 
         triggerCloudSync();
-        showToast('COPIA MAESTRA RESTAURADA');
+        showToast('RESPALDO COMPLETO RESTAURADO');
         return {
             type: 'master_backup',
             count: logs.length,
-            version: parsed.version || 1,
+            version: inspection.version || 1,
+            manifest: inspection.manifest
         };
     }
 
-    // CASE B: Flat Array (Legacy Dataset / Pandas export)
-    const rawList = Array.isArray(parsed)
-        ? parsed
-        : (parsed.records || parsed.data || parsed.telemetry_logs || null);
+    if (inspection.kind === 'legacy_array') {
+        const rawList = Array.isArray(parsed)
+            ? parsed
+            : (parsed.records || parsed.data || parsed.telemetry_logs || []);
 
-    if (Array.isArray(rawList) && rawList.length > 0) {
         const state = store.getState();
         const fuelPrice = state.fuelPriceCop || 16000;
 
         const normalizedList = rawList.map((item) => {
             const record = normalizeTelemetryLog(item);
-            // If total_cost_cop is missing or zero but gallons were added, compute reasonable estimate
             if ((!record.total_cost_cop || record.total_cost_cop <= 0) && record.gallons_added > 0) {
                 record.total_cost_cop = Math.round(record.gallons_added * fuelPrice);
             }
@@ -143,18 +315,18 @@ export async function importFromJSONString(jsonString) {
         store.setState({
             telemetryLogs: updatedLogs,
             selectedCycleIdx: null,
-            warpKm: 0,
+            warpKm: 0
         });
 
         triggerCloudSync();
-        showToast(`SYNC: ${count} LECTURAS IMPORTADAS`);
+        showToast(`${count} LECTURAS IMPORTADAS`);
         return {
             type: 'legacy_array',
-            count,
+            count
         };
     }
 
-    throw new Error('Estructura JSON no reconocida. Se esperaba un arreglo de lecturas o un archivo de respaldo maestro.');
+    throw new Error('Estructura no reconocida.');
 }
 
 /**
@@ -163,27 +335,12 @@ export async function importFromJSONString(jsonString) {
  * @returns {Promise<Object>}
  */
 export async function importFromFile(file) {
-    if (!file) {
-        throw new Error('No se seleccionó ningún archivo.');
-    }
-
     try {
-        let content = '';
-        if (typeof file.text === 'function') {
-            content = await file.text();
-        } else {
-            content = await new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = (e) => reject(e.target.error);
-                reader.readAsText(file);
-            });
-        }
-
+        const content = await readFileAsText(file);
         return await importFromJSONString(content);
     } catch (err) {
         console.error('[OCTANE IO] Error importing file:', err);
-        showToast(`ERROR EN COPIA DE SEGURIDAD: ${err.message}`);
+        showToast(err.message || 'ERROR EN COPIA DE SEGURIDAD');
         throw err;
     }
 }

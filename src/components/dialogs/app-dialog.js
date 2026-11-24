@@ -103,11 +103,29 @@ function open({ title, bodyHtml, confirmLabel, danger, cancelValue, readValue })
 }
 
 /**
- * @param {{ title: string, confirmLabel?: string, danger?: boolean }} opts
+ * @param {{ title: string, subtitle?: string, details?: Array<{ label: string, value: string|number }>, confirmLabel?: string, danger?: boolean }} opts
  * @returns {Promise<boolean>}
  */
-export function confirmDialog({ title, confirmLabel = 'Confirmar', danger = false } = {}) {
-  return open({ title, confirmLabel, danger, cancelValue: false });
+export function confirmDialog({ title, subtitle = '', details = null, confirmLabel = 'Confirmar', danger = false } = {}) {
+  const parts = [];
+  if (subtitle) {
+    parts.push(`<div class="font-mono text-[11px] text-[var(--text-secondary)] leading-relaxed">${esc(subtitle)}</div>`);
+  }
+  if (Array.isArray(details) && details.length > 0) {
+    const rows = details
+      .filter(d => d && d.label !== undefined)
+      .map(d => `
+        <div class="flex items-center justify-between py-1.5 font-mono text-[11px] gap-3">
+          <span class="uppercase tracking-wider text-[var(--text-secondary)]">${esc(d.label)}</span>
+          <span class="text-[var(--text-primary)] font-medium tabular-nums text-right">${esc(d.value)}</span>
+        </div>
+      `)
+      .join('');
+    if (rows) {
+      parts.push(`<div class="border-t border-b border-[var(--line-hair)] divide-y divide-[var(--line-hair)]">${rows}</div>`);
+    }
+  }
+  return open({ title, bodyHtml: parts.join(''), confirmLabel, danger, cancelValue: false });
 }
 
 /**

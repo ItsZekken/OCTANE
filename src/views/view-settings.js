@@ -27,7 +27,15 @@ import {
   syncToCloud,
   getCurrentUser
 } from '../core/firebase-sync.js';
-import { exportMasterBackup, importJSONFile } from '../core/json-io.js';
+import {
+  exportMasterBackup,
+  exportLlmAnalysisJson,
+  exportLlmMarkdownReport,
+  copyLlmReportToClipboard,
+  getExportMetricsSummary,
+  inspectBackupFile,
+  importFromJSONString
+} from '../core/json-io.js';
 import { syncGpsTelemetry, DEFAULT_GPS_CONFIG, getGpsConfig, saveRememberedGpsCreds, resolveProxyMode } from '../core/iopgps-sync.js';
 import { CAR_COLORS } from '../components/modals/modal-onboarding.js';
 import { playHorologyTick } from '../components/fuel-gauges/gauge-controller.js';
@@ -500,29 +508,84 @@ export async function renderSettingsView(container) {
         </div>
       </section>
 
-      <!-- SECTION 4: COPIA DE SEGURIDAD -->
+      <!-- SECTION 4: DATOS Y RESPALDO -->
       <section class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] p-5 space-y-4">
         <div class="flex items-center justify-between border-b border-[var(--line-hair)] pb-3">
-          <span class="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">COPIA DE SEGURIDAD</span>
-          <span class="font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">RESPALDO</span>
+          <span class="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">DATOS Y RESPALDO</span>
+          <span class="font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">SIN CLAVES</span>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button id="export-backup-btn" type="button" class="h-10 px-4 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)] border border-[var(--line-hair)] hover:border-[var(--line-strong)] text-[var(--text-primary)] text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer">
-            <svg class="w-4 h-4 text-[var(--accent-amber)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            <span>Exportar copia de seguridad</span>
-          </button>
+        <div class="divide-y divide-[var(--line-hair)]">
+          <!-- SUB-BLOCK A: INFORME PARA IA (COMPACTO Y LEGIBLE) -->
+          <div class="pb-4 space-y-3">
+            <div class="flex items-start justify-between gap-3 font-mono">
+              <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)] block">INFORME PARA IA</span>
+                <span class="text-[10px] text-[var(--text-secondary)] block mt-0.5">Resumen compacto sin coordenadas ni claves, listo para análisis.</span>
+              </div>
+              <span id="export-ai-size" class="text-[10px] uppercase tracking-wider text-[var(--accent-amber)] tabular-nums whitespace-nowrap flex-shrink-0">CALCULANDO...</span>
+            </div>
 
-          <input type="file" id="json-file-input" accept=".json,application/json" class="hidden" />
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button id="btn-copy-ai-report" type="button" class="h-10 px-3 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)] border border-[var(--accent-amber)]/60 hover:border-[var(--accent-amber)] text-[var(--accent-amber)] text-xs font-mono font-semibold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <span>Copiar resumen</span>
+              </button>
 
-          <button id="import-json-btn" type="button" class="h-10 px-4 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)] border border-[var(--line-hair)] hover:border-[var(--line-strong)] text-[var(--text-primary)] text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer">
-            <svg class="w-4 h-4 text-[var(--accent-volt)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-            </svg>
-            <span>Importar copia de seguridad</span>
-          </button>
+              <button id="btn-export-ai-md" type="button" class="h-10 px-3 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)] border border-[var(--line-hair)] hover:border-[var(--line-strong)] text-[var(--text-primary)] text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                <svg class="w-3.5 h-3.5 text-[var(--accent-amber)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Descargar texto</span>
+              </button>
+
+              <button id="btn-export-ai-json" type="button" class="h-10 px-3 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)] border border-[var(--line-hair)] hover:border-[var(--line-strong)] text-[var(--text-primary)] text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                <svg class="w-3.5 h-3.5 text-[var(--accent-amber)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Descargar datos</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- SUB-BLOCK B: RESPALDO COMPLETO (RESTAURABLE) -->
+          <div class="pt-4 space-y-3">
+            <div class="flex items-start justify-between gap-3 font-mono">
+              <div>
+                <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-primary)] block">RESPALDO COMPLETO</span>
+                <span class="text-[10px] text-[var(--text-secondary)] block mt-0.5">Copia restaurable con todo tu historial. Excluye tu clave GPS.</span>
+              </div>
+              <span id="export-backup-size" class="text-[10px] uppercase tracking-wider text-[var(--text-secondary)] tabular-nums whitespace-nowrap flex-shrink-0">CALCULANDO...</span>
+            </div>
+
+            <label class="flex items-center justify-between gap-3 py-1 font-mono cursor-pointer">
+              <div class="flex items-center gap-2.5">
+                <input id="toggle-backup-gps-tracks" type="checkbox" checked class="w-4 h-4 rounded-sm accent-[var(--accent-amber)] cursor-pointer" />
+                <span class="text-[11px] uppercase tracking-wider text-[var(--text-primary)]">Incluir trazados de ruta GPS</span>
+              </div>
+              <span id="export-tracks-meta" class="text-[10px] text-[var(--text-muted)] uppercase tracking-wider tabular-nums">--</span>
+            </label>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button id="export-backup-btn" type="button" class="h-10 px-4 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)] border border-[var(--line-hair)] hover:border-[var(--line-strong)] text-[var(--text-primary)] text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                <svg class="w-4 h-4 text-[var(--accent-amber)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Exportar respaldo</span>
+              </button>
+
+              <input type="file" id="json-file-input" accept=".json,application/json" class="hidden" />
+
+              <button id="import-json-btn" type="button" class="h-10 px-4 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)] border border-[var(--line-hair)] hover:border-[var(--line-strong)] text-[var(--text-primary)] text-xs font-mono uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                <svg class="w-4 h-4 text-[var(--accent-volt)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                <span>Restaurar respaldo</span>
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1234,77 +1297,163 @@ export async function renderSettingsView(container) {
     });
   }
 
-  // Export Backup
+  // Live Export Size Estimator & Dual Export / Backup Handlers
+  const aiSizeEl = container.querySelector('#export-ai-size');
+  const backupSizeEl = container.querySelector('#export-backup-size');
+  const tracksMetaEl = container.querySelector('#export-tracks-meta');
+  const includeTracksCheckbox = container.querySelector('#toggle-backup-gps-tracks');
+  let cachedExportMetrics = null;
+
+  function renderExportSizeBadges() {
+    if (!cachedExportMetrics) return;
+    const { sizes } = cachedExportMetrics;
+    const includeTracks = includeTracksCheckbox ? Boolean(includeTracksCheckbox.checked) : true;
+
+    if (aiSizeEl) {
+      const reductionSuffix = sizes.aiReductionPct >= 20 ? ` · -${sizes.aiReductionPct}%` : '';
+      aiSizeEl.textContent = `${sizes.aiMarkdownLabel} / ${sizes.aiJsonLabel}${reductionSuffix}`;
+    }
+    if (backupSizeEl) {
+      backupSizeEl.textContent = includeTracks ? sizes.fullWithTracksLabel : sizes.fullWithoutTracksLabel;
+    }
+    if (tracksMetaEl) {
+      if (sizes.trackPointsCount > 0) {
+        tracksMetaEl.textContent = includeTracks
+          ? `${sizes.trackPointsCount.toLocaleString('es-CO')} PUNTOS`
+          : `AHORRA ${sizes.trackBytesSavedLabel}`;
+      } else {
+        tracksMetaEl.textContent = 'SIN TRAZADOS';
+      }
+    }
+  }
+
+  getExportMetricsSummary()
+    .then((metrics) => {
+      cachedExportMetrics = metrics;
+      renderExportSizeBadges();
+    })
+    .catch(() => {
+      if (aiSizeEl) aiSizeEl.textContent = 'LISTO';
+      if (backupSizeEl) backupSizeEl.textContent = 'LISTO';
+    });
+
+  if (includeTracksCheckbox) {
+    includeTracksCheckbox.addEventListener('change', () => {
+      playHorologyTick(1100, 0.012, 0.02);
+      renderExportSizeBadges();
+    });
+  }
+
+  // AI Export: Copy Readable Report to Clipboard
+  const btnCopyAi = container.querySelector('#btn-copy-ai-report');
+  if (btnCopyAi) {
+    btnCopyAi.addEventListener('click', async () => {
+      playHorologyTick(1400, 0.015, 0.03);
+      try {
+        await copyLlmReportToClipboard();
+      } catch (err) {
+        showToast('ERROR · ' + (err && err.message ? err.message : 'No se pudo copiar'));
+      }
+    });
+  }
+
+  // AI Export: Download Readable Text Report (.md)
+  const btnExportAiMd = container.querySelector('#btn-export-ai-md');
+  if (btnExportAiMd) {
+    btnExportAiMd.addEventListener('click', async () => {
+      playHorologyTick(1350, 0.015, 0.03);
+      try {
+        await exportLlmMarkdownReport();
+      } catch (err) {
+        showToast('ERROR · ' + (err && err.message ? err.message : 'Error exportando resumen'));
+      }
+    });
+  }
+
+  // AI Export: Download Compact Structured Data (.json without trackPoints)
+  const btnExportAiJson = container.querySelector('#btn-export-ai-json');
+  if (btnExportAiJson) {
+    btnExportAiJson.addEventListener('click', async () => {
+      playHorologyTick(1350, 0.015, 0.03);
+      try {
+        await exportLlmAnalysisJson();
+      } catch (err) {
+        showToast('ERROR · ' + (err && err.message ? err.message : 'Error exportando datos'));
+      }
+    });
+  }
+
+  // Full Restorable Backup Export
   container.querySelector('#export-backup-btn').addEventListener('click', async () => {
     playHorologyTick(1350, 0.015, 0.03);
     try {
-      if (typeof exportMasterBackup === 'function') {
-        await exportMasterBackup();
-      } else {
-        const logs = await getTelemetryLogs();
-        const exportObj = {
-          version: '1.0',
-          exportedAt: new Date().toISOString(),
-          vehicle_profile: profile,
-          telemetry_logs: logs
-        };
-        const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const now = todayLocalYmd();
-        a.href = url;
-        a.download = `octane_copia_seguridad_${now}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-      showToast('COPIA DE SEGURIDAD EXPORTADA');
+      const includeGpsTracks = includeTracksCheckbox ? Boolean(includeTracksCheckbox.checked) : true;
+      await exportMasterBackup({ includeGpsTracks });
     } catch (err) {
-      showToast('ERROR · ' + (err && err.message ? err.message : 'Error exportando copia'));
+      showToast('ERROR · ' + (err && err.message ? err.message : 'Error exportando respaldo'));
     }
   });
 
-  // Import Backup
+  // Safe Pre-Validated Restore Backup
   const fileInput = container.querySelector('#json-file-input');
   const importBtn = container.querySelector('#import-json-btn');
 
   importBtn.addEventListener('click', () => {
     playHorologyTick(1100, 0.012, 0.02);
+    fileInput.value = '';
     fileInput.click();
   });
 
   fileInput.addEventListener('change', async (ev) => {
     const file = ev.target.files?.[0];
+    fileInput.value = '';
     if (!file) return;
 
     try {
-      if (typeof importJSONFile === 'function') {
-        await importJSONFile(file);
-      } else {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-
-        if (Array.isArray(parsed)) {
-          await saveTelemetryLogs(parsed);
-          if (store && typeof store.setState === 'function') {
-            store.setState({ telemetryLogs: parsed });
-          }
-        } else if (parsed && typeof parsed === 'object') {
-          if (parsed.vehicle_profile) {
-            await saveVehicleProfile(parsed.vehicle_profile);
-          }
-          if (Array.isArray(parsed.telemetry_logs)) {
-            await saveTelemetryLogs(parsed.telemetry_logs);
-            if (store && typeof store.setState === 'function') {
-              store.setState({ telemetryLogs: parsed.telemetry_logs });
-            }
-          }
-        }
+      const { content, inspection } = await inspectBackupFile(file);
+      if (!inspection.ok) {
+        playHorologyTick(600, 0.02, 0.04);
+        showToast(inspection.error || 'ARCHIVO NO VÁLIDO PARA RESTAURAR');
+        return;
       }
+
+      const m = inspection.manifest || {};
+      const dateLabel = m.exportedAt
+        ? String(m.exportedAt).slice(0, 10)
+        : 'SIN FECHA';
+
+      const details = inspection.kind === 'legacy_array'
+        ? [
+            { label: 'TIPO', value: 'Lecturas históricas' },
+            { label: 'REGISTROS', value: String(m.telemetryLogs || inspection.count || 0) }
+          ]
+        : [
+            { label: 'VEHÍCULO', value: m.vehicleName || 'Vehículo' },
+            { label: 'FECHA RESPALDO', value: dateLabel },
+            { label: 'LECTURAS / TANQUEADAS', value: String(m.telemetryLogs || 0) },
+            { label: 'MANTENIMIENTO', value: `${m.maintenanceItems || 0} ítems (${m.maintenanceServices || 0} reg.)` },
+            { label: 'CARRERAS', value: String(m.rideSessions || 0) },
+            { label: 'DOCS / NOTAS', value: `${m.legalDocs || 0} / ${m.freeNotes || 0}` },
+            { label: 'DÍAS GPS', value: `${m.gpsDays || 0} (${inspection.includesGpsTracks ? 'con trazados' : 'sin trazados'})` }
+          ];
+
+      const confirmed = await confirmDialog({
+        title: '¿RESTAURAR RESPALDO?',
+        subtitle: inspection.kind === 'legacy_array'
+          ? 'Se añadirán las lecturas históricas a tu dispositivo.'
+          : 'Reemplazará los datos actuales de este dispositivo.',
+        details,
+        confirmLabel: 'Restaurar',
+        danger: inspection.kind !== 'legacy_array'
+      });
+
+      if (!confirmed) return;
+
+      await importFromJSONString(content);
       playHorologyTick(1600, 0.02, 0.04);
-      showToast('COPIA RESTAURADA');
       renderSettingsView(container);
     } catch (err) {
-      showToast('ERROR · ' + (err && err.message ? err.message : 'Error importando copia de seguridad'));
+      showToast('ERROR · ' + (err && err.message ? err.message : 'Error restaurando respaldo'));
     }
   });
 
