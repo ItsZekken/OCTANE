@@ -16,7 +16,7 @@ import { calculateTelemetryModel } from './telemetry-engine.js';
 import { triggerCloudSync } from './firebase-sync.js';
 import { calculateDistanceMeters, checkStopNearStation, notifyGasStationStop } from './gas-station-matcher.js';
 import { refreshAlerts } from './alerts-engine.js';
-import { reconcileClosedCycleTrips } from './fuel-physics-engine.js';
+import { reconcileClosedCycleTrips, predictTripGallonsWithPhysics } from './fuel-physics-engine.js';
 import { recordVoltageSample } from './vehicle-health-engine.js';
 
 export const IOPGPS_INSTALL_DATE = '2026-02-01';
@@ -1473,18 +1473,53 @@ export function extractTripKinematics(rawPts = [], massKg = 1045) {
     };
 }
 
+function isFiniteTsMs(val) {
+    return val !== null && val !== undefined && val !== '' && Number.isFinite(Number(val));
+}
+
+function isTripInCycleWindow(trip, dateKey, cycle) {
+    const startDate = cycle?.startDate ? String(cycle.startDate).slice(0, 10) : '';
+    const endDate = cycle?.endDate ? String(cycle.endDate).slice(0, 10) : '';
+    if (!startDate || !endDate || !dateKey) return false;
+    if (dateKey < startDate || dateKey > endDate) return false;
+
+    const hasCStart = isFiniteTsMs(cycle.startTimeMs);
+    const hasCEnd = isFiniteTsMs(cycle.endTimeMs);
+    const cStartMs = hasCStart ? Number(cycle.startTimeMs) : NaN;
+    const cEndMs = hasCEnd ? Number(cycle.endTimeMs) : NaN;
+
+    const tStartMs = Number(trip?.startTimeMs);
+    const hasTripMs = isFiniteTsMs(trip?.startTimeMs) && tStartMs > 0;
+
+    if (hasCStart && hasCEnd && hasTripMs) {
+        return tStartMs > cStartMs && tStartMs <= cEndMs;
+    }
+    if (hasCEnd && dateKey === endDate && hasTripMs) {
+        return tStartMs <= cEndMs;
+    }
+    if (hasCStart && dateKey === startDate && hasTripMs) {
+        return tStartMs > cStartMs;
+    }
+    return startDate === endDate
+        ? dateKey === endDate
+        : (dateKey > startDate && dateKey <= endDate);
+}
+
 /**
  * Reconciles cached trips grouped by date against closed full-tank cycles.
  * For each closed full cycle (`startDate` -> `endDate`, `gals > 0`), collects trips in
- * `(startDate, endDate]`, applies `reconcileClosedCycleTrips`, and returns a cloned map
- * with `isCalibrated: true`, `reconciledGallons`, and `reconciledCostCop`.
+ * the exact cycle window (time-exact via `startTimeMs`/`endTimeMs` when available, else
+ * `(startDate, endDate]`), applies `reconcileClosedCycleTrips` with historical per-cycle
+ * fuel price, clears stale calibration on trips outside closed cycles, and optionally applies
+ * closed-loop Ridge fuel predictions to open-cycle trips.
  *
  * @param {Object} [tripsByDate={}]
  * @param {Array<Object>} [closedCycles=[]]
  * @param {number} [fuelPriceCop=16000]
+ * @param {Object} [options={}]
  * @returns {Object}
  */
-export function reconcileTripsAgainstClosedCycles(tripsByDate = {}, closedCycles = [], fuelPriceCop = 16000) {
+export function reconcileTripsAgainstClosedCycles(tripsByDate = {}, closedCycles = [], fuelPriceCop = 16000, options = {}) {
     if (!tripsByDate || typeof tripsByDate !== 'object') return {};
     const cloned = {};
     for (const dateKey of Object.keys(tripsByDate)) {
@@ -1492,43 +1527,125 @@ export function reconcileTripsAgainstClosedCycles(tripsByDate = {}, closedCycles
         cloned[dateKey] = Array.isArray(list) ? list.map(t => (t && typeof t === 'object' ? { ...t } : t)) : list;
     }
 
-    if (!Array.isArray(closedCycles) || closedCycles.length === 0) {
-        return cloned;
-    }
+    const defaultPrice = Number(fuelPriceCop) > 0 ? Number(fuelPriceCop) : 16000;
+    const calibratedKeys = new Set();
 
-    for (const cycle of closedCycles) {
-        if (!cycle || cycle.isFull === false) continue;
-        const pumpGals = Number(cycle.gals ?? cycle.gallons) || 0;
-        const startDate = cycle.startDate ? String(cycle.startDate).slice(0, 10) : '';
-        const endDate = cycle.endDate ? String(cycle.endDate).slice(0, 10) : '';
-        if (pumpGals <= 0 || !startDate || !endDate) continue;
+    if (Array.isArray(closedCycles) && closedCycles.length > 0) {
+        for (const cycle of closedCycles) {
+            if (!cycle || cycle.isFull === false) continue;
+            const pumpGals = Number(cycle.gals ?? cycle.gallons) || 0;
+            const startDate = cycle.startDate ? String(cycle.startDate).slice(0, 10) : '';
+            const endDate = cycle.endDate ? String(cycle.endDate).slice(0, 10) : '';
+            if (pumpGals <= 0 || !startDate || !endDate) continue;
 
-        const refs = [];
-        for (const dateKey of Object.keys(cloned).sort()) {
-            const inWindow = startDate === endDate
-                ? dateKey === endDate
-                : (dateKey > startDate && dateKey <= endDate);
-            if (!inWindow) continue;
+            const rawCyclePrice = Number(cycle.pricePerGal);
+            const cyclePrice = (rawCyclePrice > 5000 && rawCyclePrice < 45000) ? rawCyclePrice : defaultPrice;
 
-            const dayList = cloned[dateKey];
-            if (!Array.isArray(dayList)) continue;
-            dayList.forEach((t, idx) => {
-                if (t && typeof t === 'object') {
-                    refs.push({ dateKey, idx, trip: t });
+            const hasCycleTs = isFiniteTsMs(cycle.startTimeMs) || isFiniteTsMs(cycle.endTimeMs);
+            const refs = [];
+            for (const dateKey of Object.keys(cloned).sort()) {
+                const inDateSpan = hasCycleTs
+                    ? (dateKey >= startDate && dateKey <= endDate)
+                    : (startDate === endDate ? dateKey === endDate : (dateKey > startDate && dateKey <= endDate));
+                if (!inDateSpan) continue;
+
+                const dayList = cloned[dateKey];
+                if (!Array.isArray(dayList)) continue;
+                dayList.forEach((t, idx) => {
+                    if (t && typeof t === 'object' && isTripInCycleWindow(t, dateKey, cycle)) {
+                        refs.push({ dateKey, idx, trip: t });
+                    }
+                });
+            }
+
+            if (refs.length === 0) continue;
+            const reconciled = reconcileClosedCycleTrips(refs.map(r => r.trip), pumpGals, cyclePrice);
+            refs.forEach((r, i) => {
+                if (reconciled[i]) {
+                    cloned[r.dateKey][r.idx] = reconciled[i];
+                    calibratedKeys.add(`${r.dateKey}::${r.idx}`);
                 }
             });
         }
+    }
 
-        if (refs.length === 0) continue;
-        const reconciled = reconcileClosedCycleTrips(refs.map(r => r.trip), pumpGals, fuelPriceCop);
-        refs.forEach((r, i) => {
-            if (reconciled[i]) {
-                cloned[r.dateKey][r.idx] = reconciled[i];
+    const ridgeCoeffs = (options?.fuelPhysicsModel?.mode === 'ridge' && options?.fuelPhysicsModel?.coeffs)
+        ? options.fuelPhysicsModel.coeffs
+        : null;
+
+    for (const dateKey of Object.keys(cloned)) {
+        const dayList = cloned[dateKey];
+        if (!Array.isArray(dayList)) continue;
+        for (let idx = 0; idx < dayList.length; idx++) {
+            if (calibratedKeys.has(`${dateKey}::${idx}`)) continue;
+            const trip = dayList[idx];
+            if (!trip || typeof trip !== 'object') continue;
+
+            if (
+                trip.isCalibrated ||
+                trip.reconciledGallons !== undefined ||
+                trip.reconciledCostCop !== undefined ||
+                trip.reconciliationFactor !== undefined
+            ) {
+                delete trip.isCalibrated;
+                delete trip.reconciledGallons;
+                delete trip.reconciledCostCop;
+                delete trip.reconciliationFactor;
             }
-        });
+
+            if (ridgeCoeffs) {
+                const km = Number(trip.distanceKm ?? trip.mileageKm) || 0;
+                if (km > 0) {
+                    const ridgeGal = predictTripGallonsWithPhysics(trip, ridgeCoeffs);
+                    if (ridgeGal > 0) {
+                        trip.estGallons = ridgeGal;
+                        trip.estCostCop = Math.round(ridgeGal * defaultPrice);
+                        trip.physicsModel = 'ridge';
+                    }
+                }
+            }
+        }
     }
 
     return cloned;
+}
+
+/**
+ * Immediately reconciles cached GPS trips against closed tank cycles and open-cycle Ridge physics,
+ * persisting the updated `gpsCache.tripsByDate` to IndexedDB and updating reactive store state.
+ *
+ * @param {Object} [params={}]
+ * @returns {Promise<{ updated: boolean, profile: Object|null, tripsByDate?: Object }>}
+ */
+export async function reconcileCachedGpsTripsNow({ profile = null, engineResults = null, fuelPriceCop = null } = {}) {
+    const activeProfile = profile || await getVehicleProfile().catch(() => null);
+    const tripsByDate = activeProfile?.gpsCache?.tripsByDate;
+    if (!tripsByDate || typeof tripsByDate !== 'object' || Object.keys(tripsByDate).length === 0) {
+        return { updated: false, profile: activeProfile };
+    }
+
+    const closedCycles = engineResults?.closedCycles || engineResults?.allCycles || engineResults?.fullEraCycles || [];
+    const price = Number(fuelPriceCop || activeProfile.fuelPriceCop) || 16000;
+    const reconciledMap = reconcileTripsAgainstClosedCycles(
+        tripsByDate,
+        closedCycles,
+        price,
+        { fuelPhysicsModel: engineResults?.fuelPhysicsModel }
+    );
+
+    const updatedProfile = await saveVehicleProfile({
+        ...activeProfile,
+        gpsCache: {
+            ...activeProfile.gpsCache,
+            tripsByDate: reconciledMap
+        }
+    });
+
+    if (store && typeof store.setState === 'function') {
+        store.setState({ vehicleProfile: updatedProfile });
+    }
+
+    return { updated: true, profile: updatedProfile, tripsByDate: reconciledMap };
 }
 
 /**
@@ -1593,9 +1710,14 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
             Number(profile?.defaultEfficiencyKmGal) ||
             33.71;
 
-        const reconciledMap = closedCycles.length > 0
-            ? reconcileTripsAgainstClosedCycles(profile?.gpsCache?.tripsByDate || {}, closedCycles, fuelPriceCop)
-            : (profile?.gpsCache?.tripsByDate || {});
+        const reconciledMap = (closedCycles.length > 0 || engineSnap?.fuelPhysicsModel?.mode === 'ridge')
+            ? reconcileTripsAgainstClosedCycles(
+                profile?.gpsCache?.tripsByDate || {},
+                closedCycles,
+                fuelPriceCop,
+                { fuelPhysicsModel: engineSnap?.fuelPhysicsModel }
+            )
+            : reconcileTripsAgainstClosedCycles(profile?.gpsCache?.tripsByDate || {}, [], fuelPriceCop);
         const cachedTrips = getCachedGpsTrips(startDateStr, endDateStr, {
             ...profile,
             gpsCache: { ...(profile?.gpsCache || {}), tripsByDate: reconciledMap }
@@ -1763,8 +1885,13 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
             ...(profile.gpsCache?.tripsByDate || {}),
             ...newTripsByDate
         };
-        if (closedCycles.length > 0) {
-            mergedTripsByDate = reconcileTripsAgainstClosedCycles(mergedTripsByDate, closedCycles, fuelPriceCop);
+        if (closedCycles.length > 0 || engineSnap?.fuelPhysicsModel?.mode === 'ridge' || Object.keys(mergedTripsByDate).length > 0) {
+            mergedTripsByDate = reconcileTripsAgainstClosedCycles(
+                mergedTripsByDate,
+                closedCycles,
+                fuelPriceCop,
+                { fuelPhysicsModel: engineSnap?.fuelPhysicsModel }
+            );
             finalTrips = getCachedGpsTrips(startDateStr, endDateStr, {
                 ...profile,
                 gpsCache: { ...(profile.gpsCache || {}), tripsByDate: mergedTripsByDate }
@@ -1798,8 +1925,13 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
         if (stationMatch.matchedStop && stationMatch.station && cfg.stationAlertsEnabled === true) {
             notifyGasStationStop(stationMatch.matchedStop, stationMatch.station).catch(() => {});
         }
-    } else if (closedCycles.length > 0) {
-        const reconciledMap = reconcileTripsAgainstClosedCycles(newTripsByDate, closedCycles, fuelPriceCop);
+    } else if (closedCycles.length > 0 || engineSnap?.fuelPhysicsModel?.mode === 'ridge') {
+        const reconciledMap = reconcileTripsAgainstClosedCycles(
+            newTripsByDate,
+            closedCycles,
+            fuelPriceCop,
+            { fuelPhysicsModel: engineSnap?.fuelPhysicsModel }
+        );
         finalTrips = Object.values(reconciledMap).flat().sort((a, b) => (Number(b.startTimeMs) || 0) - (Number(a.startTimeMs) || 0));
     }
 
@@ -1948,10 +2080,25 @@ export async function syncGpsTelemetry(options = {}) {
                 telemetryLogs: logs
             });
 
-            if (sensitivityChanged || stationMatch.matchedStop) {
+            const hasTripsCache = Boolean(
+                updatedProfile?.gpsCache?.tripsByDate &&
+                Object.keys(updatedProfile.gpsCache.tripsByDate).length > 0
+            );
+            const syncClosedCycles = engineResults?.closedCycles || [];
+            const reconciledTripsByDate = (hasTripsCache && (syncClosedCycles.length > 0 || engineResults?.fuelPhysicsModel?.mode === 'ridge'))
+                ? reconcileTripsAgainstClosedCycles(
+                    updatedProfile.gpsCache.tripsByDate,
+                    syncClosedCycles,
+                    Number(updatedProfile.fuelPriceCop || stateSnap.fuelPriceCop) || 16000,
+                    { fuelPhysicsModel: engineResults?.fuelPhysicsModel }
+                )
+                : null;
+
+            if (sensitivityChanged || stationMatch.matchedStop || reconciledTripsByDate) {
                 const enrichedCache = {
                     ...(updatedProfile.gpsCache || gpsCache),
                     ...(sensitivityChanged ? { physicalSensitivity: nextSensitivity } : {}),
+                    ...(reconciledTripsByDate ? { tripsByDate: reconciledTripsByDate } : {}),
                     ...(stationMatch.matchedStop ? {
                         notifiedStopIds: stationMatch.updatedNotifiedStopIds,
                         pendingStationMatch: stationMatch.pendingStationMatch

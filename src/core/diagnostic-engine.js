@@ -507,8 +507,6 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
   const rawEffective = cycleSummary.totalEffectiveWorkKm ?? Math.max(0, (cycleSummary.totalExtraKm || 0) - (cycleSummary.totalPickupKm || 0));
   const kmRides = Number(Number(rawEffective || 0).toFixed(1));
   const kmPickup = Number(Number(cycleSummary.totalPickupKm || 0).toFixed(1));
-  const fuelRidesCop = Math.round(kmRides * costPerKmCop);
-  const fuelPickupCop = Math.round(kmPickup * costPerKmCop);
 
   // Total de kilómetros recorridos por el vehículo en el periodo
   // Buscamos odómetros de telemetría interpolada (integrando GPS diario si existe)
@@ -520,21 +518,66 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
     totalCarKmFromTelemetry = inRangeDaily.reduce((acc, d) => acc + (Number(d.km) || 0), 0);
   } catch (_) {}
 
-  // Si no hay lecturas de odómetro registradas suficientes, estimamos la base con routineDailyKm * días
-  let kmBase = 0;
-  if (totalCarKmFromTelemetry > (kmRides + kmPickup)) {
-    kmBase = Number((totalCarKmFromTelemetry - (kmRides + kmPickup)).toFixed(1));
-  } else {
-    kmBase = Number((daysInPeriod * routineDailyKm).toFixed(1));
-  }
+  const hasGpsFuelData = Boolean(
+    cycleSummary.hasGpsFuelData ||
+    cycleSummary.fuelSource === 'gps_calibrated' ||
+    cycleSummary.fuelSource === 'gps_estimated' ||
+    Number(cycleSummary.periodGpsDaysCount) > 0
+  );
 
-  const fuelBaseCop = Math.round(kmBase * costPerKmCop);
-  const totalCarKm = Number((kmBase + kmRides + kmPickup).toFixed(1));
-  const totalCarFuelCop = fuelBaseCop + fuelRidesCop + fuelPickupCop + gpsIdleFuelCop;
+  let kmBase = 0;
+  let totalCarKm = 0;
+  let fuelBaseCop = 0;
+  let fuelRidesCop = 0;
+  let fuelPickupCop = 0;
+  let totalCarFuelCop = 0;
+  let isGpsCalibrated = false;
+  let fuelDataSource = 'estimate';
+
+  if (hasGpsFuelData && Number(cycleSummary.periodCarFuelCop) > 0) {
+    totalCarFuelCop = Math.round(cycleSummary.periodCarFuelCop);
+    fuelBaseCop = Math.min(totalCarFuelCop, Math.round(cycleSummary.personalFuelCop || 0));
+    const ridesAndPickupFuelCop = Math.max(0, totalCarFuelCop - fuelBaseCop);
+
+    const workKmSum = kmRides + kmPickup;
+    if (workKmSum > 0) {
+      fuelRidesCop = Math.round(ridesAndPickupFuelCop * (kmRides / workKmSum));
+      fuelPickupCop = Math.max(0, ridesAndPickupFuelCop - fuelRidesCop);
+    } else {
+      fuelRidesCop = ridesAndPickupFuelCop;
+      fuelPickupCop = 0;
+    }
+
+    const fallbackKmBase = totalCarKmFromTelemetry > (kmRides + kmPickup)
+      ? Number((totalCarKmFromTelemetry - (kmRides + kmPickup)).toFixed(1))
+      : Number((daysInPeriod * routineDailyKm).toFixed(1));
+    totalCarKm = Number((Number(cycleSummary.periodCarKm) || totalCarKmFromTelemetry || (fallbackKmBase + kmRides + kmPickup)).toFixed(1));
+    kmBase = Number(Math.max(0, totalCarKm - kmRides - kmPickup).toFixed(1));
+    isGpsCalibrated = Boolean(
+      cycleSummary.isGpsFuelCalibrated ||
+      cycleSummary.fuelSource === 'gps_calibrated' ||
+      Number(cycleSummary.periodCalibratedDaysCount) > 0
+    );
+    fuelDataSource = 'gps';
+  } else {
+    fuelRidesCop = Math.round(kmRides * costPerKmCop);
+    fuelPickupCop = Math.round(kmPickup * costPerKmCop);
+
+    // Si no hay lecturas de odómetro registradas suficientes, estimamos la base con routineDailyKm * días
+    if (totalCarKmFromTelemetry > (kmRides + kmPickup)) {
+      kmBase = Number((totalCarKmFromTelemetry - (kmRides + kmPickup)).toFixed(1));
+    } else {
+      kmBase = Number((daysInPeriod * routineDailyKm).toFixed(1));
+    }
+
+    fuelBaseCop = Math.round(kmBase * costPerKmCop);
+    totalCarKm = Number((kmBase + kmRides + kmPickup).toFixed(1));
+    totalCarFuelCop = fuelBaseCop + fuelRidesCop + fuelPickupCop + gpsIdleFuelCop;
+  }
 
   // Porcentajes de cada rubro de gasolina
   const pctBase = totalCarFuelCop > 0 ? Math.round((fuelBaseCop / totalCarFuelCop) * 100) : 0;
-  const pctRides = totalCarFuelCop > 0 ? Math.round((fuelRidesCop / totalCarFuelCop) * 100) : 0;
+  const pctRides = totalCarFuelCop > 0 ? Math.min(100 - pctBase, Math.round((fuelRidesCop / totalCarFuelCop) * 100)) : 0;
   const pctPickup = totalCarFuelCop > 0 ? Math.max(0, 100 - pctBase - pctRides) : 0;
 
   const fuelBreakdown = {
@@ -551,7 +594,9 @@ export function generateOperationalDiagnostic(state = {}, periodFilter = 'this_m
     totalCarKm,
     totalCarFuelCop,
     effKmGal,
-    costPerKmCop
+    costPerKmCop,
+    isGpsCalibrated,
+    fuelDataSource
   };
 
   // Balance Final de Bolsillo (La Verdad Financiera)

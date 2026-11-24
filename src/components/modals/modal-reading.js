@@ -24,7 +24,7 @@ import {
   getTelemetryLogs,
   getVehicleProfile
 } from '../../core/db-local.js';
-import { recalculateTelemetry } from '../../core/telemetry-engine.js';
+import { recalculateTelemetry, calibratedGaugePct } from '../../core/telemetry-engine.js';
 import { syncToCloud } from '../../core/firebase-sync.js';
 import { calibrateGpsOdometer } from '../../core/iopgps-sync.js';
 import { calculateFuelVolume, clamp } from '../fuel-gauges/gauge-controller.js';
@@ -154,6 +154,7 @@ export async function openReadingModal(options = {}) {
     initialTime = defaultCurrentTime;
   }
   const initialVols = calculateFuelVolume(currentLevelPct, profile.tankCapacityLiters, profile.tankCapacityGallons);
+  const gaugeCalibration = store?.getState?.()?.telemetryEngineResults?.gaugeCalibration || null;
 
   modalRootEl.innerHTML = `
     <!-- Flat Backdrop Overlay (Zero Blur) -->
@@ -288,7 +289,14 @@ export async function openReadingModal(options = {}) {
   function updateHeroReadout(pct) {
     const vols = calculateFuelVolume(pct, profile.tankCapacityLiters, profile.tankCapacityGallons);
     heroPctEl.innerText = `${Math.round(pct)}%`;
-    heroVolEl.innerText = `${vols.liters.toFixed(1)} L · ${vols.gallons.toFixed(2)} GAL`;
+    if (gaugeCalibration?.mode === 'empirical') {
+      const calPct = calibratedGaugePct(pct, gaugeCalibration);
+      const realGal = (calPct / 100) * (profile.tankCapacityGallons || 9.25);
+      const realL = realGal * 3.78541;
+      heroVolEl.innerText = `${realL.toFixed(1)} L · ${realGal.toFixed(2)} GAL · CALIBRADO`;
+    } else {
+      heroVolEl.innerText = `${vols.liters.toFixed(1)} L · ${vols.gallons.toFixed(2)} GAL`;
+    }
 
     if (pct < 14) {
       heroPctEl.style.color = 'var(--accent-crimson)';

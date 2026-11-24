@@ -13,7 +13,8 @@
 
 import { parseFuelVolume, parseIntegerMetric } from './number-utils.js';
 import { localYmd } from './date-utils.js';
-import { calibrateVehicleFuelModel, decomposeFuelCost } from './fuel-physics-engine.js';
+import { calibrateVehicleFuelModel, decomposeFuelCost, predictTripGallonsWithPhysics } from './fuel-physics-engine.js';
+import { buildGaugeCalibrationModel, evaluateGaugeCalibration } from './gauge-calibration.js';
 
 export const GAL_TO_L = 3.78541;
 export const L_TO_GAL = 1 / 3.78541;
@@ -182,22 +183,42 @@ export function formatDateWithWeekday(dateStr) {
 
 /**
  * Non-linear automotive float gauge calibration.
- * Real vehicle float arms dwell longer in the upper quadrant (75%-100%)
- * due to tank neck geometry and float arm geometry, then drop faster in the mid quadrant.
- * Smooth monotonic transfer function mapping indicated gauge % to true physical fluid %.
+ * Delegates to the empirical piecewise-linear PAVA gauge model when available,
+ * falling back to the legacy smooth monotonic transfer function otherwise.
  * 
  * @param {number} pct - Indicated needle percentage (0 - 100)
+ * @param {Object|null} [gaugeModel=null] - Empirical calibration model from buildGaugeCalibrationModel
  * @returns {number} Calibrated physical fuel percentage (0 - 100)
  */
-export function calibratedGaugePct(pct) {
-    if (pct === null || pct === undefined || isNaN(pct)) return 0;
-    const p = Math.min(100, Math.max(0, Number(pct)));
-    if (p <= 0) return 0;
-    if (p >= 100) return 100;
+export function calibratedGaugePct(pct, gaugeModel = null) {
+    return evaluateGaugeCalibration(pct, gaugeModel);
+}
 
-    const x = p / 100;
-    const calibrated = (0.7 * Math.pow(x, 1.18) + 0.3 * (3 * x * x - 2 * x * x * x)) * 100;
-    return Number(Math.min(100, Math.max(0, calibrated)).toFixed(1));
+/**
+ * Resolves an epoch timestamp (ms) for a telemetry log record.
+ * Uses explicit `date` + `time` (CO -05:00), or `createdAt` ONLY when its local calendar
+ * date matches `log.date` (preventing backdated entries without time from getting today's ms).
+ *
+ * @param {Object|null} log
+ * @returns {number|null}
+ */
+function resolveLogTimestampMs(log) {
+    if (!log || typeof log !== 'object') return null;
+    const dateStr = typeof log.date === 'string' ? log.date.slice(0, 10) : '';
+    const timeRaw = typeof log.time === 'string' ? log.time.trim() : '';
+    if (dateStr && /^\d{1,2}:\d{2}(:\d{2})?$/.test(timeRaw)) {
+        const [hh, mm] = timeRaw.split(':');
+        const hhmm = `${hh.padStart(2, '0')}:${mm.padStart(2, '0')}`;
+        const ms = Date.parse(`${dateStr}T${hhmm}:00-05:00`);
+        return Number.isFinite(ms) ? ms : null;
+    }
+    if (log.createdAt) {
+        const ms = Date.parse(log.createdAt);
+        if (Number.isFinite(ms) && dateStr && localYmd(new Date(ms)) === dateStr) {
+            return ms;
+        }
+    }
+    return null;
 }
 
 /**
@@ -605,6 +626,9 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
     const latest = processedData[processedData.length - 1];
     const gpsDaysMap = vehicleProfile?.gpsCache?.days || options?.gpsDaysMap || null;
     const gpsLive = vehicleProfile?.gpsCache?.live || options?.gpsLive || null;
+    const gaugeCalibration = options.gaugeCalibration || null;
+    const fuelPhysicsModel = options.fuelPhysicsModel || null;
+    const tripsByDate = options.tripsByDate || vehicleProfile?.gpsCache?.tripsByDate || null;
     const gpsLiveOdo = Number(gpsLive?.totalMile) || 0;
     const gpsLiveDate = gpsLive?.date || '';
     const physicalSensitivity = Number(options?.physicalSensitivity) || Number(vehicleProfile?.gpsCache?.physicalSensitivity) || 1.0;
@@ -667,7 +691,50 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
             const severityFactor = activePhysicalTelemetry ? activePhysicalTelemetry.severityFactor : 1.0;
             const effectiveCycleEff = safeEff / severityFactor;
 
-            const burned = effectiveCycleEff > 0 ? (kmSinceFull / effectiveCycleEff) : 0;
+            let burned = effectiveCycleEff > 0 ? (kmSinceFull / effectiveCycleEff) : 0;
+
+            // Closed-loop open-cycle physics burn when GPS trips cover >= 75% of kmSinceFull
+            if (kmSinceFull > 5 && tripsByDate && typeof tripsByDate === 'object') {
+                const lastFullMs = resolveLogTimestampMs(lastFull);
+                let openTripsKm = 0;
+                let openTripsGal = 0;
+
+                for (const [dateKey, dayTrips] of Object.entries(tripsByDate)) {
+                    if (!Array.isArray(dayTrips) || dayTrips.length === 0) continue;
+                    if (lastFullMs !== null) {
+                        if (dateKey < startDate) continue;
+                    } else if (dateKey <= startDate) {
+                        continue;
+                    }
+                    for (const t of dayTrips) {
+                        if (!t || typeof t !== 'object') continue;
+                        if (lastFullMs !== null) {
+                            const tStartMs = Number(t.startTimeMs ?? (t.startTimeUnix ? t.startTimeUnix * 1000 : 0)) || 0;
+                            if (tStartMs > 0) {
+                                if (tStartMs < lastFullMs) continue;
+                            } else if (dateKey <= startDate) {
+                                continue;
+                            }
+                        }
+                        const tripKm = Number(t.distanceKm ?? t.mileageKm) || 0;
+                        const tripGal = fuelPhysicsModel?.mode === 'ridge'
+                            ? predictTripGallonsWithPhysics(t, fuelPhysicsModel.coeffs)
+                            : (Number(t.estGallons) || 0);
+                        if (tripKm > 0 || tripGal > 0) {
+                            openTripsKm += tripKm;
+                            openTripsGal += Math.max(0, Number(tripGal) || 0);
+                        }
+                    }
+                }
+
+                if (openTripsKm >= kmSinceFull * 0.75 && openTripsGal > 0) {
+                    const physicsBurned = openTripsGal * (kmSinceFull / openTripsKm);
+                    const minBurn = kmSinceFull / 90;
+                    const maxBurn = kmSinceFull / 10;
+                    burned = Math.min(maxBurn, Math.max(minBurn, physicsBurned));
+                }
+            }
+
             v_odo = Math.max(0, tankMaxGal + partialGalsAdded - burned);
 
             // If latest record is an explicit manual gauge percentage without refuel:
@@ -677,7 +744,7 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
 
             if (hasManualGaugeOnLatest) {
                 const rawPct = Math.min(100, Math.max(0, Number(latest.fuel_level_percent)));
-                gaugePct = calibratedGaugePct(rawPct);
+                gaugePct = calibratedGaugePct(rawPct, gaugeCalibration);
                 const gpsBurnSinceLatest = (hasNewerGpsOdo && effectiveCycleEff > 0) ? (gpsExtraKm / effectiveCycleEff) : 0;
                 v_gauge = Math.max(0, (gaugePct / 100) * tankMaxGal - gpsBurnSinceLatest);
 
@@ -690,8 +757,9 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
                 }
                 fusedGal = Math.min(tankMaxGal, Math.max(0, fusedGal));
 
-                // If sensor fusion is explicitly enabled via options or vehicleProfile:
-                if (options.fuseSensors === true || vehicleProfile.sensorFusion === true || vehicleProfile.fuseSensors === true) {
+                // Use fusedGal when empirical gauge calibration is active OR sensor fusion is explicitly enabled
+                const isEmpiricalGauge = gaugeCalibration?.mode === 'empirical';
+                if (isEmpiricalGauge || options.fuseSensors === true || vehicleProfile.sensorFusion === true || vehicleProfile.fuseSensors === true) {
                     activeGal = fusedGal;
                 } else {
                     // Raw manual needle reading reflection minus any newer GPS burn since that reading
@@ -707,11 +775,12 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
             const gpsBurnSinceLatest = (hasNewerGpsOdo && safeEff > 0) ? (gpsExtraKm / safeEff) : 0;
             if (latest.fuel_level_percent !== null && latest.fuel_level_percent !== undefined) {
                 const rawPct = Math.min(100, Math.max(0, Number(latest.fuel_level_percent)));
-                gaugePct = calibratedGaugePct(rawPct);
+                gaugePct = calibratedGaugePct(rawPct, gaugeCalibration);
                 v_gauge = Math.max(0, (gaugePct / 100) * tankMaxGal - gpsBurnSinceLatest);
                 v_odo = v_gauge;
                 fusedGal = v_gauge;
-                activeGal = (options.fuseSensors === true || vehicleProfile.sensorFusion === true)
+                const isEmpiricalGauge = gaugeCalibration?.mode === 'empirical';
+                activeGal = (isEmpiricalGauge || options.fuseSensors === true || vehicleProfile.sensorFusion === true)
                     ? v_gauge
                     : Math.max(0, (rawPct / 100) * tankMaxGal - gpsBurnSinceLatest);
             } else if (latest.v_after !== undefined && Number.isFinite(latest.v_after)) {
@@ -843,6 +912,7 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
         v_odo: Number(v_odo.toFixed(3)),
         v_gauge: Number(v_gauge.toFixed(3)),
         calibratedGaugePct: gaugePct,
+        gaugeCalibrated: gaugeCalibration?.mode === 'empirical',
         fusedGal: Number(fusedGal.toFixed(3)),
         fusedPct: Number(((fusedGal / tankMaxGal) * 100).toFixed(1)),
         fusedAutonomyKm: Math.round(fusedGal * projEff)
@@ -946,6 +1016,7 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
             weekdayDNA: calculateWeekdayDNA([]),
             learnedSensitivity: Number(vehicleProfile?.gpsCache?.physicalSensitivity) || 1.0,
             fuelPhysicsModel: calibrateVehicleFuelModel([], { tripsByDate: vehicleProfile?.gpsCache?.tripsByDate }),
+            gaugeCalibration: buildGaugeCalibrationModel([], { tankMaxGal }),
             stats: {
                 totalKm: 0,
                 totalGallons: 0,
@@ -1063,10 +1134,24 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
             validCyclesCount++;
         }
 
+        const rawEndCost = parseIntegerMetric(sorted[e.idx]?.total_cost_cop);
+        const totalCostCop = rawEndCost > 0 ? rawEndCost : Math.round(consumedGals * fuelPriceCop);
+        let pricePerGal = fuelPriceCop;
+        if (e.gals > 0 && rawEndCost > 0) {
+            const computedPrice = Math.round(rawEndCost / e.gals);
+            if (computedPrice >= 5000 && computedPrice <= 45000) {
+                pricePerGal = computedPrice;
+            }
+        }
+
         allClosedCycles.push({
             cycleIndex: allClosedCycles.length + 1,
             startDate: s.date,
             endDate: e.date,
+            startTime: sorted[s.idx]?.time || null,
+            endTime: sorted[e.idx]?.time || null,
+            startTimeMs: resolveLogTimestampMs(sorted[s.idx]),
+            endTimeMs: resolveLogTimestampMs(sorted[e.idx]),
             startOdo: s.odo,
             endOdo: e.odo,
             startIndex: s.idx,
@@ -1078,6 +1163,8 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
             gals: Number(consumedGals.toFixed(3)),
             eff: Number(eff.toFixed(2)),
             kmPerDay: Number.isFinite(kmPerDay) ? kmPerDay : 0,
+            totalCostCop,
+            pricePerGal,
             type: cycleType,
             isFull: cycleType === 'full',
             isValid: isValidCycle
@@ -1183,6 +1270,15 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
         });
     }
 
+    // Build empirical float-gauge calibration curve from direct pre-refuel anchors & retroactive intermediate readings
+    const tripsByDate = vehicleProfile?.gpsCache?.tripsByDate || options?.tripsByDate || null;
+    const gaugeCalibration = buildGaugeCalibrationModel(processedData, {
+        tankMaxGal,
+        tripsByDate,
+        closedCycles: allClosedCycles,
+        adaptiveEff
+    });
+
     // Build interpolated daily series (proportional to GPS daily mileage when available)
     const dailySeries = buildInterpolatedDailySeries(processedData, gpsDaysMap);
     const weekdayDNA = calculateWeekdayDNA(dailySeries);
@@ -1199,7 +1295,15 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
         vehicleProfile,
         weekdayDNA,
         avgDailyKm,
-        { ...options, gpsDaysMap, physicalSensitivity: learnedSensitivity, fuelPhysicsPriors: fuelPhysicsModel.coeffs }
+        {
+            ...options,
+            gpsDaysMap,
+            tripsByDate,
+            physicalSensitivity: learnedSensitivity,
+            fuelPhysicsPriors: fuelPhysicsModel.coeffs,
+            fuelPhysicsModel,
+            gaugeCalibration
+        }
     );
 
     // Scoped records (Active telemetry calibration)
@@ -1240,6 +1344,7 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
         weekdayDNA,
         learnedSensitivity,
         fuelPhysicsModel,
+        gaugeCalibration,
         stats: {
             totalKm: totalDistance,
             totalGallons: Number(scopedGals.toFixed(2)),

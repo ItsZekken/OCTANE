@@ -383,6 +383,18 @@ export function normalizeTelemetryLog(raw, vehicleProfile = null) {
         } catch (_) {}
     }
 
+    let pre_refuel_gauge_pct = null;
+    if (
+        raw.pre_refuel_gauge_pct !== undefined &&
+        raw.pre_refuel_gauge_pct !== null &&
+        raw.pre_refuel_gauge_pct !== ''
+    ) {
+        const parsedPre = Number(raw.pre_refuel_gauge_pct);
+        if (Number.isFinite(parsedPre) && parsedPre > 0 && parsedPre < 100) {
+            pre_refuel_gauge_pct = Number(parsedPre.toFixed(1));
+        }
+    }
+
     return {
         id: raw.id || date,
         date,
@@ -390,6 +402,7 @@ export function normalizeTelemetryLog(raw, vehicleProfile = null) {
         createdAt,
         odometer_reading,
         fuel_level_percent,
+        ...(pre_refuel_gauge_pct !== null ? { pre_refuel_gauge_pct } : {}),
         refuels_count,
         gallons_added,
         is_full_tank,
@@ -403,6 +416,8 @@ export function normalizeTelemetryLog(raw, vehicleProfile = null) {
         acceleration_variance: raw.acceleration_variance !== undefined ? Number(raw.acceleration_variance) : null,
         max_speed_kmh: raw.max_speed_kmh !== undefined ? Number(raw.max_speed_kmh) : null,
         thermal_stress_score: raw.thermal_stress_score !== undefined ? Number(raw.thermal_stress_score) : null,
+        ...(raw.stationId ? { stationId: String(raw.stationId) } : {}),
+        ...(raw.stationName ? { stationName: String(raw.stationName) } : {}),
         updatedAt: raw.updatedAt || new Date().toISOString(),
     };
 }

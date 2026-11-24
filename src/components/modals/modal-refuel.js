@@ -27,7 +27,7 @@ import {
 } from '../../core/db-local.js';
 import { recalculateTelemetry } from '../../core/telemetry-engine.js';
 import { syncToCloud } from '../../core/firebase-sync.js';
-import { calibrateGpsOdometer } from '../../core/iopgps-sync.js';
+import { calibrateGpsOdometer, reconcileCachedGpsTripsNow } from '../../core/iopgps-sync.js';
 import { learnGasStation } from '../../core/gas-station-matcher.js';
 import { clamp } from '../fuel-gauges/gauge-controller.js';
 import {
@@ -297,6 +297,31 @@ export async function openRefuelModal(options = {}) {
     initialTotalVal = editLog.total_cost_cop ? formatThousandsLive(editLog.total_cost_cop) : '';
   }
 
+  let initialPreGaugeVal = '';
+  if (
+    isEditing &&
+    editLog.pre_refuel_gauge_pct !== undefined &&
+    editLog.pre_refuel_gauge_pct !== null &&
+    Number.isFinite(Number(editLog.pre_refuel_gauge_pct))
+  ) {
+    const roundedPre = Math.round(Number(editLog.pre_refuel_gauge_pct));
+    if (roundedPre >= 1 && roundedPre <= 99) {
+      initialPreGaugeVal = String(roundedPre);
+    }
+  } else if (
+    !isEditing &&
+    latestLog &&
+    !(Number(latestLog.gallons_added) > 0) &&
+    latestLog.fuel_level_percent !== undefined &&
+    latestLog.fuel_level_percent !== null &&
+    Number(startingOdo) - Number(latestOdo) >= 0 &&
+    Number(startingOdo) - Number(latestOdo) <= 5 &&
+    latestPct > 0 &&
+    latestPct < 100
+  ) {
+    initialPreGaugeVal = String(Math.round(latestPct));
+  }
+
   modalRootEl.innerHTML = `
     <!-- Flat Backdrop Overlay (Zero Blur) -->
     <div class="refuel-backdrop fixed inset-0 bg-black/85 transition-opacity duration-150"></div>
@@ -408,6 +433,26 @@ export async function openRefuelModal(options = {}) {
           </div>
         </div>
 
+        <!-- Aguja Pre-Tanqueo Strip -->
+        <div class="flex items-center justify-between px-4 py-2 border-t border-[var(--line-hair)] bg-[var(--bg-void)] text-[10px] font-mono text-[var(--text-secondary)]">
+          <div class="flex items-center gap-2">
+            <span class="uppercase tracking-wider">AGUJA ANTES (%)</span>
+            <span class="text-[9px] uppercase tracking-wider text-[var(--text-muted)]">CALIBRA AGUJA</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <input 
+              id="refuel-pre-gauge-input" 
+              type="text" 
+              inputmode="none" 
+              placeholder="—" 
+              maxlength="2" 
+              value="${initialPreGaugeVal}" 
+              class="w-12 bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors font-mono text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] tabular-nums py-0.5 outline-none text-right" 
+            />
+            <span class="text-[10px] text-[var(--text-muted)]">%</span>
+          </div>
+        </div>
+
         <!-- Franja Inferior de 3 Celdas (Responsive 360px+) -->
         <div class="grid grid-cols-3 border-t border-[var(--line-hair)] divide-x divide-[var(--line-hair)] bg-[var(--bg-surface)]">
           <!-- Celda 1: ODÓMETRO -->
@@ -500,6 +545,7 @@ export async function openRefuelModal(options = {}) {
   const previewText = modalRootEl.querySelector('#refuel-preview-text');
   const previewBar = modalRootEl.querySelector('#refuel-preview-bar');
   const dateInput = modalRootEl.querySelector('#refuel-date-input');
+  const preGaugeInput = modalRootEl.querySelector('#refuel-pre-gauge-input');
   const odoInput = modalRootEl.querySelector('#refuel-odo-input');
   const priceInput = modalRootEl.querySelector('#refuel-price-input');
   const totalInput = modalRootEl.querySelector('#refuel-total-input');
@@ -531,8 +577,18 @@ export async function openRefuelModal(options = {}) {
     recalcAll();
   }
 
+  function getParsedPreGauge() {
+    if (!preGaugeInput) return undefined;
+    const digits = String(preGaugeInput.value || '').replace(/[^\d]/g, '');
+    if (!digits) return undefined;
+    const n = parseInt(digits, 10);
+    return (Number.isInteger(n) && n >= 1 && n <= 99) ? n : undefined;
+  }
+
   function recalcAll() {
     const price = parseIntegerMetric(priceInput.value) || currentPrice;
+    const prePct = getParsedPreGauge();
+    const startPct = prePct !== undefined ? prePct : Math.round(latestPct);
     let computedGallons = 0;
     let computedTotal = 0;
     let targetPct = 100;
@@ -547,13 +603,13 @@ export async function openRefuelModal(options = {}) {
 
       if (activeTab === 'full') {
         targetPct = 100;
-        previewText.innerText = `${Math.round(latestPct)}% → 100% (LLENO)`;
+        previewText.innerText = `${startPct}% → 100% (LLENO)`;
         previewBar.style.width = '100%';
         previewBar.style.backgroundColor = 'var(--accent-volt)';
       } else {
         const addedPct = tankGallons > 0 ? (computedGallons / tankGallons) * 100 : 0;
-        targetPct = clamp(Math.round(latestPct + addedPct), 0, 100);
-        previewText.innerText = `${Math.round(latestPct)}% → ${targetPct}%`;
+        targetPct = clamp(Math.round(startPct + addedPct), 0, 100);
+        previewText.innerText = `${startPct}% → ${targetPct}%`;
         previewBar.style.width = `${targetPct}%`;
         previewBar.style.backgroundColor = targetPct > 25 ? 'var(--accent-volt)' : 'var(--accent-amber)';
       }
@@ -566,8 +622,8 @@ export async function openRefuelModal(options = {}) {
         : '0.000 GAL · 0.00 L';
 
       const addedPct = tankGallons > 0 ? (computedGallons / tankGallons) * 100 : 0;
-      targetPct = clamp(Math.round(latestPct + addedPct), 0, 100);
-      previewText.innerText = `${Math.round(latestPct)}% → ${targetPct}%`;
+      targetPct = clamp(Math.round(startPct + addedPct), 0, 100);
+      previewText.innerText = `${startPct}% → ${targetPct}%`;
       previewBar.style.width = `${targetPct}%`;
       previewBar.style.backgroundColor = targetPct > 25 ? 'var(--accent-volt)' : 'var(--accent-amber)';
     }
@@ -643,8 +699,15 @@ export async function openRefuelModal(options = {}) {
     }
   });
 
+  if (preGaugeInput) {
+    preGaugeInput.addEventListener('input', () => {
+      preGaugeInput.value = preGaugeInput.value.replace(/[^\d]/g, '').slice(0, 2);
+      recalcAll();
+    });
+  }
+
   // Focus ergonomics & Cursor stabilization
-  [heroInput, odoInput, priceInput, totalInput].forEach(inp => {
+  [heroInput, odoInput, priceInput, totalInput, preGaugeInput].filter(Boolean).forEach(inp => {
     inp.addEventListener('focus', () => setCursorAtEnd(inp));
     inp.addEventListener('click', () => setCursorAtEnd(inp));
   });
@@ -654,7 +717,7 @@ export async function openRefuelModal(options = {}) {
   if (refuelKeypadSlot) {
     createNumericKeypad({
       container: refuelKeypadSlot,
-      inputs: [heroInput, odoInput, priceInput, totalInput],
+      inputs: [heroInput, odoInput, priceInput, totalInput, preGaugeInput].filter(Boolean),
       onConfirm: () => submitBtn.click(),
       onInput: () => recalcAll()
     });
@@ -713,11 +776,23 @@ export async function openRefuelModal(options = {}) {
           let engineResults = null;
           if (typeof recalculateTelemetry === 'function') {
             engineResults = recalculateTelemetry(updatedLogs, profile);
+            if (typeof reconcileCachedGpsTripsNow === 'function') {
+              const recResult = await reconcileCachedGpsTripsNow({
+                profile,
+                engineResults,
+                fuelPriceCop: profile.fuelPriceCop || 16000
+              }).catch(() => null);
+              if (recResult?.updated && recResult.profile) {
+                profile = recResult.profile;
+                engineResults = recalculateTelemetry(updatedLogs, profile);
+              }
+            }
           }
           if (store && typeof store.setState === 'function') {
             store.setState({
               telemetryLogs: updatedLogs,
-              telemetryEngineResults: engineResults
+              telemetryEngineResults: engineResults,
+              vehicleProfile: profile
             });
           }
           if (typeof syncToCloud === 'function') {
@@ -779,10 +854,12 @@ export async function openRefuelModal(options = {}) {
     submitBtn.classList.add('opacity-70', 'pointer-events-none');
 
     try {
-      const isFullTank = activeTab === 'full' || ((latestPct + (galVal / tankGallons) * 100) >= 99);
+      const preGaugeVal = getParsedPreGauge();
+      const baseStartPct = preGaugeVal !== undefined ? preGaugeVal : latestPct;
+      const isFullTank = activeTab === 'full' || ((baseStartPct + (galVal / tankGallons) * 100) >= 99);
       const resultingPct = isFullTank
         ? 100
-        : clamp(Math.round(latestPct + (galVal / tankGallons) * 100), 0, 100);
+        : clamp(Math.round(baseStartPct + (galVal / tankGallons) * 100), 0, 100);
 
       const deltaKm = (editLog && editLog.distance_km !== undefined)
         ? editLog.distance_km
@@ -855,6 +932,9 @@ export async function openRefuelModal(options = {}) {
         thermal_stress_score: editLog?.thermal_stress_score || enrichment.thermal_stress_score,
         ...(enrichment.stationId ? { stationId: enrichment.stationId } : {}),
         ...(enrichment.stationName ? { stationName: enrichment.stationName } : {}),
+        ...(preGaugeVal !== undefined
+          ? { pre_refuel_gauge_pct: preGaugeVal }
+          : (isEditing ? { pre_refuel_gauge_pct: null } : {})),
         updatedAt: new Date().toISOString()
       };
 
@@ -881,6 +961,17 @@ export async function openRefuelModal(options = {}) {
       let engineResults = null;
       if (typeof recalculateTelemetry === 'function') {
         engineResults = recalculateTelemetry(updatedLogs, profile);
+        if (typeof reconcileCachedGpsTripsNow === 'function') {
+          const recResult = await reconcileCachedGpsTripsNow({
+            profile,
+            engineResults,
+            fuelPriceCop: priceVal
+          }).catch(() => null);
+          if (recResult?.updated && recResult.profile) {
+            profile = recResult.profile;
+            engineResults = recalculateTelemetry(updatedLogs, profile);
+          }
+        }
       }
 
       if (store && typeof store.setState === 'function') {

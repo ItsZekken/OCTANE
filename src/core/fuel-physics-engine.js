@@ -28,6 +28,66 @@ function clampVal(val, min, max) {
   return Math.min(max, Math.max(min, val));
 }
 
+function computeTrafficWeight(avgSpeedKmh = 0, trafficPctInput = 0) {
+  let trafficWeight = 0;
+  if (avgSpeedKmh > 0 && avgSpeedKmh < 30) {
+    trafficWeight = Math.min(1, (30 - avgSpeedKmh) / 18);
+  }
+  if (trafficPctInput > 0) {
+    const pctWeight = Math.min(1, trafficPctInput / 100);
+    trafficWeight = trafficWeight > 0 ? (0.6 * trafficWeight + 0.4 * pctWeight) : pctWeight;
+  }
+  return trafficWeight;
+}
+
+/**
+ * Predicts fuel consumption (in gallons) for a single GPS trip using the
+ * 4-feature physics model (base distance, idle hours, traffic-weighted km,
+ * cold-start enrichment + hard-acceleration dynamics).
+ *
+ * @param {Object} trip
+ * @param {Object|null} [coeffs=null]
+ * @param {Object} [options={}]
+ * @returns {number}
+ */
+export function predictTripGallonsWithPhysics(trip, coeffs = null, options = {}) {
+  if (!trip || typeof trip !== 'object') return 0;
+  const resolvedCoeffs = {
+    ...DEFAULT_FUEL_PHYSICS_PRIORS,
+    ...(coeffs && typeof coeffs === 'object' ? coeffs : {})
+  };
+
+  const km = Number(trip.distanceKm ?? trip.mileageKm) || 0;
+  if (km <= 0) return 0;
+
+  const idleSec = Number(trip.stoppedTimeSec ?? trip.idleSec) || 0;
+  const avgSpeed = Number(trip.avgSpeedKmh) || 0;
+  const trafficPct = Number(trip.trafficPct) || 0;
+  const trafficWeight = computeTrafficWeight(avgSpeed, trafficPct);
+
+  const ret = Number(trip.thermalRetentionPct);
+  const coldEq = Number.isFinite(ret)
+    ? Math.max(0, 1 - Math.min(100, Math.max(0, ret)) / 100)
+    : 0.55;
+  const hardAccels = Number(trip.hardAccels ?? trip.hardAccelCount) || 0;
+
+  let gal = (
+    km * resolvedCoeffs.galPerKmBase +
+    (idleSec / 3600) * resolvedCoeffs.galPerIdleHour +
+    km * trafficWeight * resolvedCoeffs.galPerTrafficKm +
+    coldEq * resolvedCoeffs.galPerColdStart +
+    hardAccels * 0.004
+  );
+
+  if (km >= 0.2) {
+    gal = clampVal(gal, km / 110, km / 8);
+  } else {
+    gal = Math.max(0, gal);
+  }
+
+  return Number(gal.toFixed(3));
+}
+
 /**
  * Decomposes fuel consumption into 4 strictly additive buckets whose sum equals
  * 100% of `totalGallons` and `totalCostCop`:
@@ -82,14 +142,7 @@ export function decomposeFuelCost(physMetrics, options = {}) {
   const rawBase = km > 0 ? km * priors.galPerKmBase : 0;
   const rawIdle = idleSec > 0 ? (idleSec / 3600) * priors.galPerIdleHour : 0;
 
-  let trafficWeight = 0;
-  if (avgSpeedKmh > 0 && avgSpeedKmh < 30) {
-    trafficWeight = Math.min(1, (30 - avgSpeedKmh) / 18);
-  }
-  if (trafficPctInput > 0) {
-    const pctWeight = Math.min(1, trafficPctInput / 100);
-    trafficWeight = trafficWeight > 0 ? (0.6 * trafficWeight + 0.4 * pctWeight) : pctWeight;
-  }
+  const trafficWeight = computeTrafficWeight(avgSpeedKmh, trafficPctInput);
   const rawTraffic = km > 0 ? km * trafficWeight * priors.galPerTrafficKm : 0;
   const rawDynamicsCold = (Math.max(0, coldStarts) * priors.galPerColdStart) + (Math.max(0, hardAccels) * 0.004);
   const rawSum = rawBase + rawTraffic + rawIdle + rawDynamicsCold;
@@ -330,23 +383,52 @@ export function solveRidge4x4(X, y, priorVec, lambda = 0.25) {
   return sol;
 }
 
+function isFiniteTimestamp(val) {
+  return val !== null && val !== undefined && val !== '' && Number.isFinite(Number(val));
+}
+
 function resolveCycleColdStarts(cycle, phys, tripsByDate) {
   if (tripsByDate && typeof tripsByDate === 'object' && cycle.startDate && cycle.endDate) {
+    const startDate = String(cycle.startDate).slice(0, 10);
+    const endDate = String(cycle.endDate).slice(0, 10);
+    const hasCStart = isFiniteTimestamp(cycle.startTimeMs);
+    const hasCEnd = isFiniteTimestamp(cycle.endTimeMs);
+    const cStartMs = hasCStart ? Number(cycle.startTimeMs) : NaN;
+    const cEndMs = hasCEnd ? Number(cycle.endTimeMs) : NaN;
+    const scanFromStart = hasCStart || hasCEnd;
+
     let sumColdEq = 0;
     let foundTrips = 0;
     for (const dateKey of Object.keys(tripsByDate)) {
-      if (dateKey > cycle.startDate && dateKey <= cycle.endDate) {
-        const dayTrips = tripsByDate[dateKey];
-        if (!Array.isArray(dayTrips)) continue;
-        for (const t of dayTrips) {
-          if (!t) continue;
-          foundTrips++;
-          const ret = Number(t.thermalRetentionPct);
-          if (Number.isFinite(ret)) {
-            sumColdEq += Math.max(0, 1 - Math.min(100, Math.max(0, ret)) / 100);
-          } else {
-            sumColdEq += 0.55;
-          }
+      const inDateSpan = scanFromStart
+        ? (dateKey >= startDate && dateKey <= endDate)
+        : (startDate === endDate ? dateKey === endDate : (dateKey > startDate && dateKey <= endDate));
+      if (!inDateSpan) continue;
+
+      const dayTrips = tripsByDate[dateKey];
+      if (!Array.isArray(dayTrips)) continue;
+      for (const t of dayTrips) {
+        if (!t) continue;
+        const tStartMs = Number(t.startTimeMs);
+        const hasTripMs = isFiniteTimestamp(t.startTimeMs) && tStartMs > 0;
+        let matches = false;
+        if (hasCStart && hasCEnd && hasTripMs) {
+          matches = tStartMs > cStartMs && tStartMs <= cEndMs;
+        } else if (hasCEnd && dateKey === endDate && hasTripMs) {
+          matches = tStartMs <= cEndMs;
+        } else if (hasCStart && dateKey === startDate && hasTripMs) {
+          matches = tStartMs > cStartMs;
+        } else {
+          matches = startDate === endDate ? dateKey === endDate : (dateKey > startDate && dateKey <= endDate);
+        }
+        if (!matches) continue;
+
+        foundTrips++;
+        const ret = Number(t.thermalRetentionPct);
+        if (Number.isFinite(ret)) {
+          sumColdEq += Math.max(0, 1 - Math.min(100, Math.max(0, ret)) / 100);
+        } else {
+          sumColdEq += 0.55;
         }
       }
     }
