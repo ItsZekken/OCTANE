@@ -5,9 +5,10 @@ import {
   calculateCostPerKm,
   resolveDayOdometerDelta,
   calculateRidesCycleSummary,
+  classifyGpsDayTrips,
   MAX_PICKUP_RATIO
 } from '../src/core/rides-engine.js';
-import { generateOperationalDiagnostic } from '../src/core/diagnostic-engine.js';
+import { generateOperationalDiagnostic, buildTimeSlotMatrix } from '../src/core/diagnostic-engine.js';
 
 describe('Rides Engine', () => {
   test('calculateCostPerKm resolves fuelPrice / efficiency and guards zero values', () => {
@@ -88,6 +89,68 @@ describe('Rides Engine', () => {
     assert.equal(summary.grossRevenueCop, 90000);
     assert.equal(summary.totalExpensesCop, 4000);
     assert.equal(summary.wearReserveCop, 9000);
+  });
+
+  test('reconciles exact GPS calibrated fuel ($34,873), separates routine CASA->TRABAJO trips, and computes GAS TOTAL vs SOLO CARRERAS', () => {
+    const home = { lat: 10.9600, lng: -74.8000, label: 'CASA' };
+    const work = { lat: 11.0180, lng: -74.8500, label: 'TRABAJO' };
+    const cityA = { lat: 10.9950, lng: -74.8100 };
+    const cityB = { lat: 10.9850, lng: -74.7950 };
+
+    const mondayTrips = [
+      { startLat: home.lat, startLng: home.lng, endLat: work.lat, endLng: work.lng, startTimeHm: '07:38', endTimeHm: '08:10', distanceKm: 12.23, durationSec: 1920, reconciledCostCop: 5660, isCalibrated: true },
+      { startLat: work.lat, startLng: work.lng, endLat: cityA.lat, endLng: cityA.lng, startTimeHm: '18:13', endTimeHm: '18:44', distanceKm: 7.26, durationSec: 1860, reconciledCostCop: 3360, isCalibrated: true },
+      { startLat: cityA.lat, startLng: cityA.lng, endLat: cityB.lat, endLng: cityB.lng, startTimeHm: '18:50', endTimeHm: '21:27', distanceKm: 46.99, durationSec: 9420, reconciledCostCop: 21748, isCalibrated: true },
+      { startLat: cityB.lat, startLng: cityB.lng, endLat: home.lat, endLng: home.lng, startTimeHm: '21:46', endTimeHm: '22:15', distanceKm: 8.46, durationSec: 1740, reconciledCostCop: 3915, isCalibrated: true },
+      { startLat: home.lat, startLng: home.lng, endLat: home.lat, endLng: home.lng, startTimeHm: '22:28', endTimeHm: '22:30', distanceKm: 0.41, durationSec: 120, reconciledCostCop: 190, isCalibrated: true }
+    ];
+
+    const classified = classifyGpsDayTrips(mondayTrips, { semanticPlaces: { home, work }, costPerKmCop: 448 });
+    assert.equal(classified.totalKm, 75.35);
+    assert.equal(classified.totalFuelCop, 34873);
+    assert.equal(classified.isCalibrated, true);
+    assert.equal(classified.hasHomeToWork, true);
+    assert.equal(classified.routineTripsCount, 2); // 07:38 commute + 22:28 parking hop
+    assert.equal(classified.workTripsCount, 3);
+    assert.equal(classified.workWindowStartHm, '18:13');
+    assert.equal(classified.workWindowEndHm, '22:15');
+
+    const summary = calculateRidesCycleSummary({
+      sessions: [
+        { id: 'r1', date: '2026-11-23', platform: 'Uber', grossEarnings: 66620, distanceKm: 32.4, isEnRoute: false }
+      ],
+      passes: [
+        { id: 'p1', date: '2026-11-23', platform: 'Recarga', amountCop: 4000 }
+      ],
+      profile: {
+        fuelPriceCop: 16000,
+        routineDailyKm: 24,
+        defaultEfficiencyKmGal: 35.7,
+        gpsCache: { tripsByDate: { '2026-11-23': mondayTrips } }
+      },
+      cycleType: 'custom',
+      startDate: '2026-11-23',
+      endDate: '2026-11-23',
+      accountingMode: 'total_fuel'
+    });
+
+    // Exact GPS fuel match ($34,873) and 100%-fuel-covered net profit (+$27,747)
+    assert.equal(summary.periodCarFuelCop, 34873);
+    assert.equal(summary.periodCarKm, 75.35);
+    assert.equal(summary.fuelSource, 'gps_calibrated');
+    assert.equal(summary.totalFuelNetProfitCop, 66620 - 4000 - 34873);
+    assert.equal(summary.activeNetProfitCop, 27747);
+    assert.equal(summary.fuelCoveredPct, Math.round((62620 / 34873) * 100)); // 180%
+    assert.equal(summary.fuelExpenseCop + summary.personalFuelCop, 34873);
+    assert.ok(summary.marginalNetProfitCop > summary.totalFuelNetProfitCop);
+  });
+
+  test('buildTimeSlotMatrix ignores createdAt fallback when rides have no explicit time', () => {
+    const retroactiveSessions = [
+      { id: 'r1', date: '2026-11-23', grossEarnings: 25000, distanceKm: 10, createdAt: '2026-11-24T09:15:00.000Z' }
+    ];
+    const matrix = buildTimeSlotMatrix(retroactiveSessions, {}, { startDate: '2026-11-01', endDate: '2026-11-30' });
+    assert.equal(matrix.hasTimestampedData, false);
   });
 });
 

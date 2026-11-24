@@ -1,16 +1,16 @@
 /**
- * OCTANE // KINETIC — Rediseño Total del Módulo Carreras ("view-rides.js")
- * 
- * Filosofía de Diseño Industrial (DESIGN_GUIDELINES.md):
- * - Nombre directo: "Carreras" (cero jerga, cero "//", cero prefijos numéricos "01 /").
- * - Silencio Verbal Absoluto: Prohibidos párrafos <p>, títulos ruidosos, cajas dentro de cajas.
- * - Selector de Ciclo en Header: "Cada 3 días" | "Semanal" | "Quincenal" | "Mensual" | "Ciclo actual".
- * - 4 Tarjetas Limpias sobre un único contenedor plano dividido por hairlines:
- *     1. GANANCIA NETA LIBRE (Bruto - Egresos - Combustible extra)
- *     2. GASOLINA CUBIERTA (% del tanque o gasto de combustible pagado por carreras)
- *     3. KILÓMETROS EXTRA TOTALES (KM de carreras + KM estimados de recogida/desvío)
- *     4. FONDO DE DESGASTE SUGERIDO ($ COP y % sugerido a apartar)
- * - Lista Unificada de Movimientos con opción de editar y eliminar.
+ * OCTANE — Carreras View ("view-rides.js")
+ * Transparent GPS-Reconciled Financial Accounting for Urban Rides.
+ *
+ * Features:
+ * - Accounting Mode Switch (persisted):
+ *     * "GAS TOTAL": Net pocket profit after covering 100% of the vehicle's real fuel in the period.
+ *     * "SOLO CARRERAS": Operating margin discounting only fuel attributed to rides + pickup.
+ *   Both figures remain visible simultaneously for total financial transparency.
+ * - Fuel Coverage always compared against exact GPS calibrated vehicle fuel (matching GPS Data).
+ * - GPS Reconciliation Bar conserving 100% of distance (Carreras + Recogida + Rutina/Personal)
+ *   and 100% of fuel cost, with 1-tap jump to the GPS map inspector.
+ * - Silencio Verbal Absoluto: Zero <p> tags, zero nested boxes, 1px hairline dividers.
  */
 
 import { playHorologyTick, store } from '../core/state.js';
@@ -19,12 +19,12 @@ import { getRideSessions, getPlatformPasses, getVehicleProfile, getTelemetryLogs
 import { calculateTelemetryModel } from '../core/telemetry-engine.js';
 import {
   calculateRidesCycleSummary,
-  calculateCostPerKm,
   formatCop,
   formatCompactCop
 } from '../core/rides-engine.js';
 import { renderRideSessionLog } from '../components/rides/ride-session-log.js';
 import { openDiagnosticModal } from '../components/modals/modal-diagnostic.js';
+import { openGpsTripsModal } from '../components/modals/modal-gps-trips.js';
 
 let currentContainer = null;
 let boundListeners = [];
@@ -39,6 +39,21 @@ const CYCLES = [
 ];
 
 const CYCLE_STORAGE_KEY = 'octane_rides_cycle';
+const ACCOUNTING_MODE_KEY = 'octane_rides_accounting_mode';
+
+function getStoredAccountingMode() {
+  try {
+    const saved = localStorage.getItem(ACCOUNTING_MODE_KEY);
+    if (saved === 'total_fuel' || saved === 'marginal') return saved;
+  } catch (_) {}
+  return 'total_fuel';
+}
+
+function setStoredAccountingMode(mode) {
+  try {
+    localStorage.setItem(ACCOUNTING_MODE_KEY, mode);
+  } catch (_) {}
+}
 
 /**
  * Destroys view listeners when unmounting.
@@ -53,7 +68,7 @@ export function destroyRidesView() {
 }
 
 /**
- * Renders the clean Swiss Carreras view.
+ * Renders the transparent GPS-reconciled Carreras view.
  * @param {HTMLElement} container
  */
 export async function renderRidesView(container) {
@@ -70,6 +85,9 @@ export async function renderRidesView(container) {
     }
   } catch (_) {}
 
+  const accountingMode = getStoredAccountingMode();
+  const isTotalFuelMode = accountingMode === 'total_fuel';
+
   const [sessions, passes, profile, logs] = await Promise.all([
     getRideSessions().catch(() => []),
     getPlatformPasses().catch(() => []),
@@ -85,13 +103,13 @@ export async function renderRidesView(container) {
     telemetryLogs: logs,
     telemetryModel,
     cycleType: activeCycle,
-    cycleOffset: currentCycleOffset
+    cycleOffset: currentCycleOffset,
+    accountingMode
   });
 
   currentCycleOffset = summary.cycleOffset ?? currentCycleOffset;
 
-  // Fecha contextual para el FAB: en el periodo actual es hoy; en uno pasado, el último día
-  // del periodo (nunca futuro), para que lo registrado aparezca dentro de lo que se está viendo.
+  // Contextual date for FAB: today in active period, last day of period in past periods
   {
     const today = todayLocalYmd();
     let ctxDate = today;
@@ -102,32 +120,55 @@ export async function renderRidesView(container) {
     store.setState({ ridesContextDate: ctxDate });
   }
 
-  const costPerKm = calculateCostPerKm({
-    telemetryModel,
-    vehicleProfile: profile
-  });
+  const primaryProfit = summary.activeNetProfitCop;
+  const primaryProfitFormatted = formatCop(primaryProfit, true);
 
-  const freeProfitFormatted = formatCop(summary.freeNetProfitCop, true);
   const grossShort = formatCompactCop(summary.grossRevenueCop);
   const expShort = formatCompactCop(summary.totalExpensesCop);
-  const fuelShort = formatCompactCop(summary.fuelExpenseCop);
+  const activeFuelCost = isTotalFuelMode ? summary.periodCarFuelCop : summary.fuelExpenseCop;
+  const activeFuelShort = formatCompactCop(activeFuelCost);
+  const crossRefLabel = isTotalFuelMode
+    ? `SOLO CARRERAS: ${formatCop(summary.marginalNetProfitCop, true)}`
+    : `CON GAS TOTAL: ${formatCop(summary.totalFuelNetProfitCop, true)}`;
 
   const periodRangeText = summary.displayRange
     ? summary.displayRange
     : (summary.startDate === summary.endDate ? summary.startDate : `${summary.startDate} — ${summary.endDate}`);
 
+  const rateSourceTag = summary.fuelSource === 'gps_calibrated' ? 'GPS' : 'BASE';
+  const hourlyStr = summary.activeProfitPerHourCop !== null && summary.activeProfitPerHourCop !== undefined
+    ? ` · ${formatCop(summary.activeProfitPerHourCop, false)}/H (${summary.totalGpsWorkHours.toFixed(1)}H)`
+    : '';
+
+  // Distance conservation breakdown
+  const hasCarKm = summary.periodCarKm > 0;
+  const nonWorkKm = Number(Math.max(0, summary.periodCarKm - summary.totalDeclaredKm - summary.totalPickupKm).toFixed(1));
+  const declaredPct = hasCarKm ? Math.min(100, Math.round((summary.totalDeclaredKm / summary.periodCarKm) * 100)) : 0;
+  const pickupPct = hasCarKm ? Math.min(100 - declaredPct, Math.round((summary.totalPickupKm / summary.periodCarKm) * 100)) : 0;
+  const personalPct = hasCarKm ? Math.max(0, 100 - declaredPct - pickupPct) : 0;
+
+  const declaredFuelEst = hasCarKm && summary.periodCarFuelCop > 0
+    ? Math.round(summary.periodCarFuelCop * Math.min(1, summary.totalDeclaredKm / summary.periodCarKm))
+    : 0;
+  const pickupFuelEst = Math.max(0, summary.fuelExpenseCop - declaredFuelEst);
+  const personalFuelEst = Math.max(0, summary.periodCarFuelCop - summary.fuelExpenseCop);
+
+  const kmFooterLine2 = hasCarKm
+    ? `TOTAL: ${summary.periodCarKm.toFixed(1)} KM · ${nonWorkKm.toFixed(1)} RUTINA`
+    : (summary.deadheadSource === 'estimated' ? 'RECOGIDA ESTIMADA (SIN GPS/ODO)' : '');
+
   container.innerHTML = `
     <div id="rides-swipe-stage" class="view-rides max-w-5xl mx-auto space-y-5 pb-20 select-none font-mono">
       
-      <!-- Top Header con Selector de División de Tiempo (Cero // ni prefijos numéricos) -->
+      <!-- Top Header con Selector de División de Tiempo -->
       <header class="border-b border-[var(--line-hair)] pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div class="flex items-center gap-2.5">
-          <span class="w-2.5 h-2.5 bg-[var(--accent-volt)]"></span>
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="w-2.5 h-2.5 bg-[var(--accent-volt)] shrink-0"></span>
           <h1 class="font-mono text-sm uppercase tracking-widest text-[var(--text-primary)] font-semibold">
             Carreras
           </h1>
-          <span class="text-[10px] text-[var(--text-secondary)] font-normal tracking-wider">
-            · $${costPerKm}/KM BASE${summary.netProfitPerHourCop !== null && summary.netProfitPerHourCop !== undefined ? ` · ${formatCop(summary.netProfitPerHourCop, false)}/H REAL` : ''}
+          <span class="text-[10px] text-[var(--text-secondary)] font-normal tracking-wider tabular-nums">
+            · $${summary.effectiveCostPerKmCop}/KM ${rateSourceTag}${hourlyStr}
           </span>
         </div>
 
@@ -148,8 +189,8 @@ export async function renderRidesView(container) {
         </div>
       </header>
 
-      <!-- Barra de Periodo Calendario y Navegador con Flechas -->
-      <div class="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-void)] border border-[var(--line-hair)]">
+      <!-- Barra de Periodo Calendario, Modo Contable y Navegador -->
+      <div class="flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 bg-[var(--bg-void)] border border-[var(--line-hair)]">
         <div class="flex items-center gap-2 text-[10px] sm:text-[11px] uppercase tracking-wider text-[var(--text-primary)] font-medium min-w-0">
           <span class="w-1.5 h-1.5 shrink-0 rounded-full ${summary.sessionCount > 0 ? 'bg-[var(--accent-volt)] animate-pulse' : 'bg-[var(--text-muted)]'}"></span>
           <span id="rides-period-label" class="tabular-nums truncate">${periodRangeText}</span>
@@ -164,67 +205,94 @@ export async function renderRidesView(container) {
           </button>
         </div>
 
-        <div class="flex items-center gap-1.5 shrink-0">
-          ${!summary.isCurrentPeriod ? `
+        <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0 ml-auto">
+          <!-- Switch Contable: GAS TOTAL (100% gasolina carro) vs SOLO CARRERAS (marginal) -->
+          <div class="inline-flex border border-[var(--line-hair)] bg-[var(--bg-surface)] divide-x divide-[var(--line-hair)]" role="group" aria-label="Modo de descuento de gasolina">
             <button
-              id="btn-cycle-today"
               type="button"
-              class="h-7 px-2.5 border border-[var(--accent-volt)]/40 bg-[var(--accent-volt)]/10 text-[var(--accent-volt)] hover:bg-[var(--accent-volt)]/20 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+              data-accounting-mode="total_fuel"
+              class="btn-accounting-mode px-2 py-1 font-mono text-[9px] uppercase tracking-wider cursor-pointer transition-colors ${isTotalFuelMode ? 'bg-[var(--text-primary)] text-[var(--bg-void)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+              title="Descuenta el 100% de la gasolina real usada por el vehículo en el periodo"
             >
-              ACTUAL
+              GAS TOTAL
             </button>
-          ` : ''}
+            <button
+              type="button"
+              data-accounting-mode="marginal"
+              class="btn-accounting-mode px-2 py-1 font-mono text-[9px] uppercase tracking-wider cursor-pointer transition-colors ${!isTotalFuelMode ? 'bg-[var(--text-primary)] text-[var(--bg-void)] font-bold' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+              title="Descuenta únicamente la gasolina atribuida a las carreras y recogidas"
+            >
+              SOLO CARRERAS
+            </button>
+          </div>
 
-          <button 
-            id="btn-cycle-prev" 
-            type="button" 
-            ${!summary.canGoPrev ? 'disabled' : ''}
-            class="w-8 h-7 border border-[var(--line-hair)] bg-[var(--bg-surface)] font-mono text-xs flex items-center justify-center transition-colors ${summary.canGoPrev ? 'text-[var(--text-primary)] hover:border-[var(--accent-volt)] hover:text-[var(--accent-volt)] cursor-pointer active:scale-95' : 'text-[var(--text-muted)] opacity-30 cursor-not-allowed'}"
-            aria-label="Periodo anterior"
-          >
-            ←
-          </button>
-          
-          <button 
-            id="btn-cycle-next" 
-            type="button" 
-            ${!summary.canGoNext ? 'disabled' : ''}
-            class="w-8 h-7 border border-[var(--line-hair)] bg-[var(--bg-surface)] font-mono text-xs flex items-center justify-center transition-colors ${summary.canGoNext ? 'text-[var(--text-primary)] hover:border-[var(--accent-volt)] hover:text-[var(--accent-volt)] cursor-pointer active:scale-95' : 'text-[var(--text-muted)] opacity-30 cursor-not-allowed'}"
-            aria-label="Periodo siguiente"
-          >
-            →
-          </button>
+          <div class="flex items-center gap-1.5 shrink-0">
+            ${!summary.isCurrentPeriod ? `
+              <button
+                id="btn-cycle-today"
+                type="button"
+                class="h-7 px-2.5 border border-[var(--accent-volt)]/40 bg-[var(--accent-volt)]/10 text-[var(--accent-volt)] hover:bg-[var(--accent-volt)]/20 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                ACTUAL
+              </button>
+            ` : ''}
+
+            <button 
+              id="btn-cycle-prev" 
+              type="button" 
+              ${!summary.canGoPrev ? 'disabled' : ''}
+              class="w-8 h-7 border border-[var(--line-hair)] bg-[var(--bg-surface)] font-mono text-xs flex items-center justify-center transition-colors ${summary.canGoPrev ? 'text-[var(--text-primary)] hover:border-[var(--accent-volt)] hover:text-[var(--accent-volt)] cursor-pointer active:scale-95' : 'text-[var(--text-muted)] opacity-30 cursor-not-allowed'}"
+              aria-label="Periodo anterior"
+            >
+              ←
+            </button>
+            
+            <button 
+              id="btn-cycle-next" 
+              type="button" 
+              ${!summary.canGoNext ? 'disabled' : ''}
+              class="w-8 h-7 border border-[var(--line-hair)] bg-[var(--bg-surface)] font-mono text-xs flex items-center justify-center transition-colors ${summary.canGoNext ? 'text-[var(--text-primary)] hover:border-[var(--accent-volt)] hover:text-[var(--accent-volt)] cursor-pointer active:scale-95' : 'text-[var(--text-muted)] opacity-30 cursor-not-allowed'}"
+              aria-label="Periodo siguiente"
+            >
+              →
+            </button>
+          </div>
         </div>
       </div>
 
-      <!-- =====================================================================
-           4 TARJETAS LIMPIAS (Contenedor plano sin cajas dentro de cajas)
-           1. GANANCIA NETA LIBRE
-           2. GASOLINA CUBIERTA
-           3. KILÓMETROS EXTRA TOTALES
-           4. FONDO DE DESGASTE SUGERIDO
-           ===================================================================== -->
+      <!-- 4 TARJETAS LIMPIAS (Contenedor plano sin cajas dentro de cajas) -->
       <section class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--line-hair)] overflow-hidden">
         
-        <!-- Tarjeta 1: GANANCIA NETA LIBRE -->
-        <div class="p-4 sm:p-5 flex flex-col justify-between min-h-[140px]">
-          <div class="text-[10px] uppercase tracking-widest text-[var(--text-secondary)] font-medium">
-            GANANCIA NETA LIBRE
+        <!-- Tarjeta 1: GANANCIA REAL (GAS TOTAL) o MARGEN CARRERAS -->
+        <div class="p-4 sm:p-5 flex flex-col justify-between min-h-[152px]">
+          <div class="flex items-center justify-between gap-2 text-[10px] uppercase tracking-widest text-[var(--text-secondary)] font-medium">
+            <span>${isTotalFuelMode ? 'GANANCIA REAL' : 'MARGEN CARRERAS'}</span>
+            <span class="text-[8px] px-1.5 py-0.5 border border-[var(--line-hair)] text-[var(--text-muted)]">
+              ${isTotalFuelMode ? '100% GAS' : 'MARGINAL'}
+            </span>
           </div>
           <div class="my-auto py-2">
-            <div class="font-sans font-light text-3xl sm:text-4xl tracking-tighter tabular-nums ${summary.freeNetProfitCop >= 0 ? 'text-[var(--accent-volt)]' : 'text-[var(--accent-crimson)]'} leading-none">
-              ${freeProfitFormatted}
+            <div class="font-sans font-light text-3xl sm:text-4xl tracking-tighter tabular-nums ${primaryProfit >= 0 ? 'text-[var(--accent-volt)]' : 'text-[var(--accent-crimson)]'} leading-none">
+              ${primaryProfitFormatted}
             </div>
           </div>
-          <div class="pt-2 border-t border-[var(--line-hair)] text-[9px] uppercase tracking-wider text-[var(--text-secondary)] tabular-nums truncate">
-            BRUTO ${grossShort} · EGRESOS -${expShort} · GAS -${fuelShort}
+          <div class="pt-2 border-t border-[var(--line-hair)] space-y-1 text-[9px] uppercase tracking-wider tabular-nums">
+            <div class="text-[var(--text-secondary)] truncate">
+              BRUTO ${grossShort} · EGR -${expShort} · GAS -${activeFuelShort}
+            </div>
+            <div class="text-[var(--text-muted)] truncate">
+              ${crossRefLabel}
+            </div>
           </div>
         </div>
 
-        <!-- Tarjeta 2: GASOLINA CUBIERTA -->
-        <div class="p-4 sm:p-5 flex flex-col justify-between min-h-[140px]">
-          <div class="text-[10px] uppercase tracking-widest text-[var(--text-secondary)] font-medium">
-            GASOLINA CUBIERTA
+        <!-- Tarjeta 2: GASOLINA CUBIERTA (Reconciliada contra el gasto real del carro) -->
+        <div class="p-4 sm:p-5 flex flex-col justify-between min-h-[152px]">
+          <div class="flex items-center justify-between gap-2 text-[10px] uppercase tracking-widest text-[var(--text-secondary)] font-medium">
+            <span>GASOLINA CUBIERTA</span>
+            ${summary.fuelSource === 'gps_calibrated' ? `
+              <span class="text-[8px] text-[var(--accent-volt)]">CALIBRADO</span>
+            ` : ''}
           </div>
           <div class="my-auto py-2">
             <div class="font-sans font-light text-3xl sm:text-4xl tracking-tighter tabular-nums ${summary.fuelCoveredPct >= 100 ? 'text-[var(--accent-volt)]' : (summary.fuelCoveredPct > 0 ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]')} leading-none">
@@ -236,25 +304,30 @@ export async function renderRidesView(container) {
           </div>
         </div>
 
-        <!-- Tarjeta 3: KILÓMETROS EXTRA TOTALES -->
-        <div class="p-4 sm:p-5 flex flex-col justify-between min-h-[140px]">
+        <!-- Tarjeta 3: KILÓMETROS EXTRA Y RECOGIDA (Conservados contra el total del carro) -->
+        <div class="p-4 sm:p-5 flex flex-col justify-between min-h-[152px]">
           <div class="text-[10px] uppercase tracking-widest text-[var(--text-secondary)] font-medium">
-            KILÓMETROS EXTRA TOTALES
+            KILÓMETROS DE TRABAJO
           </div>
           <div class="my-auto py-2">
             <div class="font-sans font-light text-3xl sm:text-4xl tracking-tighter tabular-nums text-[var(--text-primary)] leading-none">
               ${summary.totalExtraKm.toFixed(1)} <span class="text-xl sm:text-2xl text-[var(--text-secondary)]">KM</span>
             </div>
           </div>
-          <div class="pt-2 border-t border-[var(--line-hair)] text-[9px] uppercase tracking-wider text-[var(--text-secondary)] tabular-nums truncate">
-            ${summary.totalDeclaredKm.toFixed(1)} KM CARRERAS · ${summary.totalPickupKm.toFixed(1)} KM RECOGIDA
+          <div class="pt-2 border-t border-[var(--line-hair)] space-y-1 text-[9px] uppercase tracking-wider tabular-nums">
+            <div class="text-[var(--text-secondary)] truncate">
+              ${summary.totalDeclaredKm.toFixed(1)} CARRERAS · ${summary.totalPickupKm.toFixed(1)} RECOGIDA
+            </div>
+            <div class="text-[var(--text-muted)] truncate">
+              ${kmFooterLine2}
+            </div>
           </div>
         </div>
 
         <!-- Tarjeta 4: FONDO DE DESGASTE SUGERIDO -->
-        <div class="p-4 sm:p-5 flex flex-col justify-between min-h-[140px]">
+        <div class="p-4 sm:p-5 flex flex-col justify-between min-h-[152px]">
           <div class="text-[10px] uppercase tracking-widest text-[var(--text-secondary)] font-medium">
-            FONDO DE DESGASTE SUGERIDO
+            FONDO DE DESGASTE
           </div>
           <div class="my-auto py-2">
             <div class="font-sans font-light text-3xl sm:text-4xl tracking-tighter tabular-nums text-[var(--accent-amber)] leading-none">
@@ -268,31 +341,103 @@ export async function renderRidesView(container) {
 
       </section>
 
-      <!-- =====================================================================
-           LISTA UNIFICADA DE MOVIMIENTOS
-           ===================================================================== -->
+      <!-- Barra de Auditoría GPS (conservación 100% de KM y gasolina real del periodo) -->
+      ${hasCarKm ? `
+        <section class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] px-4 sm:px-5 py-3.5 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2 text-[10px] uppercase tracking-wider">
+            <div class="flex items-center gap-2 flex-wrap min-w-0">
+              <span class="w-1.5 h-1.5 rounded-full ${summary.periodGpsDaysCount > 0 ? 'bg-[var(--accent-volt)]' : 'bg-[var(--text-muted)]'} shrink-0"></span>
+              <span class="text-[var(--text-primary)] font-semibold">
+                ${summary.periodGpsDaysCount > 0 ? 'AUDITORÍA GPS' : 'DESGLOSE DE RECORRIDO'}
+              </span>
+              <span class="text-[var(--text-secondary)] tabular-nums">
+                · ${summary.periodCarKm.toFixed(1)} KM · $${summary.periodCarFuelCop.toLocaleString('es-CO')}
+              </span>
+              ${summary.workWindowLabel && activeCycle === 'day' ? `
+                <span class="text-[var(--accent-amber)] tabular-nums">
+                  · BLOQUE ${summary.workWindowLabel}
+                </span>
+              ` : ''}
+            </div>
+
+            ${summary.periodGpsDaysCount > 0 ? `
+              <button
+                id="btn-rides-open-gps"
+                type="button"
+                class="text-[10px] uppercase tracking-wider text-[var(--accent-amber)] hover:opacity-80 transition-opacity cursor-pointer shrink-0"
+              >
+                VER MAPA GPS →
+              </button>
+            ` : ''}
+          </div>
+
+          <!-- Barra proporcional 3px -->
+          <div class="h-[3px] w-full flex bg-[var(--line-hair)] overflow-hidden">
+            ${declaredPct > 0 ? `<div class="h-full bg-[var(--accent-volt)]" style="width: ${declaredPct}%"></div>` : ''}
+            ${pickupPct > 0 ? `<div class="h-full bg-[var(--accent-amber)]" style="width: ${pickupPct}%"></div>` : ''}
+            ${personalPct > 0 ? `<div class="h-full bg-[var(--line-strong)]" style="width: ${personalPct}%"></div>` : ''}
+          </div>
+
+          <!-- Leyenda exacta (suma 100% del kilometraje y del gasto del carro) -->
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] uppercase tracking-wider tabular-nums text-[var(--text-secondary)]">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 bg-[var(--accent-volt)]"></span>
+              CARRERAS ${summary.totalDeclaredKm.toFixed(1)} KM (${formatCompactCop(declaredFuelEst)})
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 bg-[var(--accent-amber)]"></span>
+              RECOGIDA ${summary.totalPickupKm.toFixed(1)} KM (${formatCompactCop(pickupFuelEst)})
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 bg-[var(--line-strong)]"></span>
+              RUTINA ${nonWorkKm.toFixed(1)} KM (${formatCompactCop(personalFuelEst)})
+            </span>
+          </div>
+        </section>
+      ` : ''}
+
+      <!-- LISTA UNIFICADA DE MOVIMIENTOS -->
       <section id="rides-unified-log-root"></section>
 
     </div>
   `;
 
   // Bind Cycle switcher pills
-  const cyclePills = container.querySelectorAll('.cycle-pill');
-  cyclePills.forEach(pill => {
+  container.querySelectorAll('.cycle-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       const selected = pill.dataset.cycle;
       if (selected && selected !== activeCycle) {
         playHorologyTick(1200, 0.012, 0.02);
         currentCycleOffset = 0;
-        try {
-          localStorage.setItem(CYCLE_STORAGE_KEY, selected);
-        } catch (_) {}
+        try { localStorage.setItem(CYCLE_STORAGE_KEY, selected); } catch (_) {}
         renderRidesView(container);
       }
     });
   });
 
-  // Bind Period Navigation Buttons (← / → / ACTUAL)
+  // Bind Accounting Mode switch
+  container.querySelectorAll('.btn-accounting-mode').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const nextMode = btn.getAttribute('data-accounting-mode');
+      if (nextMode && nextMode !== accountingMode) {
+        playHorologyTick(1250, 0.012, 0.025);
+        setStoredAccountingMode(nextMode);
+        renderRidesView(container);
+      }
+    });
+  });
+
+  // Open GPS Map Inspector directly from Carreras
+  container.querySelector('#btn-rides-open-gps')?.addEventListener('click', () => {
+    playHorologyTick(1200, 0.012, 0.02);
+    openGpsTripsModal({
+      initialScope: 'cycle',
+      cycleStartDate: summary.startDate,
+      cycleEndDate: summary.endDate
+    });
+  });
+
+  // Bind Period Navigation Buttons
   const navigatePeriod = (delta) => {
     if (delta < 0 && !summary.canGoPrev) return;
     if (delta > 0 && !summary.canGoNext) return;
@@ -310,7 +455,7 @@ export async function renderRidesView(container) {
     renderRidesView(container);
   });
 
-  // Bind Horizontal Swipe Gestures (Swipe right -> previous period, Swipe left -> next period up to current)
+  // Horizontal Swipe Gestures
   const swipeStage = container.querySelector('#rides-swipe-stage');
   if (swipeStage) {
     let touchStartX = null;
@@ -333,13 +478,8 @@ export async function renderRidesView(container) {
       touchStartY = null;
 
       if (Math.abs(dx) >= 50 && Math.abs(dy) < 35) {
-        if (dx > 0) {
-          // Swipe right -> go back in time
-          navigatePeriod(-1);
-        } else {
-          // Swipe left -> go forward towards current period
-          navigatePeriod(1);
-        }
+        if (dx > 0) navigatePeriod(-1);
+        else navigatePeriod(1);
       }
     }, { passive: true });
   }
@@ -358,7 +498,6 @@ export async function renderRidesView(container) {
 
   // Reactive updates
   const updateHandler = () => {
-    // Nunca repintar Carreras si el usuario ya está en otra pestaña (pisaba la vista activa).
     if (store.getState().currentView !== 'rides') return;
     if (document.body.contains(container)) {
       renderRidesView(container);

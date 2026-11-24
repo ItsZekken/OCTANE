@@ -247,7 +247,7 @@ const TIME_SLOTS = [
   { key: 'noche', label: 'NOCHE', range: '18–23', minHour: 18, maxHour: 23 }
 ];
 
-function extractLocalHour(obj) {
+function extractLocalHour(obj, { isGpsTrip = false } = {}) {
   if (!obj || typeof obj !== 'object') return null;
   if (typeof obj.time === 'string' && /^\d{1,2}:\d{2}/.test(obj.time.trim())) {
     const h = parseInt(obj.time.trim().split(':')[0], 10);
@@ -257,10 +257,15 @@ function extractLocalHour(obj) {
     const h = parseInt(obj.startTimeHm.trim().split(':')[0], 10);
     if (Number.isFinite(h) && h >= 0 && h <= 23) return h;
   }
-  if (obj.createdAt) {
-    const d = new Date(obj.createdAt);
-    if (!isNaN(d.getTime())) return d.getHours();
+  if (isGpsTrip) {
+    const rawMs = Number(obj.startTimeMs ?? obj.startTime);
+    if (Number.isFinite(rawMs) && rawMs > 0) {
+      const d = new Date(rawMs < 1e12 ? rawMs * 1000 : rawMs);
+      if (!isNaN(d.getTime())) return d.getHours();
+    }
   }
+  // Never fall back to createdAt for ride sessions: retroactive logging at home or the next day
+  // would misattribute night shifts to morning/late-night hours.
   return null;
 }
 
@@ -334,7 +339,7 @@ export function buildTimeSlotMatrix(rideSessions = [], tripsByDate = {}, options
         const dayTrips = tripsByDate[dateKey];
         if (!Array.isArray(dayTrips)) continue;
         for (const t of dayTrips) {
-          const tHour = extractLocalHour(t);
+          const tHour = extractLocalHour(t, { isGpsTrip: true });
           if (tHour === null) continue;
           const slotDef = resolveSlot(tHour);
           if (slotDef && slotDef.key === bucket.key) {

@@ -168,8 +168,8 @@ export function openMovementDetailModal(movement, options = {}) {
           <div class="grid grid-cols-2 divide-x divide-[var(--line-hair)] bg-[var(--bg-surface)] font-mono text-xs">
             <!-- Fecha -->
             <div class="p-3.5 space-y-1">
-              <span class="text-[9px] uppercase tracking-wider text-[var(--text-secondary)] block">FECHA</span>
-              <div class="text-[var(--text-primary)] font-medium">${fullDate}</div>
+              <span class="text-[9px] uppercase tracking-wider text-[var(--text-secondary)] block">FECHA${movement.time ? ' Y HORA' : ''}</span>
+              <div class="text-[var(--text-primary)] font-medium tabular-nums">${fullDate}${movement.time ? ` · ${escapeHtml(movement.time)}` : ''}</div>
             </div>
 
             <!-- Distancia -->

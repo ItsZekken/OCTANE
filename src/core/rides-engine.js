@@ -21,6 +21,9 @@
  * - Silencio Verbal Absoluto: Prohibidos párrafos/p-tags, únicamente micro-labels y macro-números.
  */
 
+import { detectSemanticPlaces } from './geospatial-intelligence.js';
+import { calculateDistanceMeters } from './gas-station-matcher.js';
+
 export const DEFAULT_ROUTINE_DAILY_KM = 24;
 export const DEFAULT_FUEL_PRICE_COP = 16000;
 export const DEFAULT_EFFICIENCY_KM_GAL = 33.71; // Benchmark Kia Picanto 1.0L urbano
@@ -141,10 +144,18 @@ export function learnRoutineDailyKmByWeekday(gpsDaysMap = null, rideSessions = [
         };
     }
 
-    const overallAvg = Number((allNonRideKm.reduce((a, b) => a + b, 0) / allNonRideKm.length).toFixed(1));
+    const computeMedian = (arr) => {
+        if (!Array.isArray(arr) || arr.length === 0) return fallback;
+        const sorted = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const val = sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        return Number(val.toFixed(1));
+    };
+
+    const overallAvg = computeMedian(allNonRideKm);
     const byWeekday = buckets.map((arr) => {
         if (arr.length >= 3) {
-            return Number((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1));
+            return computeMedian(arr);
         }
         return overallAvg;
     });
@@ -154,6 +165,194 @@ export function learnRoutineDailyKmByWeekday(gpsDaysMap = null, rideSessions = [
         avgRoutineKm: overallAvg,
         learnedDaysCount: allNonRideKm.length,
         isGpsLearned: true
+    };
+}
+
+const SEMANTIC_MATCH_RADIUS_M = 280;
+
+function formatHmFromTrip(trip, fieldHm, fieldMs) {
+    if (typeof trip?.[fieldHm] === 'string' && /^\d{1,2}:\d{2}/.test(trip[fieldHm].trim())) {
+        return trip[fieldHm].trim().slice(0, 5);
+    }
+    const rawMs = Number(trip?.[fieldMs]);
+    if (Number.isFinite(rawMs) && rawMs > 0) {
+        const ms = rawMs < 1e12 ? rawMs * 1000 : rawMs;
+        const d = new Date(ms);
+        if (!isNaN(d.getTime())) {
+            return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
+    }
+    return '';
+}
+
+function matchTripEndpointPlace(lat, lng, addrText, semanticPlaces) {
+    const cleanAddr = String(addrText || '').toUpperCase();
+    const home = semanticPlaces?.home || null;
+    const work = semanticPlaces?.work || null;
+
+    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) && (Number(lat) !== 0 || Number(lng) !== 0)) {
+        if (home && calculateDistanceMeters(Number(lat), Number(lng), home.lat, home.lng) <= SEMANTIC_MATCH_RADIUS_M) {
+            return 'home';
+        }
+        if (work && calculateDistanceMeters(Number(lat), Number(lng), work.lat, work.lng) <= SEMANTIC_MATCH_RADIUS_M) {
+            return 'work';
+        }
+    }
+    if (home && cleanAddr.includes(String(home.label || 'CASA').toUpperCase())) return 'home';
+    if (work && cleanAddr.includes(String(work.label || 'TRABAJO').toUpperCase())) return 'work';
+    return null;
+}
+
+/**
+ * Classifies a day's GPS trips into habitual routine trips (CASA <-> TRABAJO & local parking)
+ * versus non-routine/work trips, and sums the exact calibrated fuel cost and distance.
+ *
+ * @param {Array<Object>} [dayTrips=[]]
+ * @param {Object} [options={}]
+ * @returns {Object}
+ */
+export function classifyGpsDayTrips(dayTrips = [], options = {}) {
+    const trips = Array.isArray(dayTrips) ? dayTrips.filter(Boolean) : [];
+    const costPerKmCop = Number(options.costPerKmCop) || 450;
+    const semanticPlaces = options.semanticPlaces || null;
+    const fallbackCommuteKm = Number(options.fallbackCommuteKm) > 0 ? Number(options.fallbackCommuteKm) : 12;
+
+    if (trips.length === 0) {
+        return {
+            hasTrips: false,
+            tripCount: 0,
+            totalKm: 0,
+            totalFuelCop: 0,
+            isCalibrated: false,
+            effectiveCostPerKm: costPerKmCop,
+            routineTripsKm: 0,
+            routineTripsFuelCop: 0,
+            routineTripsCount: 0,
+            hasHomeToWork: false,
+            hasWorkToHome: false,
+            workTripsKm: 0,
+            workTripsFuelCop: 0,
+            workTripsCount: 0,
+            workTripsDurationSec: 0,
+            totalDurationSec: 0,
+            workWindowStartHm: '',
+            workWindowEndHm: '',
+            workTripStartTimes: [],
+            tripsClassified: []
+        };
+    }
+
+    const sorted = [...trips].sort((a, b) => {
+        const msA = Number(a.startTimeMs ?? a.startTime) || 0;
+        const msB = Number(b.startTimeMs ?? b.startTime) || 0;
+        if (msA !== msB) return msA - msB;
+        return String(a.startTimeHm || '').localeCompare(String(b.startTimeHm || ''));
+    });
+
+    const maxDirectCommuteKm = Math.max(25, fallbackCommuteKm * 1.8);
+    let totalKm = 0;
+    let totalFuelCop = 0;
+    let totalDurationSec = 0;
+    let isCalibrated = false;
+
+    let routineTripsKm = 0;
+    let routineTripsFuelCop = 0;
+    let routineTripsCount = 0;
+    let hasHomeToWork = false;
+    let hasWorkToHome = false;
+
+    let workTripsKm = 0;
+    let workTripsFuelCop = 0;
+    let workTripsCount = 0;
+    let workTripsDurationSec = 0;
+    let workWindowStartHm = '';
+    let workWindowEndHm = '';
+    const workTripStartTimes = [];
+    const tripsClassified = [];
+
+    for (const t of sorted) {
+        const km = Math.max(0, Number(t.distanceKm ?? t.mileageKm) || 0);
+        const hasRec = t.reconciledCostCop !== undefined && t.reconciledCostCop !== null && Number.isFinite(Number(t.reconciledCostCop));
+        if (hasRec || t.isCalibrated) isCalibrated = true;
+        const rawCost = Number(t.reconciledCostCop ?? t.estCostCop);
+        const costCop = Number.isFinite(rawCost) && rawCost > 0 ? Math.round(rawCost) : Math.round(km * costPerKmCop);
+        const durSec = Number(t.durationSec ?? t.tripTimeSec) || (Number(t.durationMin) > 0 ? Math.round(Number(t.durationMin) * 60) : 0);
+
+        const startHm = formatHmFromTrip(t, 'startTimeHm', 'startTimeMs');
+        const endHm = formatHmFromTrip(t, 'endTimeHm', 'endTimeMs');
+
+        const startPlace = matchTripEndpointPlace(t.startLat ?? t.startLatitude, t.startLng ?? t.startLongitude, t.startAddress, semanticPlaces);
+        const endPlace = matchTripEndpointPlace(t.endLat ?? t.endLatitude, t.endLng ?? t.endLongitude, t.endAddress, semanticPlaces);
+
+        const isDirectHomeToWork = startPlace === 'home' && endPlace === 'work' && km <= maxDirectCommuteKm;
+        const isDirectWorkToHome = startPlace === 'work' && endPlace === 'home' && km <= maxDirectCommuteKm;
+        const isLocalParkingHop = km < 1.0 && (startPlace === 'home' || endPlace === 'home' || startPlace === 'work' || endPlace === 'work');
+
+        const isRoutine = isDirectHomeToWork || isDirectWorkToHome || isLocalParkingHop;
+
+        totalKm += km;
+        totalFuelCop += costCop;
+        totalDurationSec += durSec;
+
+        if (isRoutine) {
+            routineTripsKm += km;
+            routineTripsFuelCop += costCop;
+            routineTripsCount += 1;
+            if (isDirectHomeToWork) hasHomeToWork = true;
+            if (isDirectWorkToHome) hasWorkToHome = true;
+        } else {
+            workTripsKm += km;
+            workTripsFuelCop += costCop;
+            workTripsCount += 1;
+            workTripsDurationSec += durSec;
+            if (startHm) {
+                if (!workWindowStartHm) workWindowStartHm = startHm;
+                if (!workTripStartTimes.includes(startHm)) workTripStartTimes.push(startHm);
+            }
+            if (endHm) {
+                workWindowEndHm = endHm;
+            } else if (startHm) {
+                workWindowEndHm = startHm;
+            }
+        }
+
+        tripsClassified.push({
+            km: Number(km.toFixed(2)),
+            costCop,
+            durationSec: durSec,
+            startHm,
+            endHm,
+            startPlace,
+            endPlace,
+            classification: isRoutine ? 'routine' : 'work'
+        });
+    }
+
+    const roundedKm = Number(totalKm.toFixed(2));
+    const roundedFuel = Math.round(totalFuelCop);
+    const effectiveCostPerKm = roundedKm > 0 ? Math.round(roundedFuel / roundedKm) : costPerKmCop;
+
+    return {
+        hasTrips: true,
+        tripCount: sorted.length,
+        totalKm: roundedKm,
+        totalFuelCop: roundedFuel,
+        isCalibrated,
+        effectiveCostPerKm,
+        routineTripsKm: Number(routineTripsKm.toFixed(2)),
+        routineTripsFuelCop: Math.round(routineTripsFuelCop),
+        routineTripsCount,
+        hasHomeToWork,
+        hasWorkToHome,
+        workTripsKm: Number(workTripsKm.toFixed(2)),
+        workTripsFuelCop: Math.round(workTripsFuelCop),
+        workTripsCount,
+        workTripsDurationSec,
+        totalDurationSec,
+        workWindowStartHm,
+        workWindowEndHm,
+        workTripStartTimes,
+        tripsClassified
     };
 }
 
@@ -545,7 +744,8 @@ export function calculateRidesCycleSummary(params = {}) {
         telemetryLogs = [],
         telemetryModel = null,
         cycleType = 'month',
-        cycleOffset = 0
+        cycleOffset = 0,
+        accountingMode = 'marginal'
     } = params;
 
     const rawSessions = Array.isArray(sessions) ? sessions : [];
@@ -600,6 +800,12 @@ export function calculateRidesCycleSummary(params = {}) {
     const gpsDaysMap = (profile?.gpsCache?.days && typeof profile.gpsCache.days === 'object')
         ? profile.gpsCache.days
         : null;
+    const tripsByDate = (profile?.gpsCache?.tripsByDate && typeof profile.gpsCache.tripsByDate === 'object')
+        ? profile.gpsCache.tripsByDate
+        : null;
+    const semanticPlaces = tripsByDate
+        ? detectSemanticPlaces(tripsByDate, profile?.learnedGasStations || [], profile?.semanticPlaceLabels || {})
+        : null;
     const routineProfile = learnRoutineDailyKmByWeekday(gpsDaysMap, rawSessions, routineDailyKm);
 
     const getDayRoutineKm = (dateStr) => {
@@ -642,15 +848,35 @@ export function calculateRidesCycleSummary(params = {}) {
     let totalRouteCreditUsedKm = 0;
     let totalEffectiveWorkKm = 0;
     let totalPickupKm = 0;
+    let totalOtherUnusualKm = 0;
+    let totalHabitualKm = 0;
     let totalExtraKm = 0;
     let totalFuelExpenseCop = 0;
     let totalIdleFuelCop = 0;
     let totalGpsWorkHours = 0;
     let gpsOdoDaysCount = 0;
+    let gpsTripsDaysCount = 0;
     let odoManualDaysCount = 0;
     let totalRidesCount = 0;
+    let workWindowLabel = '';
 
     const dailyBreakdown = {};
+    const gpsDayCache = {};
+
+    const getGpsDayClassified = (dateStr) => {
+        if (gpsDayCache[dateStr] !== undefined) return gpsDayCache[dateStr];
+        const rawTrips = tripsByDate?.[dateStr];
+        if (Array.isArray(rawTrips) && rawTrips.length > 0) {
+            gpsDayCache[dateStr] = classifyGpsDayTrips(rawTrips, {
+                semanticPlaces,
+                costPerKmCop,
+                fallbackCommuteKm: getDayRoutineKm(dateStr) / 2
+            });
+        } else {
+            gpsDayCache[dateStr] = null;
+        }
+        return gpsDayCache[dateStr];
+    };
 
     Object.keys(sessionsByDate).sort().forEach(dateStr => {
         const dayRides = sessionsByDate[dateStr];
@@ -660,7 +886,6 @@ export function calculateRidesCycleSummary(params = {}) {
         let dayRidesCount = 0;
 
         dayRides.forEach(r => {
-            // Can be individual ride or day summary session
             if (Array.isArray(r.rides) && r.rides.length > 0) {
                 r.rides.forEach(sub => {
                     const fare = Number(sub.fareCop || sub.netValue || 0);
@@ -691,51 +916,103 @@ export function calculateRidesCycleSummary(params = {}) {
         const dayDeclaredKm = dayEnRouteKm + dayFreeKm;
         const dayRoutineKm = getDayRoutineKm(dateStr);
 
-        // Apply route credit to en_route km (remplaza viaje habitual, hasta dayRoutineKm por jornada)
+        // Apply route credit to en_route km (reemplaza viaje habitual, hasta dayRoutineKm por jornada)
         const creditUsed = Math.min(dayEnRouteKm, dayRoutineKm);
-        const enRouteDetourKm = Math.max(0, dayEnRouteKm - dayRoutineKm); // Desvío excedente que supera la rutina
-        const dayEffectiveKm = dayFreeKm + enRouteDetourKm; // Km de carreras que requieren combustible
+        const enRouteDetourKm = Math.max(0, dayEnRouteKm - dayRoutineKm);
+        const dayEffectiveKm = dayFreeKm + enRouteDetourKm;
 
-        // Tope Físico Realista de Recogida (Criterios 2 y 3):
-        // - Carreras libres: tope máximo del 40% (realidad urbana ciudad).
-        // - Carreras 'En ruta': matches sobre el corredor del viaje habitual (máximo 15% o 1.5 km).
         const enRoutePickupCap = dayEnRouteKm > 0 ? Math.min(1.5, Number((dayEnRouteKm * 0.15).toFixed(1))) : 0;
         const maxAllowedPickupKm = Number(((dayFreeKm * MAX_PICKUP_RATIO) + (enRouteDetourKm * 0.20) + enRoutePickupCap).toFixed(1));
         const defaultExpectedPickupKm = Number(((dayFreeKm * learnedPickupFactor) + (enRouteDetourKm * 0.15) + (enRoutePickupCap * 0.5)).toFixed(1));
 
-        // Resolve day odometer reading (GPS daily telemetry takes priority over manual odometer logs)
+        const gpsDayInfo = getGpsDayClassified(dateStr);
         const odo = resolveDayOdometerDelta(dateStr, rawLogs, null, gpsDaysMap);
-        let dayPickupKm = 0;
-        let dayDeadheadSource = 'estimated';
 
-        if (odo.hasClosing && odo.deltaOdo > 0) {
-            // Criterio 1: Si pasaron múltiples días entre lecturas, deducir la rutina de todos los días transcurridos
+        let dayPickupKm = 0;
+        let dayHabitualKm = dayRoutineKm;
+        let dayOtherUnusualKm = 0;
+        let dayDeadheadSource = 'estimated';
+        let dayIdleWorkFuelCop = 0;
+        let dayGpsWorkHours = 0;
+        let dayTotalCarKm = 0;
+        let dayTotalCarFuelCop = 0;
+        let dayFuelCost = 0;
+        let dayWorkWindow = '';
+
+        if (gpsDayInfo && gpsDayInfo.hasTrips && gpsDayInfo.totalKm > 0) {
+            dayTotalCarKm = gpsDayInfo.totalKm;
+            dayTotalCarFuelCop = gpsDayInfo.totalFuelCop;
+            gpsTripsDaysCount++;
+            gpsOdoDaysCount++;
+            dayDeadheadSource = 'gps';
+
+            if (gpsDayInfo.hasHomeToWork && gpsDayInfo.hasWorkToHome) {
+                dayHabitualKm = Number(Math.min(Math.max(0, dayTotalCarKm - dayEffectiveKm), gpsDayInfo.routineTripsKm).toFixed(1));
+            } else if (gpsDayInfo.hasHomeToWork || gpsDayInfo.hasWorkToHome) {
+                const estTwoWay = Math.max(gpsDayInfo.routineTripsKm * 2, dayRoutineKm);
+                dayHabitualKm = Number(Math.min(Math.max(0, dayTotalCarKm - dayEffectiveKm), estTwoWay).toFixed(1));
+            } else {
+                dayHabitualKm = Number(Math.min(Math.max(0, dayTotalCarKm - dayEffectiveKm), dayRoutineKm).toFixed(1));
+            }
+
+            const candidateWorkKm = Math.max(0, dayTotalCarKm - dayHabitualKm);
+            const rawPickup = Math.max(0, candidateWorkKm - dayEffectiveKm);
+            dayPickupKm = Number(Math.min(rawPickup, maxAllowedPickupKm).toFixed(1));
+            dayOtherUnusualKm = Number(Math.max(0, rawPickup - dayPickupKm).toFixed(1));
+
+            const dayExtraKmTmp = Number((dayEffectiveKm + dayPickupKm).toFixed(1));
+            const workShare = Math.min(1, dayExtraKmTmp / dayTotalCarKm);
+            dayFuelCost = Math.round(dayTotalCarFuelCop * workShare);
+
+            if (gpsDayInfo.workTripsDurationSec > 0) {
+                dayGpsWorkHours = gpsDayInfo.workTripsDurationSec / 3600;
+            } else if (gpsDayInfo.totalDurationSec > 0) {
+                dayGpsWorkHours = (gpsDayInfo.totalDurationSec * workShare) / 3600;
+            } else if (odo.hasClosing && odo.deltaOdo > 0 && (odo.idleAccOnSec > 0 || odo.runTimeSec > 0)) {
+                dayGpsWorkHours = ((Number(odo.runTimeSec) || 0) + (Number(odo.idleAccOnSec) || 0)) * workShare / 3600;
+            }
+
+            if (gpsDayInfo.workWindowStartHm && gpsDayInfo.workWindowEndHm) {
+                dayWorkWindow = `${gpsDayInfo.workWindowStartHm}–${gpsDayInfo.workWindowEndHm}`;
+                if (!workWindowLabel) workWindowLabel = dayWorkWindow;
+            }
+        } else if (odo.hasClosing && odo.deltaOdo > 0) {
             const elapsedDays = Math.max(1, odo.daysElapsed || 1);
             const multiDayRoutine = elapsedDays * dayRoutineKm;
             const candidateWorkKm = Math.max(0, odo.deltaOdo - multiDayRoutine);
             const rawPickup = Math.max(0, candidateWorkKm - dayEffectiveKm);
 
-            // Criterio 2: Acotamiento estricto contra el tope físico de recogida
-            // Cualquier exceso por encima de maxAllowedPickupKm es uso personal del conductor (fines de semana, diligencias)
-            dayPickupKm = Math.min(rawPickup, maxAllowedPickupKm);
+            dayPickupKm = Number(Math.min(rawPickup, maxAllowedPickupKm).toFixed(1));
+            dayHabitualKm = Number(Math.min(odo.deltaOdo, multiDayRoutine).toFixed(1));
+            dayOtherUnusualKm = Number(Math.max(0, rawPickup - dayPickupKm).toFixed(1));
             dayDeadheadSource = odo.source === 'gps' ? 'gps' : 'odometer';
             if (odo.source === 'gps') gpsOdoDaysCount++;
             else odoManualDaysCount++;
+
+            const dayExtraKmTmp = Number((dayEffectiveKm + dayPickupKm).toFixed(1));
+            const workShare = Math.min(1, dayExtraKmTmp / odo.deltaOdo);
+            if (odo.idleAccOnSec > 0 || odo.runTimeSec > 0) {
+                if (odo.idleAccOnSec > 0) {
+                    dayIdleWorkFuelCop = Math.round(((odo.idleAccOnSec / 3600) * 0.18) * workShare * fuelPriceCop);
+                }
+                dayGpsWorkHours = ((Number(odo.runTimeSec) || 0) + (Number(odo.idleAccOnSec) || 0)) * workShare / 3600;
+            }
+            dayFuelCost = Math.round(dayExtraKmTmp * costPerKmCop) + dayIdleWorkFuelCop;
+            dayTotalCarKm = odo.deltaOdo;
+            const totalDayIdleCop = odo.idleAccOnSec > 0 ? Math.round(((odo.idleAccOnSec / 3600) * 0.18) * fuelPriceCop) : 0;
+            dayTotalCarFuelCop = Math.round(odo.deltaOdo * costPerKmCop) + totalDayIdleCop;
         } else {
             dayPickupKm = defaultExpectedPickupKm;
+            dayHabitualKm = dayRoutineKm;
+            dayOtherUnusualKm = 0;
+            const dayExtraKmTmp = Number((dayEffectiveKm + dayPickupKm).toFixed(1));
+            dayFuelCost = Math.round(dayExtraKmTmp * costPerKmCop);
+            dayTotalCarKm = Number((dayHabitualKm + dayExtraKmTmp).toFixed(1));
+            dayTotalCarFuelCop = Math.round(dayHabitualKm * costPerKmCop) + dayFuelCost;
         }
 
         const dayExtraKm = Number((dayEffectiveKm + dayPickupKm).toFixed(1));
-        let dayIdleWorkFuelCop = 0;
-        let dayGpsWorkHours = 0;
-        if (odo.hasClosing && odo.deltaOdo > 0 && (odo.idleAccOnSec > 0 || odo.runTimeSec > 0)) {
-            const workShare = Math.min(1, dayExtraKm / odo.deltaOdo);
-            if (odo.idleAccOnSec > 0) {
-                dayIdleWorkFuelCop = Math.round(((odo.idleAccOnSec / 3600) * 0.18) * workShare * fuelPriceCop);
-            }
-            dayGpsWorkHours = ((Number(odo.runTimeSec) || 0) + (Number(odo.idleAccOnSec) || 0)) * workShare / 3600;
-        }
-        const dayFuelCost = Math.round(dayExtraKm * costPerKmCop) + dayIdleWorkFuelCop;
+        const dayPersonalFuelCop = Math.max(0, dayTotalCarFuelCop - dayFuelCost);
 
         dailyBreakdown[dateStr] = {
             date: dateStr,
@@ -747,13 +1024,20 @@ export function calculateRidesCycleSummary(params = {}) {
             detourKm: enRouteDetourKm,
             effectiveKm: dayEffectiveKm,
             pickupKm: dayPickupKm,
+            otherUnusualKm: dayOtherUnusualKm,
+            habitualKm: dayHabitualKm,
             extraKm: dayExtraKm,
+            totalCarKm: dayTotalCarKm,
+            totalCarFuelCop: dayTotalCarFuelCop,
+            personalFuelCop: dayPersonalFuelCop,
             idleFuelCop: dayIdleWorkFuelCop,
             gpsWorkHours: Number(dayGpsWorkHours.toFixed(2)),
+            workWindow: dayWorkWindow,
+            isGpsCalibrated: Boolean(gpsDayInfo?.isCalibrated),
             deadheadSource: dayDeadheadSource,
             fuelCostCop: dayFuelCost,
             ridesCount: dayRidesCount,
-            hasOdometer: odo.hasClosing
+            hasOdometer: odo.hasClosing || Boolean(gpsDayInfo?.hasTrips)
         };
 
         totalGrossRevenueCop += dayGross;
@@ -763,6 +1047,8 @@ export function calculateRidesCycleSummary(params = {}) {
         totalRouteCreditUsedKm += creditUsed;
         totalEffectiveWorkKm += dayEffectiveKm;
         totalPickupKm += dayPickupKm;
+        totalOtherUnusualKm += dayOtherUnusualKm;
+        totalHabitualKm += dayHabitualKm;
         totalExtraKm += dayExtraKm;
         totalIdleFuelCop += dayIdleWorkFuelCop;
         totalGpsWorkHours += dayGpsWorkHours;
@@ -776,7 +1062,6 @@ export function calculateRidesCycleSummary(params = {}) {
         totalExpensesCop += Number(p.amountCop || p.costCop || 0);
     });
 
-    // Also include any appCommissions stored in legacy session objects
     cycleSessions.forEach(s => {
         if (s.type === 'expense') {
             const exp = Number(s.amountCop || s.costCop || s.expenseCop || s.appCommissions || 0);
@@ -791,41 +1076,102 @@ export function calculateRidesCycleSummary(params = {}) {
         }
     });
 
-    // 4. Net Free Profit (Bolsillo Libre)
-    // Formula: Gross - Expenses - Fuel Extra
-    const freeNetProfitCop = Math.round(totalGrossRevenueCop - totalExpensesCop - totalFuelExpenseCop);
+    // 4. Period-wide Real Vehicle Fuel & Distance (conserves 100% of GPS calibrated fuel!)
+    const todayStr = formatLocalYmd(new Date());
+    const periodCapEnd = endDate > todayStr ? todayStr : endDate;
+    const allPeriodDates = new Set(Object.keys(dailyBreakdown));
 
-    // 5. Wear Reserve (Desgaste obligatorio 10% del ingreso bruto)
+    if (tripsByDate) {
+        for (const d of Object.keys(tripsByDate)) {
+            const clean = String(d).slice(0, 10);
+            if (clean >= startDate && clean <= periodCapEnd) allPeriodDates.add(clean);
+        }
+    }
+    if (gpsDaysMap) {
+        for (const d of Object.keys(gpsDaysMap)) {
+            const clean = String(d).slice(0, 10);
+            if (clean >= startDate && clean <= periodCapEnd) allPeriodDates.add(clean);
+        }
+    }
+
+    let periodCarKm = 0;
+    let periodCarFuelCop = 0;
+    let periodGpsDaysCount = 0;
+    let periodCalibratedDaysCount = 0;
+
+    for (const d of Array.from(allPeriodDates).sort()) {
+        if (dailyBreakdown[d]) {
+            periodCarKm += dailyBreakdown[d].totalCarKm;
+            periodCarFuelCop += dailyBreakdown[d].totalCarFuelCop;
+            if (dailyBreakdown[d].deadheadSource === 'gps') periodGpsDaysCount++;
+            if (dailyBreakdown[d].isGpsCalibrated) periodCalibratedDaysCount++;
+            continue;
+        }
+        const gpsDayInfo = getGpsDayClassified(d);
+        if (gpsDayInfo && gpsDayInfo.hasTrips && gpsDayInfo.totalKm > 0) {
+            periodCarKm += gpsDayInfo.totalKm;
+            periodCarFuelCop += gpsDayInfo.totalFuelCop;
+            periodGpsDaysCount++;
+            if (gpsDayInfo.isCalibrated) periodCalibratedDaysCount++;
+            continue;
+        }
+        const rawGpsDay = gpsDaysMap?.[d];
+        const rawKm = Number(rawGpsDay?.km ?? rawGpsDay?.miles) || 0;
+        if (rawKm > 0) {
+            const idleCop = Number(rawGpsDay?.idleAccOnSec) > 0
+                ? Math.round(((Number(rawGpsDay.idleAccOnSec) / 3600) * 0.18) * fuelPriceCop)
+                : 0;
+            periodCarKm += rawKm;
+            periodCarFuelCop += Math.round(rawKm * costPerKmCop) + idleCop;
+            periodGpsDaysCount++;
+        }
+    }
+
+    periodCarKm = Number(periodCarKm.toFixed(2));
+    periodCarFuelCop = Math.round(periodCarFuelCop);
+
+    // Fallback when period has zero GPS days and zero ride days
+    const tankFuelCostCop = Math.round(tankCapacityGal * fuelPriceCop);
+    const activeDaysCount = Object.keys(sessionsByDate).length;
+    const effectivePeriodCarFuelCop = periodCarFuelCop > 0
+        ? periodCarFuelCop
+        : (activeDaysCount > 0 ? Math.round(activeDaysCount * routineDailyKm * costPerKmCop) + totalFuelExpenseCop : 0);
+
+    const fuelSource = periodCalibratedDaysCount > 0
+        ? 'gps_calibrated'
+        : (periodGpsDaysCount > 0 ? 'gps_estimated' : (odoManualDaysCount > 0 ? 'odometer' : 'estimated'));
+
+    const effectiveCostPerKmCop = (periodCarKm > 0 && effectivePeriodCarFuelCop > 0)
+        ? Math.round(effectivePeriodCarFuelCop / periodCarKm)
+        : costPerKmCop;
+
+    // 5. Net Profits (Dual Transparency: Marginal vs 100% Total Car Fuel Covered)
+    const netBeforeFuelCop = Math.round(totalGrossRevenueCop - totalExpensesCop);
+    const marginalNetProfitCop = Math.round(netBeforeFuelCop - totalFuelExpenseCop);
+    const totalFuelNetProfitCop = Math.round(netBeforeFuelCop - effectivePeriodCarFuelCop);
+    const activeNetProfitCop = accountingMode === 'total_fuel' ? totalFuelNetProfitCop : marginalNetProfitCop;
+    // Keep freeNetProfitCop backward compatible (= marginalNetProfitCop)
+    const freeNetProfitCop = marginalNetProfitCop;
+    const personalFuelCop = Math.max(0, effectivePeriodCarFuelCop - totalFuelExpenseCop);
+
+    // 6. Wear Reserve (Desgaste obligatorio 10% del ingreso bruto)
     const wearReserveCop = Math.round(totalGrossRevenueCop * (DEFAULT_WEAR_RESERVE_PERCENT / 100));
 
-    // 6. Fuel Coverage (Gasolina Cubierta)
-    // Based on the fuel spent on the active day(s) (routine + extra work fuel), NOT a full tank.
-    // Whenever earnings after expenses exceed the fuel spent on those days (i.e. driver makes money
-    // on top of covering the gas spent), fuelCoveredPct is > 100%.
-    const tankFuelCostCop = Math.round(tankCapacityGal * fuelPriceCop);
-    const activeDaysCount = Math.max(1, Object.keys(sessionsByDate).length);
-    const routineFuelCostCop = Math.round(activeDaysCount * routineDailyKm * costPerKmCop);
-    const periodFuelCostCop = Math.max(1, routineFuelCostCop + totalFuelExpenseCop);
-    const netBeforeFuelCop = Math.max(0, Math.round(totalGrossRevenueCop - totalExpensesCop));
-
+    // 7. Fuel Coverage (Gasolina Cubierta — SIEMPRE contra la gasolina REAL del carro en el periodo)
     let fuelCoveredPct = 0;
-    if (netBeforeFuelCop > 0 && periodFuelCostCop > 0) {
-        fuelCoveredPct = Math.round((netBeforeFuelCop / periodFuelCostCop) * 100);
+    if (netBeforeFuelCop > 0 && effectivePeriodCarFuelCop > 0) {
+        fuelCoveredPct = Math.round((netBeforeFuelCop / effectivePeriodCarFuelCop) * 100);
     }
 
-    // Status text for fuel coverage
-    const periodTag = cycleType === 'day' ? 'DEL DÍA' : 'GASTADA';
-    let fuelCoveredStatus = '';
-    if (fuelCoveredPct <= 0) {
-        fuelCoveredStatus = `0% DE GAS ${periodTag} (${formatCompactCop(periodFuelCostCop)})`;
-    } else {
-        fuelCoveredStatus = `${fuelCoveredPct}% DE GAS ${periodTag} (${formatCompactCop(periodFuelCostCop)})`;
-    }
+    const periodTag = cycleType === 'day' ? 'DEL DÍA' : 'DEL PERIODO';
+    const fuelSourceTag = fuelSource === 'gps_calibrated' ? 'GPS' : (fuelSource === 'gps_estimated' ? 'GPS' : 'EST.');
+    const fuelCoveredStatus = effectivePeriodCarFuelCop > 0
+        ? `${formatCompactCop(Math.max(0, netBeforeFuelCop))} VS $${effectivePeriodCarFuelCop.toLocaleString('es-CO')} ${fuelSourceTag}`
+        : `0% DE GAS ${periodTag}`;
 
-    // 7. Unified movements list for this cycle
+    // 8. Unified movements list for this cycle
     const movements = [];
 
-    // Add rides as movements
     cycleSessions.forEach(s => {
         const fare = Number(s.grossEarnings || s.grossRevenueCop || s.grossIncomeCop || s.fareCop || 0);
         const km = Number(s.distanceKm || s.workKm || s.tripKmTotal || 0);
@@ -836,6 +1182,7 @@ export function calculateRidesCycleSummary(params = {}) {
             store: 'ride_sessions',
             type: 'ride',
             date: String(s.date).slice(0, 10),
+            time: s.time || null,
             amountCop: fare,
             km: km,
             isEnRoute: isEnRoute,
@@ -846,7 +1193,6 @@ export function calculateRidesCycleSummary(params = {}) {
         });
     });
 
-    // Add passes / expenses as movements
     cyclePasses.forEach(p => {
         const amount = Number(p.amountCop || p.costCop || 0);
         movements.push({
@@ -854,6 +1200,7 @@ export function calculateRidesCycleSummary(params = {}) {
             store: 'platform_passes',
             type: 'expense',
             date: String(p.date || p.startDate || '').slice(0, 10),
+            time: p.time || null,
             amountCop: amount,
             km: 0,
             isEnRoute: false,
@@ -865,17 +1212,24 @@ export function calculateRidesCycleSummary(params = {}) {
         });
     });
 
-    // Sort movements chronologically descending (newest first)
+    // Sort movements chronologically descending (explicit date -> explicit time -> createdAt)
     movements.sort((a, b) => {
         const da = String(a.date).slice(0, 10);
         const db = String(b.date).slice(0, 10);
         if (da !== db) return db.localeCompare(da);
+        if (a.time && b.time && a.time !== b.time) return b.time.localeCompare(a.time);
         return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
     });
 
     const netProfitPerHourCop = totalGpsWorkHours >= 0.25
-        ? Math.round(freeNetProfitCop / totalGpsWorkHours)
+        ? Math.round(marginalNetProfitCop / totalGpsWorkHours)
         : null;
+    const totalFuelProfitPerHourCop = totalGpsWorkHours >= 0.25
+        ? Math.round(totalFuelNetProfitCop / totalGpsWorkHours)
+        : null;
+    const activeProfitPerHourCop = accountingMode === 'total_fuel'
+        ? totalFuelProfitPerHourCop
+        : netProfitPerHourCop;
     const deadheadSource = gpsOdoDaysCount > 0
         ? 'gps'
         : (odoManualDaysCount > 0 ? 'odometer' : 'estimated');
@@ -890,29 +1244,41 @@ export function calculateRidesCycleSummary(params = {}) {
         isCurrentPeriod,
         startDate,
         endDate,
+        accountingMode,
         costPerKmCop,
+        effectiveCostPerKmCop,
         routineDailyKm,
         routeCreditKm,
-        // 4 Clean Card Metrics:
-        // 1. Ganancia Neta Libre
+        // 1. Profits (both marginal and 100%-car-fuel-covered)
         freeNetProfitCop,
+        marginalNetProfitCop,
+        totalFuelNetProfitCop,
+        activeNetProfitCop,
+        netBeforeFuelCop,
         grossRevenueCop: totalGrossRevenueCop,
         grossIncomeCop: totalGrossRevenueCop, // alias
         totalExpensesCop,
         appCommissionsCop: totalExpensesCop, // alias
         fuelExpenseCop: totalFuelExpenseCop,
         fuelCostCop: totalFuelExpenseCop, // alias
+        periodCarFuelCop: effectivePeriodCarFuelCop,
+        periodCarKm,
+        personalFuelCop,
+        fuelSource,
         // 2. Gasolina Cubierta
         fuelCoveredPct,
         fuelCoveredStatus,
+        fuelSurplusCop: totalFuelNetProfitCop,
         tankFuelCostCop,
         tankCapacityGal,
-        // 3. Kilómetros Extra Totales
+        // 3. Kilómetros Extra Totales (100% conserved against GPS)
         totalDeclaredKm: Number(totalDeclaredKm.toFixed(1)),
         totalEnRouteKm: Number(totalEnRouteKm.toFixed(1)),
         totalFreeKm: Number(totalFreeKm.toFixed(1)),
         totalRouteCreditUsedKm: Number(totalRouteCreditUsedKm.toFixed(1)),
         totalPickupKm: Number(totalPickupKm.toFixed(1)),
+        totalOtherUnusualKm: Number(totalOtherUnusualKm.toFixed(1)),
+        totalHabitualKm: Number(totalHabitualKm.toFixed(1)),
         totalExtraKm: Number(totalExtraKm.toFixed(1)),
         tripKmTotal: Number(totalDeclaredKm.toFixed(1)), // alias
         workKmTotal: Number(totalExtraKm.toFixed(1)), // alias
@@ -922,16 +1288,23 @@ export function calculateRidesCycleSummary(params = {}) {
         wearReservePct: DEFAULT_WEAR_RESERVE_PERCENT,
         // GPS Unified Telemetry & Profitability
         netProfitPerHourCop,
+        totalFuelProfitPerHourCop,
+        activeProfitPerHourCop,
         totalGpsWorkHours: Number(totalGpsWorkHours.toFixed(2)),
+        workWindowLabel,
         totalIdleFuelCop,
         routineProfile,
         gpsOdoDaysCount,
+        gpsTripsDaysCount,
+        periodGpsDaysCount,
+        periodCalibratedDaysCount,
         deadheadSource,
         // Activity & Movements
         ridesCount: totalRidesCount,
         totalRidesCount,
         expensesCount: cyclePasses.length,
         sessionCount: cycleSessions.length,
+        activeDaysCount,
         movements,
         dailyBreakdown
     };

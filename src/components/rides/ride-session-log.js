@@ -73,6 +73,7 @@ export function normalizeMovements(sessions = [], passes = [], startDate = null,
           store: 'ride_sessions',
           type: 'ride',
           date: dateStr,
+          time: r.time || s.time || null,
           amountCop: fare,
           km: km,
           isEnRoute: isEnRoute,
@@ -91,6 +92,7 @@ export function normalizeMovements(sessions = [], passes = [], startDate = null,
         store: 'ride_sessions',
         type: 'ride',
         date: dateStr,
+        time: s.time || null,
         amountCop: fare,
         km: km,
         isEnRoute: isEnRoute,
@@ -128,11 +130,12 @@ export function normalizeMovements(sessions = [], passes = [], startDate = null,
     });
   });
 
-  // Sort chronologically descending (newest first)
+  // Sort chronologically descending (date -> explicit time -> createdAt)
   list.sort((a, b) => {
     const da = String(a.date).slice(0, 10);
     const db = String(b.date).slice(0, 10);
     if (da !== db) return db.localeCompare(da);
+    if (a.time && b.time && a.time !== b.time) return b.time.localeCompare(a.time);
     return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
   });
 
@@ -293,9 +296,9 @@ export async function renderRideSessionLog(container, options = {}) {
 
         </div>
 
-        <!-- Line 2: Entity Platform Tag + Date + Note Snippet -->
+        <!-- Line 2: Entity Platform Tag + Date (+ Optional Time) + Note Snippet -->
         <div class="flex items-center gap-2 font-mono text-[10px] text-[var(--text-secondary)] min-w-0">
-          <span class="tabular-nums text-[var(--text-muted)] shrink-0">${formattedDate}</span>
+          <span class="tabular-nums text-[var(--text-muted)] shrink-0">${formattedDate}${item.time ? ` · ${escapeHtml(item.time)}` : ''}</span>
           
           <span class="text-[var(--line-strong)]">·</span>
 

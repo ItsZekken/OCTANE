@@ -146,11 +146,39 @@ export async function openRideEntryModal(options = {}) {
   // Initial form values
   const isValidYmd = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
   let selectedDate = editItem?.date || editItem?.startDate || (isValidYmd(options.initialDate) ? options.initialDate : todayStr);
+  let selectedTime = (typeof editItem?.time === 'string' && /^\d{1,2}:\d{2}/.test(editItem.time.trim()))
+    ? editItem.time.trim().slice(0, 5)
+    : '';
   let grossAmount = editItem ? (parseIntegerMetric(editItem.grossEarnings || editItem.grossRevenueCop || editItem.amountCop || editItem.fareCop || 0) || '') : '';
   let distanceKm = editItem ? (parseDistanceKm(editItem.distanceKm || editItem.workKm || editItem.km || 0) || '') : '';
   let isEnRoute = editItem ? Boolean(editItem.isEnRoute || editItem.tripType === 'en_route') : false;
   let selectedPlatform = editItem?.platform || platforms[0] || 'Directo';
   let noteText = editItem?.notes || '';
+
+  function getGpsStartTimesForDate(dateStr) {
+    const trips = profile?.gpsCache?.tripsByDate?.[dateStr];
+    if (!Array.isArray(trips) || trips.length === 0) return [];
+    const seen = new Set();
+    const times = [];
+    const sorted = [...trips].sort((a, b) => (Number(a?.startTimeMs) || 0) - (Number(b?.startTimeMs) || 0));
+    for (const t of sorted) {
+      let hm = '';
+      if (typeof t?.startTimeHm === 'string' && /^\d{1,2}:\d{2}/.test(t.startTimeHm.trim())) {
+        hm = t.startTimeHm.trim().slice(0, 5);
+      } else if (Number(t?.startTimeMs) > 0) {
+        const ms = Number(t.startTimeMs) < 1e12 ? Number(t.startTimeMs) * 1000 : Number(t.startTimeMs);
+        const d = new Date(ms);
+        if (!isNaN(d.getTime())) {
+          hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
+      }
+      if (hm && !seen.has(hm)) {
+        seen.add(hm);
+        times.push(hm);
+      }
+    }
+    return times.slice(0, 6);
+  }
 
   // Expense specific initial values
   let expenseAmount = (activeMode === 'expense' && editItem) ? (parseIntegerMetric(editItem.amountCop || editItem.costCop || 0) || '') : '';
@@ -377,20 +405,66 @@ export async function openRideEntryModal(options = {}) {
         </div>
       </div>
 
-      <!-- Fecha & Nota Opcional (Underline Inputs) -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-[var(--line-hair)]">
-        <!-- Fecha -->
-        <div class="space-y-1">
-          <label for="input-ride-date" class="font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">
-            FECHA
-          </label>
-          <input 
-            id="input-ride-date" 
-            type="date" 
-            value="${selectedDate}" 
-            class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-volt)] font-mono text-xs tabular-nums text-[var(--text-primary)] focus:outline-none py-1.5 cursor-pointer"
-          />
+      <!-- Fecha, Hora (Opcional con Chips GPS) & Nota Opcional (Underline Inputs) -->
+      <div class="space-y-3 pt-2 border-t border-[var(--line-hair)]">
+        <div class="grid grid-cols-2 gap-3 items-end">
+          <!-- Fecha -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between min-h-[14px]">
+              <label for="input-ride-date" class="font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">
+                FECHA
+              </label>
+            </div>
+            <input 
+              id="input-ride-date" 
+              type="date" 
+              value="${selectedDate}" 
+              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-volt)] font-mono text-xs tabular-nums text-[var(--text-primary)] focus:outline-none py-1.5 cursor-pointer"
+            />
+          </div>
+
+          <!-- Hora Opcional -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between min-h-[14px]">
+              <label for="input-ride-time" class="font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">
+                HORA (OPCIONAL)
+              </label>
+              ${selectedTime ? `
+                <button type="button" id="btn-clear-ride-time" class="font-mono text-[9px] uppercase text-[var(--text-muted)] hover:text-[var(--accent-crimson)] cursor-pointer" title="Quitar hora">
+                  LIMPIAR
+                </button>
+              ` : ''}
+            </div>
+            <input 
+              id="input-ride-time" 
+              type="time" 
+              value="${selectedTime}" 
+              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-volt)] font-mono text-xs tabular-nums text-[var(--text-primary)] focus:outline-none py-1.5 cursor-pointer"
+            />
+          </div>
         </div>
+
+        ${(() => {
+          const gpsTimes = getGpsStartTimesForDate(selectedDate);
+          if (gpsTimes.length === 0) return '';
+          return `
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="font-mono text-[8px] uppercase tracking-wider text-[var(--text-muted)] shrink-0">GPS:</span>
+              ${gpsTimes.map(hm => {
+                const isActive = selectedTime === hm;
+                return `
+                  <button
+                    type="button"
+                    data-gps-time="${hm}"
+                    class="btn-gps-time-chip px-2 py-0.5 border font-mono text-[9px] tabular-nums cursor-pointer transition-colors ${isActive ? 'border-[var(--accent-volt)] bg-[var(--accent-volt)]/15 text-[var(--accent-volt)] font-semibold' : 'border-[var(--line-hair)] bg-[var(--bg-void)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}"
+                  >
+                    ${hm}
+                  </button>
+                `;
+              }).join('')}
+            </div>
+          `;
+        })()}
 
         <!-- Nota Opcional -->
         <div class="space-y-1">
@@ -665,6 +739,8 @@ export async function openRideEntryModal(options = {}) {
     const btnFree = modalRootEl.querySelector('#btn-type-free');
     const btnEnRoute = modalRootEl.querySelector('#btn-type-enroute');
     const dateInput = modalRootEl.querySelector('#input-ride-date');
+    const timeInput = modalRootEl.querySelector('#input-ride-time');
+    const clearTimeBtn = modalRootEl.querySelector('#btn-clear-ride-time');
     const noteInput = modalRootEl.querySelector('#input-ride-note');
     const addPlatBtn = modalRootEl.querySelector('#btn-add-platform');
     const keypadSlot = modalRootEl.querySelector('#ride-keypad-slot');
@@ -707,6 +783,27 @@ export async function openRideEntryModal(options = {}) {
 
     dateInput?.addEventListener('change', () => {
       selectedDate = dateInput.value;
+      renderModal();
+    });
+
+    timeInput?.addEventListener('change', () => {
+      selectedTime = timeInput.value ? timeInput.value.slice(0, 5) : '';
+      renderModal();
+    });
+
+    clearTimeBtn?.addEventListener('click', () => {
+      playHorologyTick(950, 0.01, 0.02);
+      selectedTime = '';
+      renderModal();
+    });
+
+    modalRootEl.querySelectorAll('.btn-gps-time-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        playHorologyTick(1150, 0.01, 0.02);
+        const hm = btn.getAttribute('data-gps-time') || '';
+        selectedTime = selectedTime === hm ? '' : hm;
+        renderModal();
+      });
     });
 
     noteInput?.addEventListener('focus', () => {
@@ -811,11 +908,14 @@ export async function openRideEntryModal(options = {}) {
         const grossInputEl = modalRootEl.querySelector('#input-ride-gross');
         const kmInputEl = modalRootEl.querySelector('#input-ride-km');
         const dateInputEl = modalRootEl.querySelector('#input-ride-date');
+        const timeInputEl = modalRootEl.querySelector('#input-ride-time');
         const noteInputEl = modalRootEl.querySelector('#input-ride-note');
 
         const grossVal = parseIntegerMetric(grossInputEl ? grossInputEl.value : grossAmount) || 0;
         const kmVal = parseDistanceKm(kmInputEl ? kmInputEl.value : distanceKm) || 0;
         const curDate = dateInputEl ? dateInputEl.value : selectedDate;
+        const rawTime = timeInputEl ? timeInputEl.value : selectedTime;
+        const curTime = (typeof rawTime === 'string' && /^\d{1,2}:\d{2}/.test(rawTime.trim())) ? rawTime.trim().slice(0, 5) : null;
         const curNote = noteInputEl ? noteInputEl.value : noteText;
 
         if (grossVal <= 0 && kmVal <= 0) {
@@ -827,6 +927,7 @@ export async function openRideEntryModal(options = {}) {
           id: editItem?.id || `ride_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
           type: 'ride',
           date: curDate,
+          time: curTime,
           grossEarnings: grossVal,
           grossRevenueCop: grossVal,
           distanceKm: kmVal,
