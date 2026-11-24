@@ -183,13 +183,19 @@ export function analyzeElectricalHealth(voltageHistory = [], gpsDaysMap = null, 
     }
   }
 
+  const latestRestingV = restingSamples.length > 0
+    ? restingSamples[restingSamples.length - 1].v
+    : restingAvgV;
+
   let restingStatus = 'SIN DATO';
   let restingTone = 'neutral';
   if (restingAvgV > 0) {
+    // Only treat negative 30d slope as wear when resting voltage has actually settled below healthy full-charge (~12.65V)
+    const hasMeaningfulDrift = slopeVPer30d <= -0.15 && restingAvgV < 12.65 && latestRestingV < 12.55;
     if (restingAvgV < 12.15) {
       restingStatus = 'CRÍTICA';
       restingTone = 'crimson';
-    } else if (restingAvgV < 12.45 || slopeVPer30d <= -0.15) {
+    } else if (restingAvgV < 12.30 || hasMeaningfulDrift) {
       restingStatus = 'DESGASTE';
       restingTone = 'amber';
     } else {
@@ -279,7 +285,7 @@ export function analyzeElectricalHealth(voltageHistory = [], gpsDaysMap = null, 
       isWarning: false,
       message: `BATERÍA EN REPOSO: ${restingAvgV.toFixed(2)}V`
     });
-  } else if (slopeVPer30d <= -0.15 || restingStatus === 'DESGASTE') {
+  } else if (restingStatus === 'DESGASTE') {
     const slopeSuffix = slopeVPer30d <= -0.15 ? ` (${slopeVPer30d.toFixed(2)}V/30D)` : '';
     alerts.push({
       id: 'elec_battery_resting',

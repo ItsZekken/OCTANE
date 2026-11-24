@@ -38,6 +38,44 @@ export const MIN_PICKUP_RATIO = 0.20;
 export const DEFAULT_PICKUP_RATIO = 0.28;
 export const MAX_PICKUP_RATIO = 0.40;
 
+const CANONICAL_PLATFORM_MAP = Object.freeze({
+    uber: 'Uber',
+    didi: 'DiDi',
+    indrive: 'InDrive',
+    indriver: 'InDrive',
+    gyhsell: 'Gyhsell',
+    cabify: 'Cabify',
+    yango: 'Yango',
+    picap: 'Picap',
+    particular: 'Particular',
+    directo: 'Directo',
+    recarga: 'Recarga',
+    comision: 'Comisión',
+    'comisión': 'Comisión',
+    general: 'General'
+});
+
+/**
+ * Unifies platform names regardless of capitalization or extra whitespace
+ * (e.g. "UBER" / "uber" -> "Uber", "GYHSELL" -> "Gyhsell", "INDRIVE" -> "InDrive", "DIDI" -> "DiDi").
+ * @param {string} raw
+ * @param {string} [fallback='Directo']
+ * @returns {string}
+ */
+export function normalizePlatformName(raw, fallback = 'Directo') {
+    if (!raw || typeof raw !== 'string') return fallback;
+    const clean = raw.trim().replace(/\s+/g, ' ');
+    if (!clean) return fallback;
+    const key = clean.toLowerCase();
+    if (CANONICAL_PLATFORM_MAP[key]) {
+        return CANONICAL_PLATFORM_MAP[key];
+    }
+    return clean
+        .split(' ')
+        .map(w => (w ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : ''))
+        .join(' ');
+}
+
 /**
  * Calculates marginal fuel cost per kilometer based on real telemetry or vehicle profile.
  * Formula: fuelPriceCop / efficiencyKmGal
@@ -1186,7 +1224,7 @@ export function calculateRidesCycleSummary(params = {}) {
             amountCop: fare,
             km: km,
             isEnRoute: isEnRoute,
-            platform: s.platform || 'Directo',
+            platform: normalizePlatformName(s.platform, 'Directo'),
             notes: s.notes || '',
             createdAt: s.createdAt || s.updatedAt || s.date,
             raw: s
@@ -1204,8 +1242,8 @@ export function calculateRidesCycleSummary(params = {}) {
             amountCop: amount,
             km: 0,
             isEnRoute: false,
-            platform: p.platform || p.concept || 'General',
-            concept: p.concept || p.platform || 'Comisión / Tarifa',
+            platform: normalizePlatformName(p.platform || p.concept, 'General'),
+            concept: p.concept || normalizePlatformName(p.platform, 'Comisión / Tarifa'),
             notes: p.notes || '',
             createdAt: p.createdAt || p.updatedAt || p.date || p.startDate,
             raw: p

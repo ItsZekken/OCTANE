@@ -421,6 +421,37 @@ function syncItemIntoStore(savedItem) {
     store.setState({ maintenanceItems: updatedList });
 }
 
+function estimateOdometerAtDate(targetDate, telemetryLogs = []) {
+    if (!targetDate || !Array.isArray(telemetryLogs) || telemetryLogs.length === 0) return null;
+    const targetClean = String(targetDate).slice(0, 10);
+    const valid = telemetryLogs
+        .filter((l) => l && l.date && Number(l.odometer_reading) > 0)
+        .map((l) => ({ date: String(l.date).slice(0, 10), odo: Number(l.odometer_reading) }))
+        .sort((a, b) => a.date.localeCompare(b.date) || a.odo - b.odo);
+    if (valid.length === 0) return null;
+
+    const exact = valid.find((l) => l.date === targetClean);
+    if (exact) return Math.round(exact.odo);
+
+    let before = null;
+    let after = null;
+    for (const l of valid) {
+        if (l.date < targetClean) before = l;
+        else if (l.date > targetClean && !after) after = l;
+    }
+
+    if (before && after) {
+        const t0 = Date.parse(`${before.date}T12:00:00`);
+        const t1 = Date.parse(`${after.date}T12:00:00`);
+        const tTarget = Date.parse(`${targetClean}T12:00:00`);
+        if (Number.isFinite(t0) && Number.isFinite(t1) && t1 > t0 && Number.isFinite(tTarget)) {
+            const frac = (tTarget - t0) / (t1 - t0);
+            return Math.round(before.odo + frac * (after.odo - before.odo));
+        }
+    }
+    return before ? Math.round(before.odo) : (after ? Math.round(after.odo) : null);
+}
+
 /**
  * Opens the Register / Edit Service Modal for a mechanical component.
  * Replaces the ambiguous "Reset" flow with an explicit, trustworthy service record form.
@@ -436,7 +467,7 @@ export function openRegisterServiceModal({ item, currentOdo = 0, entryToEdit = n
     initMaintenanceModal();
     playHorologyTick(1400, 0.018, 0.035);
 
-    const isEdit = Boolean(entryToEdit && entryToEdit.id);
+    const isEdit = Boolean(entryToEdit && typeof entryToEdit === 'object');
     const safeName = escapeHtml(item.name || 'COMPONENTE');
     const intervalKm = Math.max(1, Number(item.intervalKm) || 5000);
     const lastServiceOdo = Number(item.lastServiceOdo) || 0;
@@ -445,7 +476,7 @@ export function openRegisterServiceModal({ item, currentOdo = 0, entryToEdit = n
     const schema = getServiceSchemaForItem(item);
 
     const initialOdo = isEdit
-        ? (Number(entryToEdit.odometer) || 0)
+        ? (Number(entryToEdit.odometer) || lastServiceOdo || 0)
         : (currentOdo > 0 ? currentOdo : (lastServiceOdo > 0 ? lastServiceOdo + intervalKm : 0));
     const initialDate = isEdit ? (entryToEdit.date || todayStr) : todayStr;
     const initialCost = isEdit && Number(entryToEdit.costCop) > 0 ? formatThousandsLive(entryToEdit.costCop) : '';
@@ -686,12 +717,29 @@ export function openRegisterServiceModal({ item, currentOdo = 0, entryToEdit = n
         }
     });
 
-    const updatePreview = () => {
+    let odoManuallyEdited = isEdit;
+    const telemetryLogs = store.getState().telemetryLogs || [];
+
+    const updatePreview = (estimatedHint = false) => {
         const val = parseIntegerMetric(odoInput.value);
         if (val <= 0) {
+            deltaPreview.className = 'font-mono text-[10px] text-[var(--accent-volt)] tabular-nums tracking-widest mt-2.5 uppercase';
             deltaPreview.textContent = `PRÓXIMO CAMBIO CADA ${formatThousandsLive(intervalKm)} KM`;
             return;
         }
+        const dateVal = (dateInput?.value || '').trim();
+        const historicalEst = dateVal && dateVal < todayStr ? estimateOdometerAtDate(dateVal, telemetryLogs) : null;
+        if (estimatedHint && historicalEst) {
+            deltaPreview.className = 'font-mono text-[10px] text-[var(--accent-amber)] tabular-nums tracking-widest mt-2.5 uppercase';
+            deltaPreview.textContent = `ODÓMETRO ESTIMADO PARA ${dateVal} · EDITABLE`;
+            return;
+        }
+        if (historicalEst && currentOdo > 0 && Math.abs(val - currentOdo) <= 50 && (currentOdo - historicalEst) >= 500) {
+            deltaPreview.className = 'font-mono text-[10px] text-[var(--accent-amber)] tabular-nums tracking-widest mt-2.5 uppercase';
+            deltaPreview.textContent = `VERIFICAR KM · EN ${dateVal} RONDABA ${formatThousandsLive(historicalEst)} KM`;
+            return;
+        }
+        deltaPreview.className = 'font-mono text-[10px] text-[var(--accent-volt)] tabular-nums tracking-widest mt-2.5 uppercase';
         const nextDue = val + intervalKm;
         if (!isEdit && lastServiceOdo > 0 && val < lastServiceOdo) {
             deltaPreview.textContent = `REGISTRO HISTÓRICO · ÚLTIMO ACTUAL: ${formatThousandsLive(lastServiceOdo)} KM`;
@@ -703,7 +751,20 @@ export function openRegisterServiceModal({ item, currentOdo = 0, entryToEdit = n
     updatePreview();
 
     odoInput?.addEventListener('input', () => {
+        odoManuallyEdited = true;
         odoInput.value = formatThousandsLive(odoInput.value);
+        updatePreview();
+    });
+    dateInput?.addEventListener('change', () => {
+        const chosenDate = (dateInput.value || '').trim();
+        if (!isEdit && !odoManuallyEdited && chosenDate && chosenDate < todayStr) {
+            const est = estimateOdometerAtDate(chosenDate, telemetryLogs);
+            if (est && est > 0) {
+                odoInput.value = formatThousandsLive(est);
+                updatePreview(true);
+                return;
+            }
+        }
         updatePreview();
     });
     costInput?.addEventListener('input', () => {
@@ -761,7 +822,7 @@ export function openRegisterServiceModal({ item, currentOdo = 0, entryToEdit = n
             const existingHistory = Array.isArray(item.history) ? [...item.history] : [];
 
             const record = {
-                id: isEdit ? entryToEdit.id : `hist_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                id: (isEdit && entryToEdit.id) ? entryToEdit.id : `hist_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 date: dateVal,
                 odometer: odoVal,
                 costCop: costVal,
@@ -776,7 +837,12 @@ export function openRegisterServiceModal({ item, currentOdo = 0, entryToEdit = n
 
             let nextHistory;
             if (isEdit) {
-                const idx = existingHistory.findIndex((h) => h.id === entryToEdit.id);
+                let idx = entryToEdit.id ? existingHistory.findIndex((h) => h.id === entryToEdit.id) : -1;
+                if (idx < 0) {
+                    idx = existingHistory.findIndex((h) =>
+                        h && h.date === entryToEdit.date && Number(h.odometer) === Number(entryToEdit.odometer)
+                    );
+                }
                 if (idx >= 0) {
                     nextHistory = existingHistory.map((h, k) => (k === idx ? record : h));
                 } else {

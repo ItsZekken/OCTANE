@@ -5,9 +5,9 @@
  * Separates two distinct export purposes:
  *   1. AI / Human-Readable Analysis Export (JSON + Markdown):
  *      - Zero GPS trackPoints breadcrumbs, zero raw lat/lng coordinates, zero credentials/secrets.
- *      - Enriched with computed telemetry intelligence (closed cycles, empirical gauge curve,
- *        fuel physics calibration, electrical health, physical wear, rides profitability,
- *        station honesty ranking & optimal corridors).
+ *      - Enriched with computed telemetry intelligence (valid closed cycles, empirical gauge curve,
+ *        fuel physics calibration, electrical health, physical wear, rides profitability with unified
+ *        platform names & consistent historical/monthly periods, station honesty & real corridors).
  *   2. Restorable Full Backup:
  *      - Lossless 7-store master snapshot with manifest metadata & schema version.
  *      - Scrubs `gpsConfig.password` by default so plaintext credentials never leak to disk.
@@ -18,7 +18,12 @@
  */
 
 import { localYmd } from './date-utils.js';
-import { calculateTelemetryModel, DEFAULT_TANK_CAPACITY_GAL } from './telemetry-engine.js';
+import {
+    calculateTelemetryModel,
+    DEFAULT_TANK_CAPACITY_GAL,
+    MIN_PLAUSIBLE_EFF_KM_GAL,
+    MAX_PLAUSIBLE_EFF_KM_GAL
+} from './telemetry-engine.js';
 import { analyzeElectricalHealth, computePhysicalWear } from './vehicle-health-engine.js';
 import {
     detectSemanticPlaces,
@@ -26,7 +31,7 @@ import {
     computeStationHonestyIndex,
     analyzeOptimalDeparture
 } from './geospatial-intelligence.js';
-import { calculateRidesCycleSummary } from './rides-engine.js';
+import { calculateRidesCycleSummary, normalizePlatformName } from './rides-engine.js';
 
 export const EXPORT_SCHEMA_VERSION = 2;
 export const AI_EXPORT_FORMAT = 'octane_ai_analysis';
@@ -259,6 +264,46 @@ function resolveCurrentOdometer(telemetryLogs, vehicleProfile) {
 }
 
 /**
+ * Resolves the closing station name for a cycle from the closing telemetry log when absent on the cycle object.
+ */
+function resolveCycleStationName(cycle, telemetryLogs) {
+    if (cleanStr(cycle?.stationName)) return cleanStr(cycle.stationName);
+    if (!Array.isArray(telemetryLogs) || telemetryLogs.length === 0) return '';
+    if (cycle?.endLogId !== undefined && cycle?.endLogId !== null) {
+        const byId = telemetryLogs.find(l => l && String(l.id) === String(cycle.endLogId));
+        if (cleanStr(byId?.stationName)) return cleanStr(byId.stationName);
+    }
+    const endDate = String(cycle?.endDate || '').slice(0, 10);
+    const endOdo = Number(cycle?.endOdo);
+    const byMatch = telemetryLogs.find(
+        l => l && String(l.date || '').slice(0, 10) === endDate &&
+            Math.abs((Number(l.odometer_reading) || 0) - endOdo) < 1 &&
+            cleanStr(l.stationName)
+    );
+    return cleanStr(byMatch?.stationName);
+}
+
+/**
+ * Summarizes a calibrated gauge knot list to at most ~7 representative points for clean Markdown readability.
+ */
+function pickRepresentativeKnots(knots, maxPoints = 7) {
+    if (!Array.isArray(knots) || knots.length <= maxPoints) return knots || [];
+    const interior = knots.filter(k => k.needlePct > 0 && k.needlePct < 100);
+    if (interior.length <= maxPoints - 2) return knots;
+    const picked = [knots[0]];
+    const innerSlots = maxPoints - 2;
+    for (let i = 0; i < innerSlots; i++) {
+        const idx = Math.round((i / Math.max(1, innerSlots - 1)) * (interior.length - 1));
+        const candidate = interior[idx];
+        if (candidate && picked[picked.length - 1].needlePct !== candidate.needlePct) {
+            picked.push(candidate);
+        }
+    }
+    picked.push(knots[knots.length - 1]);
+    return picked;
+}
+
+/**
  * Strips raw GPS coordinates and noisy fields from a trip while preserving rich kinematic,
  * semantic origin/destination, and calibrated fuel metrics for LLM analysis.
  */
@@ -303,6 +348,111 @@ function compactTripForLlm(trip, dateKey, semanticPlaces) {
         coldStart: Number(trip.coldPenaltyPct) >= 5 ? true : undefined,
         hardBrakes: Number(trip.hardBrakes) > 0 ? roundInt(trip.hardBrakes) : undefined
     });
+}
+
+/**
+ * Computes consistent rides summary + unified platform breakdown over an explicit date range.
+ */
+function buildRidesPeriodSummary({
+    rideSessions,
+    platformPasses,
+    startDate,
+    endDate,
+    telemetryLogs,
+    telemetryModel,
+    profile
+}) {
+    const filteredSessions = rideSessions.filter(s => {
+        if (!s || !s.date) return false;
+        const d = String(s.date).slice(0, 10);
+        return d >= startDate && d <= endDate;
+    });
+    const filteredPasses = platformPasses.filter(p => {
+        const d = String(p?.date || p?.startDate || '').slice(0, 10);
+        return d && d >= startDate && d <= endDate;
+    });
+
+    if (filteredSessions.length === 0 && filteredPasses.length === 0) {
+        return null;
+    }
+
+    let summaryRaw = null;
+    try {
+        summaryRaw = calculateRidesCycleSummary({
+            sessions: filteredSessions,
+            passes: filteredPasses,
+            profile,
+            telemetryLogs,
+            telemetryModel,
+            startDate,
+            endDate
+        });
+    } catch (_) {
+        summaryRaw = null;
+    }
+
+    const byPlatform = {};
+    let fallbackGross = 0;
+    let fallbackExpenses = 0;
+    let ridesCount = 0;
+    let fallbackDeclaredKm = 0;
+
+    for (const s of filteredSessions) {
+        const isExpense = s.type === 'expense' || s.type === 'pass';
+        const platform = normalizePlatformName(s.platform, isExpense ? 'Recarga' : 'Directo');
+        const gross = isExpense ? 0 : (Number(s.grossEarnings ?? s.fareCop ?? s.grossRevenueCop ?? s.grossIncomeCop) || 0);
+        const expense = isExpense ? (Number(s.amountCop ?? s.costCop ?? s.expenseCop ?? s.grossEarnings) || 0) : 0;
+        const km = Number(s.distanceKm ?? s.workKm ?? s.tripKmTotal) || 0;
+
+        if (isExpense) {
+            fallbackExpenses += expense;
+        } else {
+            ridesCount += 1;
+            fallbackGross += gross;
+            fallbackDeclaredKm += km;
+            if (!byPlatform[platform]) byPlatform[platform] = { rides: 0, grossCop: 0, km: 0 };
+            byPlatform[platform].rides += 1;
+            byPlatform[platform].grossCop += Math.round(gross);
+            byPlatform[platform].km = roundNum(byPlatform[platform].km + km, 1);
+        }
+    }
+    for (const p of filteredPasses) {
+        fallbackExpenses += Number(p.amountCop ?? p.costCop ?? 0) || 0;
+    }
+
+    // Sort platforms by gross descending for clean deterministic output
+    const sortedByPlatform = {};
+    for (const [k, v] of Object.entries(byPlatform).sort((a, b) => b[1].grossCop - a[1].grossCop)) {
+        sortedByPlatform[k] = v;
+    }
+
+    const summary = summaryRaw
+        ? stripEmpty({
+            totalRides: ridesCount,
+            grossIncomeCop: roundInt(summaryRaw.grossRevenueCop ?? summaryRaw.grossIncomeCop ?? fallbackGross),
+            expensesAndPassesCop: roundInt(summaryRaw.totalExpensesCop ?? fallbackExpenses),
+            rideFuelCostCop: roundInt(summaryRaw.fuelExpenseCop ?? summaryRaw.fuelCostCop ?? 0),
+            netFreeProfitCop: roundInt(summaryRaw.freeNetProfitCop ?? summaryRaw.marginalNetProfitCop ?? 0),
+            netAfterTotalCarFuelCop: roundInt(summaryRaw.totalFuelNetProfitCop),
+            totalCarFuelCop: roundInt(summaryRaw.periodCarFuelCop ?? 0),
+            fuelCoveragePct: roundNum(summaryRaw.fuelCoveredPct ?? 0, 1),
+            declaredWorkKm: roundNum(summaryRaw.totalDeclaredKm ?? fallbackDeclaredKm, 1),
+            estimatedPickupKm: roundNum(summaryRaw.totalPickupKm ?? 0, 1),
+            totalExtraWorkKm: roundNum(summaryRaw.totalExtraKm ?? fallbackDeclaredKm, 1),
+            copPerExtraKm: roundInt(summaryRaw.effectiveCostPerKmCop ?? summaryRaw.costPerKmCop)
+        })
+        : stripEmpty({
+            totalRides: ridesCount,
+            grossIncomeCop: roundInt(fallbackGross),
+            expensesAndPassesCop: roundInt(fallbackExpenses),
+            declaredWorkKm: roundNum(fallbackDeclaredKm, 1)
+        });
+
+    return {
+        period: { from: startDate, to: endDate },
+        summary,
+        byPlatform: Object.keys(sortedByPlatform).length > 0 ? sortedByPlatform : undefined
+    };
 }
 
 /**
@@ -374,11 +524,37 @@ export function buildLlmAnalysisExport(snapshot, options = {}) {
         electrical = null;
     }
 
-    const closedCycles = Array.isArray(telemetryModel?.closedCycles) ? telemetryModel.closedCycles : [];
+    const allClosedCycles = Array.isArray(telemetryModel?.closedCycles) ? telemetryModel.closedCycles : [];
+    const validClosedCycles = [];
+    const excludedAnomalousCycles = [];
+
+    for (const c of allClosedCycles) {
+        if (!c) continue;
+        const eff = Number(c.eff) || 0;
+        const gals = Number(c.gals ?? c.gal ?? c.gallons) || 0;
+        const dist = Number(c.dist ?? c.distanceKm) || 0;
+        const physicallyPlausible = c.isValid !== false &&
+            dist >= 5 &&
+            gals >= 0.3 &&
+            eff >= MIN_PLAUSIBLE_EFF_KM_GAL &&
+            eff <= MAX_PLAUSIBLE_EFF_KM_GAL;
+        if (physicallyPlausible) {
+            validClosedCycles.push(c);
+        } else {
+            excludedAnomalousCycles.push(stripEmpty({
+                startDate: c.startDate,
+                endDate: c.endDate,
+                distanceKm: roundNum(dist, 1),
+                gallons: roundNum(gals, 3),
+                rawEffKmGal: roundNum(eff, 2),
+                reason: c.invalidReason || (eff > MAX_PLAUSIBLE_EFF_KM_GAL ? 'implausible_high' : 'partial_or_out_of_range')
+            }));
+        }
+    }
 
     let stationHonesty = { rankedStations: [], totalQualifiedStations: 0 };
     try {
-        stationHonesty = computeStationHonestyIndex(closedCycles, telemetryLogs, learnedStations);
+        stationHonesty = computeStationHonestyIndex(validClosedCycles, telemetryLogs, learnedStations);
     } catch (_) {}
 
     // Flatten raw trips (for corridor analyzer + compact export)
@@ -423,11 +599,22 @@ export function buildLlmAnalysisExport(snapshot, options = {}) {
     const periodFrom = allDates[0] || null;
     const periodTo = allDates[allDates.length - 1] || null;
 
-    // 3. Executive summary
+    // 3. Executive summary (exact field mappings to core engines)
     const adaptiveEff = Number(telemetryModel?.adaptiveEff) || null;
     const activeTank = telemetryModel?.activeTankState || null;
     const gaugeCal = telemetryModel?.gaugeCalibration || null;
     const physics = telemetryModel?.fuelPhysicsModel || null;
+
+    const validGaugeKnots = (gaugeCal?.mode === 'empirical' && Array.isArray(gaugeCal.knots))
+        ? gaugeCal.knots
+            .filter(k => k && Number.isFinite(Number(k.needlePct)) && Number.isFinite(Number(k.realGal)))
+            .map(k => ({
+                needlePct: roundNum(k.needlePct, 1),
+                realPct: roundNum(k.realPct, 1),
+                realGal: roundNum(k.realGal, 2)
+            }))
+        : [];
+    const isGaugeEmpirical = gaugeCal?.mode === 'empirical' && validGaugeKnots.length >= 3;
 
     const executiveSummary = stripEmpty({
         efficiency: stripEmpty({
@@ -438,33 +625,37 @@ export function buildLlmAnalysisExport(snapshot, options = {}) {
             estimatedCostPerKmCop: adaptiveEff > 0 ? Math.round(fuelPriceCop / adaptiveEff) : null,
             avgKmPerDay: roundNum(telemetryModel?.stats?.avgKmPerDay, 1),
             totalTrackedKm: roundInt(telemetryModel?.stats?.totalKm),
-            closedCyclesCount: closedCycles.length
+            closedCyclesCount: validClosedCycles.length,
+            excludedCyclesCount: excludedAnomalousCycles.length || undefined
         }),
         activeTank: activeTank ? stripEmpty({
-            estimatedGallons: roundNum(activeTank.estimatedGallons ?? activeTank.remainingGal, 2),
-            estimatedPct: roundNum(activeTank.estimatedPct ?? activeTank.pct, 1),
-            estimatedRangeKm: roundInt(activeTank.estimatedRangeKm ?? activeTank.autonomyKm),
-            projectedDaysRemaining: roundNum(activeTank.projectedDaysRemaining ?? activeTank.daysRemaining, 1),
-            source: cleanStr(activeTank.source)
+            estimatedGallons: roundNum(activeTank.activeGal ?? activeTank.fusedGal, 2),
+            estimatedPct: roundNum(activeTank.activePct ?? activeTank.fusedPct, 1),
+            estimatedRangeKm: roundInt(activeTank.autonomyKm ?? activeTank.fusedAutonomyKm),
+            projectedDaysRemaining: roundNum(activeTank.autonomyDays, 1),
+            reserveDaysRemaining: roundNum(activeTank.reserveDays, 1),
+            fuelValueCop: roundInt(activeTank.fuelValueCop),
+            gaugeCalibrated: Boolean(activeTank.gaugeCalibrated)
         }) : undefined,
         gaugeCalibration: gaugeCal ? stripEmpty({
-            status: gaugeCal.status || (gaugeCal.isCalibrated ? 'calibrated' : 'uncalibrated'),
+            mode: isGaugeEmpirical ? 'empirical' : 'prior',
+            calibrated: isGaugeEmpirical,
             sampleCount: gaugeCal.sampleCount ?? 0,
-            directAnchors: gaugeCal.anchorCount ?? 0,
+            directAnchors: gaugeCal.directCount ?? 0,
             retroactivePoints: gaugeCal.retroactiveCount ?? 0,
-            knots: Array.isArray(gaugeCal.knots)
-                ? gaugeCal.knots.map(k => ({ pct: roundNum(k.pct, 1), gallons: roundNum(k.gallons, 2) }))
-                : undefined
+            confidence: roundNum(gaugeCal.confidence, 2),
+            knots: isGaugeEmpirical ? validGaugeKnots : undefined
         }) : undefined,
         fuelPhysics: physics ? stripEmpty({
-            calibrated: Boolean(physics.isCalibrated ?? physics.calibrated),
-            sampleCycles: physics.sampleCount ?? physics.cycleCount ?? closedCycles.length,
-            r2: roundNum(physics.r2, 3),
+            mode: physics.mode || 'prior',
+            calibrated: physics.mode === 'ridge',
+            eligibleCycles: physics.eligibleCount ?? 0,
+            confidence: roundNum(physics.confidence, 2),
             coeffs: physics.coeffs ? stripEmpty({
-                baseGalPerKm: roundNum(physics.coeffs.baseGalPerKm, 5),
-                idleGalPerHour: roundNum(physics.coeffs.idleGalPerHour, 3),
-                urbanPenalty: roundNum(physics.coeffs.urbanPenalty, 4),
-                coldStartGal: roundNum(physics.coeffs.coldStartGal, 4)
+                galPerKmBase: roundNum(physics.coeffs.galPerKmBase, 5),
+                galPerIdleHour: roundNum(physics.coeffs.galPerIdleHour, 3),
+                galPerTrafficKm: roundNum(physics.coeffs.galPerTrafficKm, 5),
+                galPerColdStart: roundNum(physics.coeffs.galPerColdStart, 4)
             }) : undefined,
             anomalyAlert: physics.anomalyAlert ? stripEmpty({
                 label: physics.anomalyAlert.label,
@@ -491,10 +682,9 @@ export function buildLlmAnalysisExport(snapshot, options = {}) {
         stationRanking: stationHonesty.rankedStations.length > 0
             ? stationHonesty.rankedStations.map(s => stripEmpty({
                 station: s.stationName,
-                cycles: s.cycleCount,
+                cycles: s.cyclesCount ?? s.cycleCount ?? 0,
                 avgEffKmGal: roundNum(s.avgEff, 2),
-                residualPct: roundNum(s.residualPct, 1),
-                verdict: s.label || s.verdict
+                residualPct: roundNum(s.residualPct, 1)
             }))
             : undefined,
         optimalCorridors: optimalCorridors.length > 0 ? optimalCorridors : undefined,
@@ -507,25 +697,30 @@ export function buildLlmAnalysisExport(snapshot, options = {}) {
         })
     });
 
-    // 4. Closed fuel cycles (concise)
-    const compactCycles = closedCycles.map((c, idx) => stripEmpty({
-        cycle: c.cycleIndex ?? (idx + 1),
-        startDate: c.startDate,
-        endDate: c.endDate,
-        days: roundInt(c.days),
-        startOdoKm: roundInt(c.startOdo),
-        endOdoKm: roundInt(c.endOdo),
-        distanceKm: roundNum(c.dist ?? c.distanceKm, 1),
-        gallons: roundNum(c.gal ?? c.gallons, 3),
-        effKmGal: roundNum(c.eff, 2),
-        pricePerGalCop: roundInt(c.pricePerGal || fuelPriceCop),
-        totalCostCop: roundInt(c.totalCostCop ?? ((Number(c.gal) || 0) * (Number(c.pricePerGal) || fuelPriceCop))),
-        valid: c.isValid !== false,
-        station: cleanStr(c.stationName),
-        gpsSeverity: roundNum(c.physicalTelemetry?.severityFactor, 2),
-        idleHours: Number(c.physicalTelemetry?.idleHours) > 0 ? roundNum(c.physicalTelemetry.idleHours, 2) : undefined,
-        coldStarts: Number(c.physicalTelemetry?.coldStarts) > 0 ? roundInt(c.physicalTelemetry.coldStarts) : undefined
-    }));
+    // 4. Valid closed fuel cycles (with real gallons & resolved station name)
+    const compactCycles = validClosedCycles.map((c, idx) => {
+        const gals = Number(c.gals ?? c.gal ?? c.gallons) || 0;
+        const pricePerGal = Number(c.pricePerGal) > 0 ? Number(c.pricePerGal) : fuelPriceCop;
+        const stationName = resolveCycleStationName(c, telemetryLogs);
+        return stripEmpty({
+            cycle: idx + 1,
+            startDate: c.startDate,
+            endDate: c.endDate,
+            days: roundInt(c.days),
+            startOdoKm: roundInt(c.startOdo),
+            endOdoKm: roundInt(c.endOdo),
+            distanceKm: roundNum(c.dist ?? c.distanceKm, 1),
+            gallons: roundNum(gals, 3),
+            effKmGal: roundNum(c.eff, 2),
+            pricePerGalCop: roundInt(pricePerGal),
+            totalCostCop: roundInt(c.totalCostCop ?? (gals * pricePerGal)),
+            station: stationName || undefined,
+            gpsSeverity: roundNum(c.physicalTelemetry?.severityFactor, 2),
+            idleHours: Number(c.physicalTelemetry?.idleAccOnSec) > 0
+                ? roundNum(Number(c.physicalTelemetry.idleAccOnSec) / 3600, 2)
+                : undefined
+        });
+    });
 
     // 5. Telemetry logs (chronological, clean)
     const compactLogs = [...telemetryLogs]
@@ -593,42 +788,55 @@ export function buildLlmAnalysisExport(snapshot, options = {}) {
         }
     }
 
-    // 7. Rides & finances summary
+    // 7. Rides & finances summary (consistent historical + explicit current month + unified platform names)
     let ridesBlock = undefined;
     if (rideSessions.length > 0 || platformPasses.length > 0) {
-        let ridesSummary = null;
-        try {
-            ridesSummary = calculateRidesCycleSummary({
-                sessions: rideSessions,
-                passes: platformPasses,
+        const rideDates = [
+            ...rideSessions.map(s => String(s?.date || '').slice(0, 10)),
+            ...platformPasses.map(p => String(p?.date || p?.startDate || '').slice(0, 10))
+        ].filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+
+        const histStart = rideDates[0] || todayYmd;
+        const histEnd = rideDates[rideDates.length - 1] || todayYmd;
+
+        const historicalRides = buildRidesPeriodSummary({
+            rideSessions,
+            platformPasses,
+            startDate: histStart,
+            endDate: histEnd,
+            telemetryLogs,
+            telemetryModel,
+            profile
+        });
+
+        // Explicit current calendar month window (from nowDate)
+        const year = nowDate.getFullYear();
+        const month = String(nowDate.getMonth() + 1).padStart(2, '0');
+        const lastDay = new Date(year, nowDate.getMonth() + 1, 0).getDate();
+        const monthStart = `${year}-${month}-01`;
+        const monthEnd = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+        const currentMonthRides = (histStart < monthStart || histEnd > monthEnd)
+            ? buildRidesPeriodSummary({
+                rideSessions,
+                platformPasses,
+                startDate: monthStart,
+                endDate: monthEnd,
                 telemetryLogs,
                 telemetryModel,
-                vehicleProfile: profile,
-                fuelPriceCop,
-                gpsDaysMap,
-                tripsByDate
-            });
-        } catch (_) {
-            ridesSummary = null;
-        }
+                profile
+            })
+            : null;
 
-        const byPlatform = {};
         const compactSessions = [...rideSessions]
             .filter(Boolean)
             .sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
             .map(s => {
                 const isExpense = s.type === 'expense' || s.type === 'pass';
-                const platform = cleanStr(s.platform) || (isExpense ? 'Egreso' : 'Directo');
+                const platform = normalizePlatformName(s.platform, isExpense ? 'Recarga' : 'Directo');
                 const gross = isExpense ? 0 : (Number(s.grossEarnings ?? s.fareCop ?? s.grossRevenueCop ?? s.grossIncomeCop) || 0);
                 const expense = isExpense ? (Number(s.amountCop ?? s.costCop ?? s.expenseCop ?? s.grossEarnings) || 0) : 0;
                 const km = Number(s.distanceKm ?? s.workKm ?? s.tripKmTotal) || 0;
-
-                if (!isExpense) {
-                    if (!byPlatform[platform]) byPlatform[platform] = { rides: 0, grossCop: 0, km: 0 };
-                    byPlatform[platform].rides += 1;
-                    byPlatform[platform].grossCop += Math.round(gross);
-                    byPlatform[platform].km = roundNum(byPlatform[platform].km + km, 1);
-                }
 
                 return stripEmpty({
                     date: String(s.date || '').slice(0, 10),
@@ -644,24 +852,14 @@ export function buildLlmAnalysisExport(snapshot, options = {}) {
             });
 
         ridesBlock = stripEmpty({
-            summary: ridesSummary ? stripEmpty({
-                totalRides: ridesSummary.ridesCount ?? rideSessions.filter(s => s?.type !== 'expense' && s?.type !== 'pass').length,
-                grossIncomeCop: roundInt(ridesSummary.totalGrossIncome ?? ridesSummary.grossIncomeCop),
-                expensesAndPassesCop: roundInt(ridesSummary.totalExpenses ?? ridesSummary.expensesCop),
-                rideFuelCostCop: roundInt(ridesSummary.totalFuelCost ?? ridesSummary.fuelCostCop),
-                netFreeProfitCop: roundInt(ridesSummary.netProfit ?? ridesSummary.netFreeProfitCop),
-                totalCarFuelCop: roundInt(ridesSummary.totalCarFuelCop),
-                fuelCoveragePct: roundNum(ridesSummary.fuelCoveragePct, 1),
-                declaredWorkKm: roundNum(ridesSummary.declaredKm ?? ridesSummary.effectiveKm, 1),
-                estimatedPickupKm: roundNum(ridesSummary.pickupKm, 1),
-                totalExtraWorkKm: roundNum(ridesSummary.totalExtraKm, 1),
-                copPerExtraKm: roundInt(ridesSummary.copPerKm)
-            }) : undefined,
-            byPlatform: Object.keys(byPlatform).length > 0 ? byPlatform : undefined,
+            period: historicalRides?.period,
+            summary: historicalRides?.summary,
+            byPlatform: historicalRides?.byPlatform,
+            currentMonth: currentMonthRides || undefined,
             passes: platformPasses.length > 0
                 ? platformPasses.map(p => stripEmpty({
                     date: String(p.date || p.startDate || '').slice(0, 10),
-                    platform: cleanStr(p.platform),
+                    platform: normalizePlatformName(p.platform || p.concept, 'General'),
                     costCop: roundInt(p.costCop ?? p.amountCop),
                     days: roundInt(p.durationDays ?? p.days)
                 }))
@@ -764,6 +962,7 @@ export function buildLlmAnalysisExport(snapshot, options = {}) {
         }),
         executiveSummary,
         fuelCycles: compactCycles,
+        excludedAnomalousCycles: excludedAnomalousCycles.length > 0 ? excludedAnomalousCycles : undefined,
         telemetryLogs: compactLogs,
         gpsDailySummary,
         gpsTrips: compactTrips,
@@ -811,23 +1010,35 @@ export function buildLlmMarkdownReport(snapshotOrAnalysis, options = {}) {
         lines.push(`- **Rendimiento adaptativo:** ${eff.adaptiveKmGal} km/gal (Histórico: ${eff.historicalKmGal ?? '--'} km/gal · Costo/km: ${fmtCopPlain(eff.estimatedCostPerKmCop)}/km)`);
     }
     if (eff.avgKmPerDay) {
-        lines.push(`- **Rodaje promedio:** ${eff.avgKmPerDay} km/día · Ciclos cerrados: ${eff.closedCyclesCount ?? 0}`);
+        lines.push(`- **Rodaje promedio:** ${eff.avgKmPerDay} km/día · Ciclos válidos: ${eff.closedCyclesCount ?? 0}`);
     }
     if (exec.activeTank) {
-        lines.push(`- **Tanque activo:** ~${exec.activeTank.estimatedGallons ?? '--'} gal (${exec.activeTank.estimatedPct ?? '--'}%) · Autonomía: ~${exec.activeTank.estimatedRangeKm ?? '--'} km (~${exec.activeTank.projectedDaysRemaining ?? '--'} días)`);
+        const at = exec.activeTank;
+        const galTxt = at.estimatedGallons != null ? `~${at.estimatedGallons} gal` : 'sin dato';
+        const pctTxt = at.estimatedPct != null ? ` (${at.estimatedPct}%)` : '';
+        const rangeTxt = at.estimatedRangeKm != null ? ` · Autonomía: ~${at.estimatedRangeKm} km` : '';
+        const daysTxt = at.projectedDaysRemaining != null ? ` (~${at.projectedDaysRemaining} días)` : '';
+        lines.push(`- **Tanque activo:** ${galTxt}${pctTxt}${rangeTxt}${daysTxt}`);
     }
     if (exec.gaugeCalibration) {
         const gc = exec.gaugeCalibration;
-        const knotsStr = Array.isArray(gc.knots)
-            ? gc.knots.map(k => `${k.pct}%=${k.gallons}g`).join(', ')
-            : '';
-        lines.push(`- **Calibración aguja:** ${gc.status} (${gc.sampleCount} muestras: ${gc.directAnchors} anclas + ${gc.retroactivePoints} retroactivas)${knotsStr ? ` · Curva: ${knotsStr}` : ''}`);
+        if (gc.calibrated && Array.isArray(gc.knots) && gc.knots.length > 0) {
+            const sampleKnots = pickRepresentativeKnots(gc.knots, 7);
+            const knotsStr = sampleKnots.map(k => `${k.needlePct}%→${k.realGal}g`).join(', ');
+            lines.push(`- **Calibración aguja:** Empírica (${gc.sampleCount} muestras: ${gc.directAnchors} anclas + ${gc.retroactivePoints} retroactivas) · Puntos clave: ${knotsStr}`);
+        } else {
+            lines.push('- **Calibración aguja:** Sin calibrar aún (curva base del modelo)');
+        }
     }
     if (exec.fuelPhysics?.coeffs) {
-        const c = exec.fuelPhysics.coeffs;
-        lines.push(`- **Física de consumo:** base=${c.baseGalPerKm ?? '--'} gal/km, ralentí=${c.idleGalPerHour ?? '--'} gal/h, arranque frío=${c.coldStartGal ?? '--'} gal${exec.fuelPhysics.r2 != null ? ` (R²=${exec.fuelPhysics.r2})` : ''}`);
-        if (exec.fuelPhysics.anomalyAlert) {
-            lines.push(`- **Alerta consumo:** ${exec.fuelPhysics.anomalyAlert.label} (+${exec.fuelPhysics.anomalyAlert.avgExcessPct}% en ${exec.fuelPhysics.anomalyAlert.consecutiveCount} ciclos)`);
+        const fp = exec.fuelPhysics;
+        const c = fp.coeffs;
+        const modeLabel = fp.calibrated
+            ? `calibrada (${fp.eligibleCycles} ciclos GPS)`
+            : `base (${fp.eligibleCycles}/5 ciclos GPS para calibrar)`;
+        lines.push(`- **Física de consumo (${modeLabel}):** base=${c.galPerKmBase ?? '--'} gal/km, ralentí=${c.galPerIdleHour ?? '--'} gal/h, tráfico=${c.galPerTrafficKm ?? '--'} gal/km, arranque frío=${c.galPerColdStart ?? '--'} gal`);
+        if (fp.anomalyAlert) {
+            lines.push(`- **Alerta consumo:** ${fp.anomalyAlert.label} (+${fp.anomalyAlert.avgExcessPct}% en ${fp.anomalyAlert.consecutiveCount} ciclos)`);
         }
     }
     if (exec.electricalHealth) {
@@ -848,6 +1059,10 @@ export function buildLlmMarkdownReport(snapshotOrAnalysis, options = {}) {
         for (const c of analysis.fuelCycles) {
             lines.push(`| ${c.cycle} | ${c.startDate} → ${c.endDate} | ${c.days ?? '-'} | ${c.distanceKm ?? '-'} | ${c.gallons ?? '-'} | ${c.effKmGal ?? '-'} | ${fmtCopPlain(c.pricePerGalCop)} | ${fmtCopPlain(c.totalCostCop)} | ${c.station || '-'} | ${c.gpsSeverity ?? '-'} |`);
         }
+        if (Array.isArray(analysis.excludedAnomalousCycles) && analysis.excludedAnomalousCycles.length > 0) {
+            lines.push('');
+            lines.push(`*Nota: se excluyeron ${analysis.excludedAnomalousCycles.length} ciclo(s) parcial(es) o fuera de rango físico (${MIN_PLAUSIBLE_EFF_KM_GAL}–${MAX_PLAUSIBLE_EFF_KM_GAL} km/gal).*`);
+        }
         lines.push('');
     }
 
@@ -867,19 +1082,27 @@ export function buildLlmMarkdownReport(snapshotOrAnalysis, options = {}) {
         lines.push('');
     }
 
-    // Rides & finances
+    // Rides & finances (consistent historical + explicit current month when different)
     if (analysis.rides) {
         const rs = analysis.rides.summary || {};
-        lines.push('## 5. Carreras y Rentabilidad');
-        lines.push(`- **Bruto:** ${fmtCopPlain(rs.grossIncomeCop)} · **Egresos/Pases:** ${fmtCopPlain(rs.expensesAndPassesCop)} · **Gasolina carreras:** ${fmtCopPlain(rs.rideFuelCostCop)} · **Ganancia neta libre:** ${fmtCopPlain(rs.netFreeProfitCop)}`);
-        if (rs.totalExtraWorkKm) {
-            lines.push(`- **Km trabajo:** ${rs.totalExtraWorkKm} km (${rs.declaredWorkKm ?? 0} efectivos + ${rs.estimatedPickupKm ?? 0} recogida) · Cobertura gasolina carro: ${rs.fuelCoveragePct ?? '--'}%`);
+        const p = analysis.rides.period;
+        const rangeLabel = p?.from && p?.to ? `Histórico total: ${p.from} a ${p.to}` : 'Histórico total';
+        lines.push(`## 5. Carreras y Rentabilidad (${rangeLabel})`);
+        lines.push(`- **Totales (${rs.totalRides ?? 0} carreras):** Bruto ${fmtCopPlain(rs.grossIncomeCop)} · Egresos/Pases ${fmtCopPlain(rs.expensesAndPassesCop)} · Gasolina carreras ${fmtCopPlain(rs.rideFuelCostCop)} · Ganancia neta libre ${fmtCopPlain(rs.netFreeProfitCop)}`);
+        if (rs.totalExtraWorkKm != null || rs.declaredWorkKm != null) {
+            const covTxt = rs.fuelCoveragePct != null ? `${rs.fuelCoveragePct}%` : '--';
+            lines.push(`- **Km trabajo:** ${rs.totalExtraWorkKm ?? 0} km (${rs.declaredWorkKm ?? 0} efectivos + ${rs.estimatedPickupKm ?? 0} recogida) · Cobertura gasolina carro: ${covTxt}`);
         }
         if (analysis.rides.byPlatform) {
             const pLine = Object.entries(analysis.rides.byPlatform)
-                .map(([p, d]) => `${p}: ${d.rides} carreras, ${fmtCopPlain(d.grossCop)}, ${d.km} km`)
+                .map(([plat, d]) => `${plat}: ${d.rides} carreras, ${fmtCopPlain(d.grossCop)}, ${d.km} km`)
                 .join(' · ');
-            lines.push(`- **Por plataforma:** ${pLine}`);
+            lines.push(`- **Por plataforma (mismo periodo):** ${pLine}`);
+        }
+        if (analysis.rides.currentMonth?.summary) {
+            const cm = analysis.rides.currentMonth;
+            const cms = cm.summary;
+            lines.push(`- **Mes actual (${cm.period.from} a ${cm.period.to}):** ${cms.totalRides ?? 0} carreras · Bruto ${fmtCopPlain(cms.grossIncomeCop)} · Egresos ${fmtCopPlain(cms.expensesAndPassesCop)} · Gasolina carreras ${fmtCopPlain(cms.rideFuelCostCop)} · Neta libre ${fmtCopPlain(cms.netFreeProfitCop)} · Cobertura ${cms.fuelCoveragePct ?? 0}%`);
         }
         if (Array.isArray(analysis.rides.sessions) && analysis.rides.sessions.length > 0) {
             const recentSessions = analysis.rides.sessions.slice(-40);

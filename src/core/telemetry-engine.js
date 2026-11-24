@@ -24,6 +24,8 @@ export const DEFAULT_TANK_CAPACITY_GAL = DEFAULT_TANK_CAPACITY_L * L_TO_GAL; // 
 export const DEFAULT_RESERVE_L = 5.0;
 export const DEFAULT_RESERVE_GAL = DEFAULT_RESERVE_L * L_TO_GAL; // ~1.32 gal
 export const DEFAULT_BENCHMARK_EFF = 33.71; // KM/GAL default benchmark
+export const MIN_PLAUSIBLE_EFF_KM_GAL = 8;
+export const MAX_PLAUSIBLE_EFF_KM_GAL = 70; // Upper physical ceiling for gasoline passenger cars
 
 let audioCtx = null;
 let soundEnabled = true;
@@ -620,7 +622,7 @@ export function getActiveTankState(processedData, avgEff, vehicleProfile = {}, a
                        (vehicleProfile.tankCapacityLiters ? vehicleProfile.tankCapacityLiters * L_TO_GAL : DEFAULT_TANK_CAPACITY_GAL);
     const reserveGal = vehicleProfile.reserveLiters ? (vehicleProfile.reserveLiters * L_TO_GAL) : DEFAULT_RESERVE_GAL;
     const benchmarkEff = Number(vehicleProfile.benchmarkEff) || Number(vehicleProfile.defaultEfficiencyKmGal) || DEFAULT_BENCHMARK_EFF;
-    const safeEff = (avgEff && avgEff >= 8 && avgEff <= 130 && Number.isFinite(avgEff)) ? avgEff : benchmarkEff;
+    const safeEff = (avgEff && avgEff >= MIN_PLAUSIBLE_EFF_KM_GAL && avgEff <= MAX_PLAUSIBLE_EFF_KM_GAL && Number.isFinite(avgEff)) ? avgEff : benchmarkEff;
     const fuelPriceCop = Number(options.fuelPriceCop || vehicleProfile.fuelPriceCop) || 16000;
 
     const latest = processedData[processedData.length - 1];
@@ -1125,9 +1127,15 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
 
         const eff = (consumedGals > 0 && dist > 0) ? (dist / consumedGals) : 0;
 
-        // Filter anomalous cycles:
-        // Exclude from sumKm / sumGal if eff < 8 or eff > 130 or dist <= 0
-        const isValidCycle = dist > 0 && eff >= 8 && eff <= 130;
+        // Filter physically impossible / partial-residual cycles:
+        // Exclude from averages if dist < 5 km, consumedGals < 0.3 gal, or eff outside [8, 70] km/gal
+        const isValidCycle = dist >= 5 && consumedGals >= 0.3 && eff >= MIN_PLAUSIBLE_EFF_KM_GAL && eff <= MAX_PLAUSIBLE_EFF_KM_GAL;
+        let invalidReason = null;
+        if (!isValidCycle) {
+            if (eff > MAX_PLAUSIBLE_EFF_KM_GAL) invalidReason = 'implausible_high';
+            else if (eff < MIN_PLAUSIBLE_EFF_KM_GAL) invalidReason = 'implausible_low';
+            else invalidReason = 'partial_residual';
+        }
         if (isValidCycle) {
             sumKm += dist;
             sumGal += consumedGals;
@@ -1167,7 +1175,8 @@ export function calculateTelemetryModel(logs = [], arg2 = {}, arg3 = {}, arg4 = 
             pricePerGal,
             type: cycleType,
             isFull: cycleType === 'full',
-            isValid: isValidCycle
+            isValid: isValidCycle,
+            invalidReason
         });
     }
 

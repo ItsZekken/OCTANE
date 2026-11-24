@@ -19,6 +19,10 @@ import {
     inspectBackupPayload,
     estimateExportSizes
 } from '../src/core/export-engine.js';
+import { analyzeElectricalHealth } from '../src/core/vehicle-health-engine.js';
+import { analyzeOptimalDeparture } from '../src/core/geospatial-intelligence.js';
+import { normalizePlatformName } from '../src/core/rides-engine.js';
+import { normalizeMaintenanceItem } from '../src/core/db-local.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -127,7 +131,7 @@ function makeRichSnapshotWithHugeTracks() {
                 },
                 gpsCache: {
                     live: {
-                        totalMile: 96500,
+                        totalMile: 96350,
                         externalVoltage: 12.62,
                         accStatus: false,
                         lat: HOME.lat,
@@ -361,6 +365,176 @@ test('countSnapshotManifest handles empty snapshot safely without throwing', () 
     assert.equal(emptyAi.meta.format, AI_EXPORT_FORMAT);
     const emptyMd = buildLlmMarkdownReport({});
     assert.ok(emptyMd.includes('# OCTANE — Informe de Telemetría'));
+});
+
+test('Regression 1: Healthy 12.97V resting battery with 14.41V alternator is ÓPTIMA (never false DESGASTE)', () => {
+    const nowMs = Date.parse('2026-08-20T12:00:00Z');
+    const dayMs = 86400000;
+    const healthySurfaceDrop = [
+        { ts: nowMs - 15 * dayMs, v: 13.15, acc: false, speed: 0 },
+        { ts: nowMs - 8 * dayMs, v: 13.02, acc: false, speed: 0 },
+        { ts: nowMs - 1 * dayMs, v: 12.97, acc: false, speed: 0 },
+        { ts: nowMs - 2 * dayMs, v: 14.41, acc: true, speed: 45 }
+    ];
+    const health = analyzeElectricalHealth(healthySurfaceDrop, null, null, nowMs);
+    assert.equal(health.restingStatus, 'ÓPTIMA');
+    assert.equal(health.chargingStatus, 'NOMINAL');
+    assert.equal(health.alerts.length, 0);
+
+    // Genuine low resting voltage (< 12.30V) DOES flag DESGASTE
+    const lowBattery = [
+        { ts: nowMs - 5 * dayMs, v: 12.26, acc: false, speed: 0 },
+        { ts: nowMs - 1 * dayMs, v: 12.24, acc: false, speed: 0 }
+    ];
+    const lowHealth = analyzeElectricalHealth(lowBattery, null, null, nowMs);
+    assert.equal(lowHealth.restingStatus, 'DESGASTE');
+    assert.equal(lowHealth.alerts.length, 1);
+});
+
+test('Regression 2 & 3: Report has zero "null" text, populates activeTank/physics/gallons, and excludes impossible >70 km/gal cycles', () => {
+    const snapshot = makeRichSnapshotWithHugeTracks();
+    // Inject a partial-residual impossible cycle (884 km/gal: 265 km / 0.30 gal -> 883 km/gal)
+    snapshot.stores.telemetry_logs.unshift(
+        {
+            id: 'log_0a',
+            date: '2026-06-06',
+            odometer_reading: 95600,
+            gallons_added: 0.3,
+            total_cost_cop: 4800,
+            is_full_tank: true,
+            fuel_level_percent: 100
+        },
+        {
+            id: 'log_0b',
+            date: '2026-06-16',
+            odometer_reading: 95865,
+            gallons_added: 0.3,
+            total_cost_cop: 4800,
+            is_full_tank: true,
+            fuel_level_percent: 100
+        }
+    );
+
+    const analysis = buildLlmAnalysisExport(snapshot, { now: new Date('2026-08-10T15:00:00Z') });
+    const md = buildLlmMarkdownReport(analysis, { now: new Date('2026-08-10T15:00:00Z') });
+
+    // Zero broken "null" strings anywhere in Markdown!
+    assert.equal(md.includes('null'), false, 'Markdown report must never contain literal "null"');
+    assert.equal(md.includes('undefined'), false, 'Markdown report must never contain literal "undefined"');
+
+    // Active tank, physics, gauge calibration, and cycle gallons all populated cleanly
+    assert.ok(analysis.executiveSummary.activeTank.estimatedGallons > 0);
+    assert.ok(analysis.executiveSummary.activeTank.estimatedPct > 0);
+    assert.ok(analysis.executiveSummary.activeTank.estimatedRangeKm > 0);
+    assert.ok(analysis.executiveSummary.fuelPhysics.coeffs.galPerKmBase > 0);
+    assert.ok(analysis.executiveSummary.fuelPhysics.coeffs.galPerIdleHour > 0);
+    assert.ok(analysis.executiveSummary.gaugeCalibration.knots.every(k => Number.isFinite(k.needlePct) && Number.isFinite(k.realGal)));
+
+    // Impossible 883 km/gal cycle is excluded from valid fuelCycles and tracked in excludedAnomalousCycles
+    assert.ok(analysis.fuelCycles.every(c => c.effKmGal <= 70 && c.gallons > 0));
+    assert.ok(Array.isArray(analysis.excludedAnomalousCycles) && analysis.excludedAnomalousCycles.length >= 1);
+    assert.equal(md.includes('883'), false, 'Impossible cycle must not pollute main Markdown cycle table');
+    assert.ok(md.includes('6.1'), 'Real gallons (6.1) must appear in cycle table');
+    assert.ok(md.includes('Terpel Murillo'), 'Station name must appear in cycle table');
+
+    // Uncalibrated gauge model renders clean fallback without null knots
+    const uncalSnapshot = makeRichSnapshotWithHugeTracks();
+    uncalSnapshot.stores.telemetry_logs.forEach(l => { delete l.pre_refuel_gauge_pct; });
+    const uncalMd = buildLlmMarkdownReport(uncalSnapshot, { now: new Date('2026-08-10T15:00:00Z') });
+    assert.equal(uncalMd.includes('null'), false);
+    assert.ok(uncalMd.includes('Sin calibrar aún'));
+});
+
+test('Regression 4: analyzeOptimalDeparture ignores parking micro-moves (< 3 km or CASA -> CASA)', () => {
+    const HOME = { lat: 10.9878, lng: -74.7889 };
+    const semanticPlaces = {
+        home: { label: 'CASA', lat: HOME.lat, lng: HOME.lng },
+        work: null,
+        stations: []
+    };
+    const parkingMoves = Array.from({ length: 10 }, (_, i) => ({
+        date: `2026-08-${String(i + 1).padStart(2, '0')}`,
+        startTimeHm: '08:05',
+        durationMin: 1,
+        distanceKm: 0.08,
+        estCostCop: 120,
+        startLat: HOME.lat,
+        startLng: HOME.lng,
+        endLat: HOME.lat + 0.0001,
+        endLng: HOME.lng - 0.0001
+    }));
+    const corridors = analyzeOptimalDeparture(parkingMoves, { semanticPlaces });
+    assert.equal(corridors.length, 0, 'Parking moves (< 3 km / CASA -> CASA) must be ignored');
+});
+
+test('Regression 5: Rides unifies platform casing (Uber/UBER, DiDi/DIDI, InDrive/INDRIVE, Gyhsell/GYHSELL), populates expenses/net/km, and aligns historical totals', () => {
+    assert.equal(normalizePlatformName('UBER'), 'Uber');
+    assert.equal(normalizePlatformName('uber'), 'Uber');
+    assert.equal(normalizePlatformName('GYHSELL'), 'Gyhsell');
+    assert.equal(normalizePlatformName('INDRIVE'), 'InDrive');
+    assert.equal(normalizePlatformName('DIDI'), 'DiDi');
+
+    const snapshot = makeRichSnapshotWithHugeTracks();
+    snapshot.stores.ride_sessions = [
+        // Previous month
+        { id: 'r_old_1', date: '2026-07-15', platform: 'UBER', mode: 'libre', grossEarnings: 30000, distanceKm: 15 },
+        { id: 'r_old_2', date: '2026-07-16', platform: 'GYHSELL', mode: 'libre', grossEarnings: 25000, distanceKm: 12 },
+        // Current month (August)
+        { id: 'r_cur_1', date: '2026-08-07', platform: 'Uber', mode: 'libre', grossEarnings: 40000, distanceKm: 18 },
+        { id: 'r_cur_2', date: '2026-08-07', platform: 'Gyhsell', mode: 'libre', grossEarnings: 20000, distanceKm: 10 },
+        { id: 'r_cur_3', date: '2026-08-07', platform: 'DIDI', mode: 'libre', grossEarnings: 15000, distanceKm: 8 },
+        { id: 'r_cur_4', date: '2026-08-07', platform: 'DiDi', mode: 'libre', grossEarnings: 10000, distanceKm: 5 },
+        { id: 'r_cur_5', date: '2026-08-07', platform: 'INDRIVE', mode: 'libre', grossEarnings: 12000, distanceKm: 6 },
+        { id: 'r_cur_6', date: '2026-08-07', platform: 'InDrive', mode: 'libre', grossEarnings: 8000, distanceKm: 4 },
+        { id: 'r_exp_1', date: '2026-08-07', type: 'expense', platform: 'Recarga', amountCop: 6000 }
+    ];
+    snapshot.stores.platform_passes = [
+        { id: 'p_1', date: '2026-08-07', platform: 'DIDI', costCop: 4000 }
+    ];
+
+    const analysis = buildLlmAnalysisExport(snapshot, { now: new Date('2026-08-10T15:00:00Z') });
+    const rs = analysis.rides.summary;
+    const platKeys = Object.keys(analysis.rides.byPlatform).sort();
+
+    // Unified platform keys — zero case duplicates!
+    assert.deepEqual(platKeys, ['DiDi', 'Gyhsell', 'InDrive', 'Uber']);
+
+    // Historical summary gross === exact sum of byPlatform gross ($160,000)
+    const sumPlatGross = Object.values(analysis.rides.byPlatform).reduce((s, p) => s + p.grossCop, 0);
+    assert.equal(rs.grossIncomeCop, 160000);
+    assert.equal(sumPlatGross, rs.grossIncomeCop, 'Historical summary gross must match byPlatform sum');
+
+    // Non-zero expenses ($10,000), net profit, declared km (78 km), fuel coverage
+    assert.equal(rs.expensesAndPassesCop, 10000);
+    assert.ok(rs.netFreeProfitCop > 0, `Expected netFreeProfitCop > 0, got ${rs.netFreeProfitCop}`);
+    assert.equal(rs.declaredWorkKm, 78);
+    assert.ok(rs.totalExtraWorkKm >= 78);
+    assert.ok(rs.fuelCoveragePct > 0);
+
+    // Current month is reported separately and accurately ($105,000)
+    assert.ok(analysis.rides.currentMonth);
+    assert.equal(analysis.rides.currentMonth.summary.grossIncomeCop, 105000);
+
+    const md = buildLlmMarkdownReport(analysis, { now: new Date('2026-08-10T15:00:00Z') });
+    assert.ok(md.includes('Histórico total:'));
+    assert.ok(md.includes('Mes actual (2026-08-01 a 2026-08-31):'));
+    assert.equal(md.includes('UBER:'), false);
+    assert.equal(md.includes('GYHSELL:'), false);
+});
+
+test('Regression 6: normalizeMaintenanceItem preserves historical lastServiceOdo and assigns deterministic IDs to legacy history entries', () => {
+    const legacyCabin = normalizeMaintenanceItem({
+        id: 'maint_cabin_filter',
+        name: 'FILTRO CABINA A/C',
+        category: 'cabin',
+        intervalKm: 15000,
+        lastServiceOdo: 93733,
+        lastServiceDate: '2026-06-19',
+        history: [{ date: '2026-06-19', odometer: 93733, costCop: 45000 }]
+    });
+    assert.equal(legacyCabin.lastServiceOdo, 93733);
+    assert.equal(legacyCabin.lastServiceDate, '2026-06-19');
+    assert.ok(legacyCabin.history[0].id, 'Legacy history entry must receive a stable ID so editing never resets odometer');
 });
 
 test('view-settings.js export/backup markup contains zero <p> tags and zero technical jargon (JSON/IndexedDB/etc.)', () => {

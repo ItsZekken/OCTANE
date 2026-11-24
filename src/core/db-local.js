@@ -14,6 +14,7 @@
  */
 
 import { parseFuelVolume, parseIntegerMetric, sanitizeFuelCostCop } from './number-utils.js';
+import { normalizePlatformName } from './rides-engine.js';
 
 export const DB_NAME = 'OctaneKineticDB';
 export const DB_VERSION = 3;
@@ -865,13 +866,21 @@ export function normalizeMaintenanceItem(raw) {
     if (!raw || typeof raw !== 'object') {
         throw new Error('Invalid maintenance item');
     }
-    const sortedHistory = sortMaintenanceHistory(Array.isArray(raw.history) ? raw.history : []);
+    const rawHistory = Array.isArray(raw.history) ? raw.history : [];
+    const keyedHistory = rawHistory.map((entry, idx) => {
+        if (!entry || typeof entry !== 'object') return entry;
+        if (entry.id) return entry;
+        const d = String(entry.date || '').slice(0, 10) || 'nodate';
+        const o = Number(entry.odometer) || 0;
+        return { ...entry, id: `hist_legacy_${d}_${o}_${idx}` };
+    });
+    const sortedHistory = sortMaintenanceHistory(keyedHistory);
     const hasExplicitOdo = raw.lastServiceOdo !== undefined && raw.lastServiceOdo !== null;
-    const derivedOdo = sortedHistory.length > 0
-        ? (Number(sortedHistory[0].odometer) || 0)
-        : (hasExplicitOdo ? (Number(raw.lastServiceOdo) || 0) : 0);
+    const explicitOdo = hasExplicitOdo ? (Number(raw.lastServiceOdo) || 0) : 0;
+    const latestHistOdo = sortedHistory.length > 0 ? (Number(sortedHistory[0].odometer) || 0) : 0;
+    const derivedOdo = latestHistOdo > 0 ? latestHistOdo : explicitOdo;
     const derivedDate = sortedHistory.length > 0
-        ? (sortedHistory[0].date || '')
+        ? (sortedHistory[0].date || raw.lastServiceDate || '')
         : (raw.lastServiceDate || '');
 
     const upperName = String(raw.name || raw.title || 'COMPONENTE').trim().toUpperCase();
@@ -967,15 +976,35 @@ export async function deleteLegalDoc(id) {
 // Phase 3 Stores: Ride Sessions & Platform Passes
 // --------------------------------------------------------------------------
 
+export function normalizeRideRecord(session) {
+    if (!session || typeof session !== 'object') return session;
+    const isExpense = session.type === 'expense' || session.type === 'pass';
+    const fallback = isExpense ? 'Recarga' : 'Directo';
+    const normalizedPlatform = normalizePlatformName(session.platform, fallback);
+    if (session.platform === normalizedPlatform) return session;
+    return { ...session, platform: normalizedPlatform };
+}
+
 export async function getRideSessions() {
-    return getAllFromStore(STORES.RIDE_SESSIONS);
+    const raw = await getAllFromStore(STORES.RIDE_SESSIONS);
+    const toHeal = [];
+    const normalized = (raw || []).map((s) => {
+        const clean = normalizeRideRecord(s);
+        if (clean !== s && clean?.id) toHeal.push(clean);
+        return clean;
+    });
+    if (toHeal.length > 0) {
+        Promise.all(toHeal.map((item) => saveToStore(STORES.RIDE_SESSIONS, item))).catch(() => {});
+    }
+    return normalized;
 }
 
 export async function saveRideSession(session) {
-    if (!session.id) session.id = `ride_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    session.updatedAt = new Date().toISOString();
-    await saveToStore(STORES.RIDE_SESSIONS, session);
-    return session;
+    const clean = normalizeRideRecord(session);
+    if (!clean.id) clean.id = `ride_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    clean.updatedAt = new Date().toISOString();
+    await saveToStore(STORES.RIDE_SESSIONS, clean);
+    return clean;
 }
 
 export async function deleteRideSession(id) {
@@ -983,14 +1012,32 @@ export async function deleteRideSession(id) {
 }
 
 export async function getPlatformPasses() {
-    return getAllFromStore(STORES.PLATFORM_PASSES);
+    const raw = await getAllFromStore(STORES.PLATFORM_PASSES);
+    const toHeal = [];
+    const normalized = (raw || []).map((p) => {
+        if (!p || typeof p !== 'object') return p;
+        const cleanPlatform = normalizePlatformName(p.platform || p.concept, 'General');
+        if (p.platform && p.platform !== cleanPlatform) {
+            const fixed = { ...p, platform: cleanPlatform };
+            if (fixed.id) toHeal.push(fixed);
+            return fixed;
+        }
+        return p;
+    });
+    if (toHeal.length > 0) {
+        Promise.all(toHeal.map((item) => saveToStore(STORES.PLATFORM_PASSES, item))).catch(() => {});
+    }
+    return normalized;
 }
 
 export async function savePlatformPass(pass) {
-    if (!pass.id) pass.id = `pass_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-    pass.updatedAt = new Date().toISOString();
-    await saveToStore(STORES.PLATFORM_PASSES, pass);
-    return pass;
+    const clean = (pass && typeof pass === 'object')
+        ? { ...pass, platform: normalizePlatformName(pass.platform || pass.concept, 'General') }
+        : pass;
+    if (!clean.id) clean.id = `pass_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    clean.updatedAt = new Date().toISOString();
+    await saveToStore(STORES.PLATFORM_PASSES, clean);
+    return clean;
 }
 
 export async function deletePlatformPass(id) {
@@ -1277,6 +1324,10 @@ export async function importAllStores(snapshot, options = { merge: false }) {
                         // normalize rellena updatedAt con 'ahora' si falta; respetar el original
                         if (isMerge && !item.updatedAt) norm.updatedAt = '';
                         putItem(store, norm);
+                    } else if (storeName === STORES.RIDE_SESSIONS) {
+                        putItem(store, normalizeRideRecord(item));
+                    } else if (storeName === STORES.PLATFORM_PASSES && item && typeof item === 'object') {
+                        putItem(store, { ...item, platform: normalizePlatformName(item.platform || item.concept, 'General') });
                     } else {
                         putItem(store, item);
                     }

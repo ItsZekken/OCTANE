@@ -18,6 +18,8 @@ const MIN_SEMANTIC_DAYS = 4;
 const WORK_MIN_STAY_MIN = 180; // 3 hours
 const CORRIDOR_RADIUS_M = 400;
 const CORRIDOR_MIN_TRIPS = 6;
+const CORRIDOR_MIN_DISTANCE_KM = 3.0;
+const CORRIDOR_MIN_DISPLACEMENT_M = 500;
 const STATION_MIN_CYCLES = 2;
 
 function isValidCoord(lat, lng) {
@@ -121,6 +123,7 @@ function extractTripGeo(trip, fallbackDate = '') {
   }
 
   const costCop = Number(trip.reconciledCostCop ?? trip.estCostCop) || 0;
+  const distanceKm = Number(trip.distanceKm ?? trip.km ?? trip.mileageKm) || 0;
 
   return {
     trip,
@@ -136,6 +139,7 @@ function extractTripGeo(trip, fallbackDate = '') {
     startTimeMs,
     endTimeMs,
     durationMin,
+    distanceKm,
     costCop,
     startAddress: trip.startAddress || trip.rawStartAddress || '',
     endAddress: trip.endAddress || trip.rawEndAddress || ''
@@ -599,6 +603,13 @@ export function analyzeOptimalDeparture(tripsSource = [], options = {}) {
       continue;
     }
 
+    // Ignore parking maneuvers / same-spot micro-moves (< 3 km or < 500 m origin-to-destination displacement)
+    const displacementM = calculateDistanceMeters(item.startLat, item.startLng, item.endLat, item.endLng);
+    const effectiveDistKm = item.distanceKm > 0 ? item.distanceKm : (displacementM / 1000);
+    if (displacementM < CORRIDOR_MIN_DISPLACEMENT_M || effectiveDistKm < CORRIDOR_MIN_DISTANCE_KM) {
+      continue;
+    }
+
     let matched = null;
     let bestScore = Infinity;
 
@@ -695,6 +706,11 @@ export function analyzeOptimalDeparture(tripsSource = [], options = {}) {
     const endLabel = semanticPlaces
       ? resolvePlaceLabel(c.endLat, c.endLng, c.fallbackEndAddress, semanticPlaces)
       : (c.fallbackEndAddress || 'Destino');
+
+    // Never emit round-trip / same-place parking loops (e.g., "CASA → CASA")
+    if (String(startLabel).trim().toUpperCase() === String(endLabel).trim().toUpperCase()) {
+      continue;
+    }
 
     results.push({
       corridorLabel: `${startLabel} → ${endLabel}`,
