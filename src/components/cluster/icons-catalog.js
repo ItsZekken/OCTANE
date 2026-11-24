@@ -143,15 +143,26 @@ export const AVAILABLE_ICONS = Object.values(ICONS_CATALOG);
  * @returns {string} Icon identifier key
  */
 export function resolveIconId(item = {}) {
-  if (item?.icon && ICONS_CATALOG[item.icon]) {
-    return item.icon;
+  const name = String(item?.name || item?.id || '').toLowerCase();
+  const explicitIcon = item?.icon && ICONS_CATALOG[item.icon] ? item.icon : null;
+  const cat = String(item?.category || '').toLowerCase();
+
+  // Legacy migration guard: old default maint_oil_filter was saved with category: 'engine'
+  if (
+    (item?.id === 'maint_oil_filter' || name.includes('aceite') || name.includes('oil')) &&
+    (!explicitIcon || explicitIcon === 'engine') &&
+    (!cat || cat === 'engine' || cat === 'general')
+  ) {
+    return 'oil';
   }
 
-  const cat = String(item?.category || '').toLowerCase();
+  if (explicitIcon) {
+    return explicitIcon;
+  }
+
   if (ICONS_CATALOG[cat]) return cat;
 
   // Name heuristic mapping
-  const name = String(item?.name || item?.id || '').toLowerCase();
   if (name.includes('aceite') || name.includes('oil')) return 'oil';
   if (name.includes('filtro cabina') || name.includes('aire') || name.includes('cabin')) return 'filter';
   if (name.includes('freno') || name.includes('pastilla') || name.includes('disco') || name.includes('brake')) return 'brakes';

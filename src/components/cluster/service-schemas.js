@@ -493,7 +493,20 @@ export const SERVICE_SCHEMAS = Object.freeze({
  * @returns {{ iconId: string, sectionLabel: string, fields: Array<Object> }}
  */
 export function getServiceSchemaForItem(item = {}) {
-    const iconId = resolveIconId(item);
+    let iconId = resolveIconId(item);
+    const name = String(item?.name || '').toLowerCase();
+    // Extra safety: if user named a component with oil/tire/brake/etc. and left generic icon, match schema by name
+    if (iconId === 'general' || (iconId === 'engine' && (name.includes('aceite') || name.includes('oil')))) {
+        if (name.includes('aceite') || name.includes('oil')) iconId = 'oil';
+        else if (name.includes('llanta') || name.includes('neumat') || name.includes('tire')) iconId = 'tires';
+        else if (name.includes('freno') || name.includes('pastilla') || name.includes('brake')) iconId = 'brakes';
+        else if (name.includes('bateria') || name.includes('batería')) iconId = 'battery';
+        else if (name.includes('refrigerante') || name.includes('coolant')) iconId = 'coolant';
+        else if (name.includes('filtro')) iconId = name.includes('gasolina') ? 'fuel' : 'filter';
+        else if (name.includes('correa') || name.includes('distribuc')) iconId = 'belt';
+        else if (name.includes('suspens') || name.includes('amortiguador')) iconId = 'suspension';
+        else if (name.includes('transmis') || name.includes('caja') || name.includes('embrague')) iconId = 'transmission';
+    }
     const schema = SERVICE_SCHEMAS[iconId] || SERVICE_SCHEMAS.general;
     return {
         iconId,

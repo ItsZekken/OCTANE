@@ -859,15 +859,40 @@ export function normalizeMaintenanceItem(raw) {
         ? (sortedHistory[0].date || '')
         : (raw.lastServiceDate || '');
 
+    const upperName = String(raw.name || raw.title || 'COMPONENTE').trim().toUpperCase();
+    const rawCat = String(raw.category || '').toLowerCase();
+    const rawIcon = String(raw.icon || '').toLowerCase();
+
+    // Heal legacy default categories from v1 seeds (e.g. maint_oil_filter saved with category: 'engine', maint_cabin_filter with 'cabin')
+    let resolvedIcon = rawIcon || rawCat || 'general';
+    let resolvedCategory = rawCat || rawIcon || 'general';
+    let resolvedGroup = raw.group || '';
+
+    if (
+        (raw.id === 'maint_oil_filter' || upperName.includes('ACEITE') || upperName.includes('OIL')) &&
+        (resolvedIcon === 'engine' || resolvedCategory === 'engine')
+    ) {
+        resolvedIcon = 'oil';
+        resolvedCategory = 'oil';
+        if (!resolvedGroup) resolvedGroup = 'motor';
+    } else if (
+        (raw.id === 'maint_cabin_filter' || rawCat === 'cabin') &&
+        (!rawIcon || rawIcon === 'cabin')
+    ) {
+        resolvedIcon = 'filter';
+        resolvedCategory = 'filter';
+        if (!resolvedGroup) resolvedGroup = 'cabina';
+    }
+
     return {
         id: raw.id || `maint_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-        name: String(raw.name || raw.title || 'COMPONENTE').trim().toUpperCase(),
+        name: upperName,
         intervalKm: Math.max(1, Number(raw.intervalKm) || 5000),
         lastServiceOdo: derivedOdo,
         lastServiceDate: derivedDate,
-        category: raw.category || raw.icon || 'general',
-        icon: raw.icon || raw.category || 'general',
-        group: raw.group || '',
+        category: resolvedCategory,
+        icon: resolvedIcon,
+        group: resolvedGroup,
         history: sortedHistory,
         deletedHistoryIds: Array.isArray(raw.deletedHistoryIds) ? raw.deletedHistoryIds : [],
         isDefaultSeed: Boolean(raw.isDefaultSeed) && !hasMaintenanceServiceData(raw),
