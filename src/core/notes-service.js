@@ -12,6 +12,7 @@
 import { todayLocalYmd } from './date-utils.js';
 import { getFreeNotes, saveFreeNote, deleteFreeNote, getTelemetryLogs } from './db-local.js';
 import { store, playHorologyTick, showToast } from './state.js';
+import { triggerCloudSync } from './firebase-sync.js';
 
 export const NOTE_CATEGORIES = Object.freeze([
   'MECÁNICA',
@@ -290,6 +291,7 @@ export async function createNote(params = {}) {
   };
 
   await saveFreeNote(newNote);
+  triggerCloudSync();
   notifyNotesChange();
   return newNote;
 }
@@ -305,6 +307,7 @@ export async function updateNote(note) {
   }
   note.updatedAt = new Date().toISOString();
   await saveFreeNote(note);
+  triggerCloudSync();
   notifyNotesChange();
   return note;
 }
@@ -323,6 +326,7 @@ export async function togglePinNote(noteId) {
   note.isPinned = !note.isPinned;
   note.updatedAt = new Date().toISOString();
   await saveFreeNote(note);
+  triggerCloudSync();
   playHorologyTick(note.isPinned ? 1500 : 1000, 0.015, 0.03);
   notifyNotesChange();
   return note;
@@ -336,6 +340,7 @@ export async function togglePinNote(noteId) {
 export async function removeNote(noteId) {
   if (!noteId) return false;
   await deleteFreeNote(noteId);
+  triggerCloudSync();
   playHorologyTick(800, 0.02, 0.025);
   showToast('NOTA ELIMINADA');
   notifyNotesChange();

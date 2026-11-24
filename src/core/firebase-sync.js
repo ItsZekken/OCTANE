@@ -9,7 +9,13 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
 import { store, showToast } from './state.js';
-import { exportAllStores, importAllStores, getVehicleProfile, getTelemetryLogs } from './db-local.js';
+import {
+    exportAllStores,
+    importAllStores,
+    getVehicleProfile,
+    getTelemetryLogs,
+    getMaintenanceItems,
+} from './db-local.js';
 
 // Read config from Vite environment variables
 const firebaseConfig = {
@@ -28,8 +34,26 @@ let googleProvider = null;
 let debounceSyncTimer = null;
 let retryTimer = null;
 let retryAttempt = 0;
+let activeSyncPromise = null;
 const RETRY_DELAYS_MS = [5000, 30000, 120000];
 const SYNC_DEBOUNCE_MS = 1500;
+
+function buildStoreFingerprint(stores = {}) {
+    const keys = [
+        'telemetry_logs',
+        'maintenance_items',
+        'free_notes',
+        'legal_docs',
+        'ride_sessions',
+        'platform_passes',
+    ];
+    return JSON.stringify(keys.map((k) => {
+        const list = Array.isArray(stores[k]) ? stores[k] : [];
+        return list
+            .map((r) => `${r?.id || ''}|${r?.updatedAt || ''}|${Array.isArray(r?.history) ? r.history.length : ''}|${r?.lastServiceOdo || ''}`)
+            .sort();
+    }));
+}
 
 /**
  * Checks if Firebase environment variables are provided and non-empty.
@@ -174,12 +198,19 @@ export function onAuthChange(callback) {
 }
 
 /**
- * Triggers a debounced (1.5s) synchronization to Firestore.
+ * Triggers a debounced (1.5s) or immediate synchronization to Firestore.
  * Call this after every local write in IndexedDB.
+ * @param {Object} [options]
+ * @param {boolean} [options.immediate=false]
  */
-export function triggerCloudSync() {
+export function triggerCloudSync(options = {}) {
     if (debounceSyncTimer) {
         clearTimeout(debounceSyncTimer);
+        debounceSyncTimer = null;
+    }
+
+    if (options && options.immediate) {
+        return syncToCloud();
     }
 
     debounceSyncTimer = setTimeout(async () => {
@@ -289,51 +320,64 @@ export async function syncToCloud() {
         return false;
     }
 
-    try {
-        store.setState({ syncStatus: 'syncing' });
+    if (activeSyncPromise) {
+        try { await activeSyncPromise; } catch (_) {}
+    }
 
-        const docRef = doc(firestore, 'users', user.uid, 'snapshots', 'master');
-
-        // Fusionar primero lo que haya en la nube (p. ej. registros del celular) para no pisarlo con datos viejos
+    const run = (async () => {
         try {
-            const cloudSnap = await getDoc(docRef);
-            if (cloudSnap.exists() && cloudSnap.data()?.stores) {
-                await importAllStores(cloudSnap.data(), { merge: true });
-                await refreshFromLocal();
+            store.setState({ syncStatus: 'syncing' });
+
+            const docRef = doc(firestore, 'users', user.uid, 'snapshots', 'master');
+
+            // Fusionar primero lo que haya en la nube (p. ej. registros del celular) para no pisarlo con datos viejos
+            try {
+                const cloudSnap = await getDoc(docRef);
+                if (cloudSnap.exists() && cloudSnap.data()?.stores) {
+                    await importAllStores(cloudSnap.data(), { merge: true });
+                    await refreshFromLocal();
+                }
+            } catch (mergeErr) {
+                console.warn('[OCTANE SYNC] Pre-push merge skipped:', mergeErr.message);
             }
-        } catch (mergeErr) {
-            console.warn('[OCTANE SYNC] Pre-push merge skipped:', mergeErr.message);
+
+            const rawSnapshot = await exportAllStores();
+            const snapshot = sanitizeSnapshotForCloud(rawSnapshot);
+
+            await setDoc(docRef, {
+                ...snapshot,
+                uid: user.uid,
+                userEmail: user.email,
+                syncedAt: new Date().toISOString(),
+                clientAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'OCTANE/1.0',
+            }, { merge: true });
+
+            const now = Date.now();
+            retryAttempt = 0;
+            if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+            store.setState({
+                syncStatus: 'synced',
+                lastSyncTimestamp: now,
+            });
+
+            return true;
+        } catch (err) {
+            console.warn('[OCTANE SYNC] Cloud sync failed:', err.message);
+            store.setState({ syncStatus: 'error' });
+            // Reintento automático con espera creciente (5 s, 30 s, 2 min); luego queda el reintento manual
+            if (!retryTimer && retryAttempt < RETRY_DELAYS_MS.length) {
+                const delay = RETRY_DELAYS_MS[retryAttempt++];
+                retryTimer = setTimeout(() => { retryTimer = null; syncToCloud(); }, delay);
+            }
+            return false;
         }
+    })();
 
-        const rawSnapshot = await exportAllStores();
-        const snapshot = sanitizeSnapshotForCloud(rawSnapshot);
-
-        await setDoc(docRef, {
-            ...snapshot,
-            uid: user.uid,
-            userEmail: user.email,
-            syncedAt: new Date().toISOString(),
-            clientAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'OCTANE/1.0',
-        }, { merge: true });
-
-        const now = Date.now();
-        retryAttempt = 0;
-        if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
-        store.setState({
-            syncStatus: 'synced',
-            lastSyncTimestamp: now,
-        });
-
-        return true;
-    } catch (err) {
-        console.warn('[OCTANE SYNC] Cloud sync failed:', err.message);
-        store.setState({ syncStatus: 'error' });
-        // Reintento automático con espera creciente (5 s, 30 s, 2 min); luego queda el reintento manual
-        if (!retryTimer && retryAttempt < RETRY_DELAYS_MS.length) {
-            const delay = RETRY_DELAYS_MS[retryAttempt++];
-            retryTimer = setTimeout(() => { retryTimer = null; syncToCloud(); }, delay);
-        }
-        return false;
+    activeSyncPromise = run;
+    try {
+        return await run;
+    } finally {
+        if (activeSyncPromise === run) activeSyncPromise = null;
     }
 }
 
@@ -342,14 +386,22 @@ export async function syncToCloud() {
  * @returns {Promise<Array>} logs actuales
  */
 async function refreshFromLocal() {
-    const [profile, logs] = await Promise.all([getVehicleProfile(), getTelemetryLogs()]);
+    const [profile, logs, maintenanceItems] = await Promise.all([
+        getVehicleProfile(),
+        getTelemetryLogs(),
+        getMaintenanceItems(),
+    ]);
     store.setState({
         vehicleProfile: profile,
         telemetryLogs: logs,
+        maintenanceItems,
         fuelPriceCop: profile.fuelPriceCop || store.getState().fuelPriceCop,
     });
     if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('octane:logs-updated', { detail: { logs } }));
+        window.dispatchEvent(new CustomEvent('octane:maintenance-updated', { detail: { items: maintenanceItems } }));
+        window.dispatchEvent(new CustomEvent('octane:notes-changed'));
+        window.dispatchEvent(new CustomEvent('octane:legal-docs-updated'));
         window.dispatchEvent(new CustomEvent('octane:rides-updated'));
         window.dispatchEvent(new CustomEvent('octane:profile-updated'));
     }
@@ -364,16 +416,36 @@ function autoPull() {
     pullFromCloud({ silent: true });
 }
 
+function flushPendingSync() {
+    if (debounceSyncTimer) {
+        clearTimeout(debounceSyncTimer);
+        debounceSyncTimer = null;
+        syncToCloud();
+    }
+}
+
 if (typeof window !== 'undefined') {
     // Traer cambios de otros dispositivos al volver a la pestaña, recuperar conexión o cada 60 s
-    document.addEventListener('visibilitychange', autoPull);
+    // y empujar escrituras pendientes antes de cerrar o bloquear el móvil
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            flushPendingSync();
+        } else {
+            autoPull();
+        }
+    });
+    window.addEventListener('pagehide', flushPendingSync);
     window.addEventListener('focus', autoPull);
-    window.addEventListener('online', autoPull);
+    window.addEventListener('online', () => {
+        flushPendingSync();
+        autoPull();
+    });
     setInterval(autoPull, 60000);
 }
 
 /**
- * Pulls the latest snapshot from Cloud Firestore and updates local IndexedDB & store state.
+ * Pulls the latest snapshot from Cloud Firestore, merges into local IndexedDB,
+ * updates all views, and pushes back sanitized snapshot if local had unsynced changes.
  * @returns {Promise<boolean>}
  */
 export async function pullFromCloud({ silent = false } = {}) {
@@ -397,10 +469,28 @@ export async function pullFromCloud({ silent = false } = {}) {
 
         const cloudData = docSnap.data();
         if (cloudData && cloudData.stores) {
-            const before = JSON.stringify((store.getState().telemetryLogs || []).map(l => l.updatedAt));
+            const beforeSnap = await exportAllStores();
+            const beforeFp = buildStoreFingerprint(beforeSnap.stores);
+
             await importAllStores(cloudData, { merge: true });
-            const logs = await refreshFromLocal();
-            const changed = before !== JSON.stringify(logs.map(l => l.updatedAt));
+            await refreshFromLocal();
+
+            const afterSnap = await exportAllStores();
+            const afterFp = buildStoreFingerprint(afterSnap.stores);
+            const cloudFp = buildStoreFingerprint(cloudData.stores);
+            const changed = beforeFp !== afterFp;
+
+            // Si este dispositivo tenía registros locales no subidos aún, empujarlos sanitizados a Firestore
+            if (afterFp !== cloudFp) {
+                const sanitized = sanitizeSnapshotForCloud(afterSnap);
+                await setDoc(docRef, {
+                    ...sanitized,
+                    uid: user.uid,
+                    userEmail: user.email,
+                    syncedAt: new Date().toISOString(),
+                    clientAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'OCTANE/1.0',
+                }, { merge: true });
+            }
 
             // En pulls automáticos solo avisar cuando realmente llegaron datos nuevos
             store.setState({ syncStatus: 'synced', lastSyncTimestamp: Date.now() });

@@ -20,6 +20,7 @@ import {
     bulkAddTelemetryLogs,
     getTelemetryLogs,
     getVehicleProfile,
+    getMaintenanceItems,
     normalizeTelemetryLog
 } from './db-local.js';
 import { store, showToast } from './state.js';
@@ -91,16 +92,23 @@ export async function importFromJSONString(jsonString) {
         // CASE A: Full Master Snapshot
         await importAllStores(parsed);
 
-        const [profile, logs] = await Promise.all([
+        const [profile, logs, maintenanceItems] = await Promise.all([
             getVehicleProfile(),
             getTelemetryLogs(),
+            getMaintenanceItems(),
         ]);
 
         store.setState({
             vehicleProfile: profile,
             telemetryLogs: logs,
+            maintenanceItems,
             fuelPriceCop: profile.fuelPriceCop || store.getState().fuelPriceCop,
         });
+
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('octane:maintenance-updated', { detail: { items: maintenanceItems } }));
+            window.dispatchEvent(new CustomEvent('octane:notes-changed'));
+        }
 
         triggerCloudSync();
         showToast('COPIA MAESTRA RESTAURADA');

@@ -68,6 +68,7 @@ let boardState = {
 
 let activeContainer = null;
 let notesUnsubscribe = null;
+let isEmbeddedMode = false;
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -296,9 +297,12 @@ function renderComposerCategoryChips() {
  * Initializes and mounts the Free Notes Board into a target DOM container.
  * @param {HTMLElement} container 
  */
-export async function renderFreeNotesBoard(container) {
+export async function renderFreeNotesBoard(container, options = {}) {
   if (!container) return;
   activeContainer = container;
+  if (options && typeof options.embedded === 'boolean') {
+    isEmbeddedMode = options.embedded;
+  }
 
   try {
     boardState.currentOdo = await getCurrentOdometer();
@@ -313,19 +317,29 @@ export async function renderFreeNotesBoard(container) {
   const formattedOdo = effectiveOdo > 0 ? effectiveOdo.toLocaleString('es-CO') : '0';
   const dateLabel = boardState.isDated ? formatComposerDateLabel(boardState.selectedDate) : 'SIN FECHA';
 
+  const outerClasses = isEmbeddedMode
+    ? 'free-notes-board bg-[var(--bg-surface)] select-none'
+    : 'free-notes-board flat-frame border border-[var(--line-hair)] bg-[var(--bg-surface)] select-none';
+
   container.innerHTML = `
-    <div class="free-notes-board flat-frame border border-[var(--line-hair)] bg-[var(--bg-surface)] select-none">
+    <div class="${outerClasses}">
       
-      <!-- 1. Header de Sección: BITÁCORA ABIERTA + Filtros de Categoría -->
-      <div class="min-h-12 px-4 sm:px-5 py-2.5 border-b border-[var(--line-hair)] flex flex-wrap items-center justify-between gap-3 bg-[var(--bg-surface)]">
+      <!-- 1. Filtros de Categoría -->
+      <div class="min-h-11 px-4 sm:px-5 py-2 border-b border-[var(--line-hair)] flex flex-wrap items-center justify-between gap-3 bg-[var(--bg-surface)]">
         
-        <div class="flex items-center gap-2.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-volt)]"></span>
-          <span class="font-mono text-[10px] uppercase tracking-widest text-[var(--text-primary)] font-semibold">BITÁCORA ABIERTA</span>
-          <span id="notes-total-counter" class="font-mono text-[9px] uppercase tracking-wider text-[var(--text-muted)] border-l border-[var(--line-hair)] pl-2.5">
-            ${boardState.notes.length} REGISTROS
+        ${isEmbeddedMode ? `
+          <span id="notes-total-counter" class="font-mono text-[9px] uppercase tracking-wider text-[var(--text-muted)]">
+            ${boardState.notes.length} ${boardState.notes.length === 1 ? 'REGISTRO' : 'REGISTROS'}
           </span>
-        </div>
+        ` : `
+          <div class="flex items-center gap-2.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--accent-volt)]"></span>
+            <span class="font-mono text-[10px] uppercase tracking-widest text-[var(--text-primary)] font-semibold">BITÁCORA ABIERTA</span>
+            <span id="notes-total-counter" class="font-mono text-[9px] uppercase tracking-wider text-[var(--text-muted)] border-l border-[var(--line-hair)] pl-2.5">
+              ${boardState.notes.length} REGISTROS
+            </span>
+          </div>
+        `}
 
         <!-- Category Filter Pills -->
         <div class="flex items-center gap-1 overflow-x-auto py-0.5 max-w-full" id="notes-filter-bar">
@@ -529,8 +543,9 @@ function attachEventListeners(container) {
     });
   }
 
-  // Categories delegation: select, add, and remove
-  container.addEventListener('click', async (e) => {
+  // Categories delegation: bind on inner .free-notes-board so re-renders never stack listeners
+  const boardRoot = container.querySelector('.free-notes-board') || container;
+  boardRoot.addEventListener('click', async (e) => {
     // 1. Delete Category
     const delBtn = e.target.closest('[data-delete-cat]');
     if (delBtn) {

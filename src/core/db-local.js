@@ -631,7 +631,9 @@ export const DEFAULT_MAINTENANCE_ITEMS = Object.freeze([
         intervalKm: 5000,
         lastServiceOdo: 0,
         lastServiceDate: '',
-        category: 'engine',
+        category: 'oil',
+        icon: 'oil',
+        group: 'motor',
         history: [],
     },
     {
@@ -640,7 +642,9 @@ export const DEFAULT_MAINTENANCE_ITEMS = Object.freeze([
         intervalKm: 15000,
         lastServiceOdo: 0,
         lastServiceDate: '',
-        category: 'cabin',
+        category: 'filter',
+        icon: 'filter',
+        group: 'cabina',
         history: [],
     },
     {
@@ -650,6 +654,8 @@ export const DEFAULT_MAINTENANCE_ITEMS = Object.freeze([
         lastServiceOdo: 0,
         lastServiceDate: '',
         category: 'brakes',
+        icon: 'brakes',
+        group: 'rodaje',
         history: [],
     },
     {
@@ -659,15 +665,19 @@ export const DEFAULT_MAINTENANCE_ITEMS = Object.freeze([
         lastServiceOdo: 0,
         lastServiceDate: '',
         category: 'fuel',
+        icon: 'fuel',
+        group: 'motor',
         history: [],
     },
     {
         id: 'maint_tire_rotation',
-        name: 'ROTACIÓN LLANTAS',
+        name: 'LLANTAS / ROTACIÓN',
         intervalKm: 10000,
         lastServiceOdo: 0,
         lastServiceDate: '',
         category: 'tires',
+        icon: 'tires',
+        group: 'rodaje',
         history: [],
     },
     {
@@ -677,12 +687,120 @@ export const DEFAULT_MAINTENANCE_ITEMS = Object.freeze([
         lastServiceOdo: 0,
         lastServiceDate: '',
         category: 'engine',
+        icon: 'engine',
+        group: 'motor',
         history: [],
     },
 ]);
 
+export const DEFAULT_SEED_EPOCH = '1970-01-01T00:00:00.000Z';
+
+/**
+ * Checks whether a maintenance item contains actual user service records or mileage baseline.
+ * Prevents untouched default seeds from ever overwriting real records during cloud merge.
+ * @param {Object|null} item
+ * @returns {boolean}
+ */
+export function hasMaintenanceServiceData(item) {
+    if (!item || typeof item !== 'object') return false;
+    return Boolean(
+        Number(item.lastServiceOdo) > 0 ||
+        (Array.isArray(item.history) && item.history.length > 0) ||
+        Boolean(item.lastServiceDate)
+    );
+}
+
+/**
+ * Sorts a maintenance history array newest-first (by date desc, odometer desc, createdAt desc).
+ * @param {Array<Object>} history
+ * @returns {Array<Object>}
+ */
+export function sortMaintenanceHistory(history = []) {
+    if (!Array.isArray(history)) return [];
+    return [...history].sort((a, b) => {
+        const dateA = String(a?.date || '');
+        const dateB = String(b?.date || '');
+        if (dateA !== dateB) return dateA > dateB ? -1 : 1;
+        const odoA = Number(a?.odometer) || 0;
+        const odoB = Number(b?.odometer) || 0;
+        if (odoA !== odoB) return odoB - odoA;
+        const tsA = Date.parse(a?.updatedAt || a?.createdAt || '') || 0;
+        const tsB = Date.parse(b?.updatedAt || b?.createdAt || '') || 0;
+        return tsB - tsA;
+    });
+}
+
+/**
+ * Merges two versions of the same maintenance item (local vs cloud) without losing history entries
+ * and ensuring untouched default seeds never win over real service data.
+ * @param {Object} local
+ * @param {Object} incoming
+ * @returns {Object}
+ */
+export function mergeMaintenanceItemRecords(local, incoming) {
+    if (!local) return normalizeMaintenanceItem(incoming);
+    if (!incoming) return normalizeMaintenanceItem(local);
+
+    const localHasData = hasMaintenanceServiceData(local);
+    const incomingHasData = hasMaintenanceServiceData(incoming);
+
+    if (!localHasData && incomingHasData) {
+        return normalizeMaintenanceItem(incoming);
+    }
+    if (localHasData && !incomingHasData) {
+        return normalizeMaintenanceItem(local);
+    }
+
+    const localTs = local.updatedAt ? (Date.parse(local.updatedAt) || 0) : 0;
+    const incomingTs = incoming.updatedAt ? (Date.parse(incoming.updatedAt) || 0) : 0;
+    const primary = incomingTs >= localTs ? incoming : local;
+    const secondary = incomingTs >= localTs ? local : incoming;
+
+    const deletedHistorySet = new Set([
+        ...(Array.isArray(local.deletedHistoryIds) ? local.deletedHistoryIds : []),
+        ...(Array.isArray(incoming.deletedHistoryIds) ? incoming.deletedHistoryIds : []),
+    ]);
+
+    const historyMap = new Map();
+    const addEntry = (entry) => {
+        if (!entry || typeof entry !== 'object') return;
+        if (entry.id && deletedHistorySet.has(entry.id)) return;
+        const key = entry.id || `${entry.date || ''}_${entry.odometer || 0}_${entry.createdAt || ''}`;
+        const existing = historyMap.get(key);
+        if (!existing) {
+            historyMap.set(key, { ...entry });
+        } else {
+            const exTs = Date.parse(existing.updatedAt || existing.createdAt || '') || 0;
+            const enTs = Date.parse(entry.updatedAt || entry.createdAt || '') || 0;
+            if (enTs >= exTs) historyMap.set(key, { ...existing, ...entry });
+        }
+    };
+
+    (Array.isArray(secondary.history) ? secondary.history : []).forEach(addEntry);
+    (Array.isArray(primary.history) ? primary.history : []).forEach(addEntry);
+
+    const mergedHistory = sortMaintenanceHistory(Array.from(historyMap.values()));
+
+    const merged = normalizeMaintenanceItem({
+        ...secondary,
+        ...primary,
+        history: mergedHistory,
+        deletedHistoryIds: Array.from(deletedHistorySet),
+        isDefaultSeed: Boolean(local.isDefaultSeed && incoming.isDefaultSeed && !localHasData && !incomingHasData),
+        updatedAt: new Date(Math.max(localTs, incomingTs) || 0).toISOString(),
+    });
+
+    if (mergedHistory.length > 0) {
+        merged.lastServiceOdo = Number(mergedHistory[0].odometer) || merged.lastServiceOdo || 0;
+        merged.lastServiceDate = mergedHistory[0].date || merged.lastServiceDate || '';
+    }
+
+    return merged;
+}
+
 /**
  * Seeds default 6 maintenance items into IndexedDB if the store is empty.
+ * Uses DEFAULT_SEED_EPOCH so untouched seeds never override real cloud records on merge.
  * @param {boolean} [force=false]
  * @returns {Promise<Array>}
  */
@@ -691,10 +809,14 @@ export async function seedDefaultMaintenanceItems(force = false) {
     if (!force && existing && existing.length > 0) {
         return existing;
     }
-    const now = new Date().toISOString();
     const seeded = [];
     for (const item of DEFAULT_MAINTENANCE_ITEMS) {
-        const record = { ...item, updatedAt: now };
+        const record = {
+            ...item,
+            history: [],
+            isDefaultSeed: true,
+            updatedAt: DEFAULT_SEED_EPOCH,
+        };
         await saveToStore(STORES.MAINTENANCE_ITEMS, record);
         seeded.push(record);
     }
@@ -716,7 +838,7 @@ export async function getMaintenanceItems(optionsOrAutoSeed = false) {
     if (autoSeed && (!items || items.length === 0)) {
         return seedDefaultMaintenanceItems();
     }
-    return items || [];
+    return (items || []).map(item => normalizeMaintenanceItem(item));
 }
 
 /**
@@ -728,20 +850,34 @@ export function normalizeMaintenanceItem(raw) {
     if (!raw || typeof raw !== 'object') {
         throw new Error('Invalid maintenance item');
     }
+    const sortedHistory = sortMaintenanceHistory(Array.isArray(raw.history) ? raw.history : []);
+    const hasExplicitOdo = raw.lastServiceOdo !== undefined && raw.lastServiceOdo !== null;
+    const derivedOdo = sortedHistory.length > 0
+        ? (Number(sortedHistory[0].odometer) || 0)
+        : (hasExplicitOdo ? (Number(raw.lastServiceOdo) || 0) : 0);
+    const derivedDate = sortedHistory.length > 0
+        ? (sortedHistory[0].date || '')
+        : (raw.lastServiceDate || '');
+
     return {
         id: raw.id || `maint_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
         name: String(raw.name || raw.title || 'COMPONENTE').trim().toUpperCase(),
         intervalKm: Math.max(1, Number(raw.intervalKm) || 5000),
-        lastServiceOdo: Number(raw.lastServiceOdo) || 0,
-        lastServiceDate: raw.lastServiceDate || '',
-        category: raw.category || 'general',
-        history: Array.isArray(raw.history) ? raw.history : [],
+        lastServiceOdo: derivedOdo,
+        lastServiceDate: derivedDate,
+        category: raw.category || raw.icon || 'general',
+        icon: raw.icon || raw.category || 'general',
+        group: raw.group || '',
+        history: sortedHistory,
+        deletedHistoryIds: Array.isArray(raw.deletedHistoryIds) ? raw.deletedHistoryIds : [],
+        isDefaultSeed: Boolean(raw.isDefaultSeed) && !hasMaintenanceServiceData(raw),
         updatedAt: raw.updatedAt || new Date().toISOString(),
     };
 }
 
 export async function saveMaintenanceItem(item) {
     const normalized = normalizeMaintenanceItem(item);
+    normalized.isDefaultSeed = false;
     normalized.updatedAt = new Date().toISOString();
     await saveToStore(STORES.MAINTENANCE_ITEMS, normalized);
     return normalized;
@@ -1059,20 +1195,32 @@ export async function importAllStores(snapshot, options = { merge: false }) {
                 const local = getReq.result;
                 const localTs = local && local.updatedAt ? Date.parse(local.updatedAt) : 0;
                 const incomingTs = item.updatedAt ? Date.parse(item.updatedAt) : 0;
+
+                const writeRecord = (recordToSave) => {
+                    if (!tombStore) { store.put(recordToSave); return; }
+                    const tkey = store.name + ':' + id;
+                    const treq = tombStore.get(tkey);
+                    treq.onsuccess = () => {
+                        const tomb = treq.result;
+                        const tTs = tomb ? Date.parse(tomb.deletedAt) || 0 : 0;
+                        if (tomb && tTs >= incomingTs) return; // borrado después de esa versión: no resucita
+                        if (tomb) tombStore.delete(tkey); // editado después del borrado: gana el registro
+                        store.put(recordToSave);
+                    };
+                };
+
+                // Fusión inteligente para mantenimiento: semillas vacías nunca pisan datos reales e historiales se fusionan
+                if (store.name === STORES.MAINTENANCE_ITEMS) {
+                    const merged = local ? mergeMaintenanceItemRecords(local, item) : normalizeMaintenanceItem(item);
+                    writeRecord(merged);
+                    return;
+                }
+
                 if (local && localTs > incomingTs) return; // lo local es más nuevo: se conserva
                 const itemToStore = (store.name === STORES.VEHICLE_PROFILE && local)
                     ? mergeVehicleProfileRecords(local, item)
                     : item;
-                if (!tombStore) { store.put(itemToStore); return; }
-                const tkey = store.name + ':' + id;
-                const treq = tombStore.get(tkey);
-                treq.onsuccess = () => {
-                    const tomb = treq.result;
-                    const tTs = tomb ? Date.parse(tomb.deletedAt) || 0 : 0;
-                    if (tomb && tTs >= incomingTs) return; // borrado después de esa versión: no resucita
-                    if (tomb) tombStore.delete(tkey); // editado después del borrado: gana el registro
-                    store.put(itemToStore);
-                };
+                writeRecord(itemToStore);
             };
         };
 

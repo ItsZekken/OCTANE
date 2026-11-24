@@ -223,6 +223,29 @@ export function evaluateMaintenanceItem(item, currentOdo = 0, gpsContext = null)
     const wear = calculateWearDialTelemetry(item, currentOdo, gpsContext);
     const title = (item.name || item.title || 'COMPONENTE').toUpperCase();
 
+    if (wear.isUncalibrated) {
+        return {
+            id: item.id || `maint_${title}`,
+            title,
+            category: 'maintenance',
+            type: 'maintenance',
+            name: title,
+            kmRemaining: null,
+            realKmRemaining: null,
+            stressMultiplier: 1.0,
+            lifePct: 0,
+            lastServiceOdo: 0,
+            intervalKm: wear.intervalKm,
+            status: 'SIN REGISTRO',
+            severity: 'none',
+            label: 'SIN REGISTRO',
+            color: 'var(--text-muted)',
+            isCritical: false,
+            isWarning: false,
+            message: `${title}: SIN REGISTRO`,
+        };
+    }
+
     const isCritical = wear.status === 'critical' || wear.kmRemaining <= 0 || wear.kmRemaining < ALERT_THRESHOLDS.MAINT_CRITICAL_KM;
     const isWarning = !isCritical && (wear.status === 'warning' || wear.kmRemaining < ALERT_THRESHOLDS.MAINT_WARNING_KM);
 

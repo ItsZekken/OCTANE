@@ -109,9 +109,37 @@ export function calculateWearDialTelemetry(item, currentOdo = 0, gpsContext = nu
     const odo = Number(currentOdo) || 0;
     const lastServiceOdo = Number(item?.lastServiceOdo) || 0;
     const intervalKm = Math.max(1, Number(item?.intervalKm) || 5000);
+    const hasHistory = Array.isArray(item?.history) && item.history.length > 0;
+    const isUncalibrated = lastServiceOdo <= 0 && !hasHistory && !item?.lastServiceDate;
 
-    // Baseline linear formula: KM Restantes = Math.max(0, (lastServiceOdo + intervalKm) - currentOdo)
-    const realKmRemaining = Math.max(0, (lastServiceOdo + intervalKm) - odo);
+    if (isUncalibrated) {
+        return {
+            kmRemaining: null,
+            remainingKm: null,
+            realKmRemaining: null,
+            kmOverdue: 0,
+            nextDueOdo: null,
+            lifePct: 0,
+            physicalWear: null,
+            stressMultiplier: 1.0,
+            status: 'uncalibrated',
+            statusText: 'SIN REGISTRO',
+            colorVar: 'var(--text-muted)',
+            hex: '#63636B',
+            isUncalibrated: true,
+            isCritical: false,
+            isWarning: false,
+            lastServiceOdo: 0,
+            intervalKm,
+            currentOdo: odo,
+        };
+    }
+
+    const nextDueOdo = lastServiceOdo + intervalKm;
+    const effectiveOdo = Math.max(odo, lastServiceOdo);
+    const signedRemaining = nextDueOdo - effectiveOdo;
+    const realKmRemaining = Math.max(0, signedRemaining);
+    const kmOverdue = signedRemaining < 0 ? Math.abs(signedRemaining) : 0;
     let kmRemaining = realKmRemaining;
     const rawPct = (kmRemaining / intervalKm) * 100;
     let lifePct = Math.min(100, Math.max(0, rawPct));
@@ -120,7 +148,7 @@ export function calculateWearDialTelemetry(item, currentOdo = 0, gpsContext = nu
 
     if (gpsContext && (gpsContext.gpsDays || gpsContext.tripsByDate)) {
         physicalWear = computePhysicalWear(item, {
-            currentOdo: odo,
+            currentOdo: effectiveOdo,
             gpsDays: gpsContext.gpsDays || null,
             tripsByDate: gpsContext.tripsByDate || null,
         });
@@ -140,13 +168,16 @@ export function calculateWearDialTelemetry(item, currentOdo = 0, gpsContext = nu
         kmRemaining,
         remainingKm: kmRemaining,
         realKmRemaining,
+        kmOverdue,
+        nextDueOdo,
         lifePct,
         physicalWear,
         stressMultiplier,
-        status: statusMeta.status,
-        statusText: isCritical ? 'CRÍTICO' : (isWarning ? 'ATENCIÓN' : 'NOMINAL'),
-        colorVar: statusMeta.colorVar,
-        hex: statusMeta.hex,
+        status: isCritical ? 'critical' : (isWarning ? 'warning' : 'nominal'),
+        statusText: kmOverdue > 0 ? 'VENCIDO' : (isCritical ? 'CRÍTICO' : (isWarning ? 'PRÓXIMO' : 'AL DÍA')),
+        colorVar: isCritical ? 'var(--accent-crimson)' : (isWarning ? 'var(--accent-amber)' : 'var(--accent-volt)'),
+        hex: isCritical ? '#F43F5E' : (isWarning ? '#FF5500' : '#10B981'),
+        isUncalibrated: false,
         isCritical,
         isWarning,
         lastServiceOdo,
@@ -231,9 +262,11 @@ export function renderWearDialCard(item, currentOdo = 0, gpsContext = null) {
     const needleTip = polarToCartesian(cx, cy, needleLength, needleAngle);
 
     // 4. Numeric and Label Formatting
-    const kmFormatted = Number(kmRemaining).toLocaleString('en-US');
+    const kmFormatted = kmRemaining !== null && kmRemaining !== undefined
+        ? Number(kmRemaining).toLocaleString('es-CO')
+        : '—';
     const lastOdoText = lastServiceOdo > 0 
-        ? `${Number(lastServiceOdo).toLocaleString('en-US')} KM` 
+        ? `${Number(lastServiceOdo).toLocaleString('es-CO')} KM` 
         : '—';
     const safeName = escapeHtml(item.name || 'COMPONENTE');
     const safeId = escapeHtml(item.id || '');
@@ -311,12 +344,12 @@ export function renderWearDialCard(item, currentOdo = 0, gpsContext = null) {
           </button>
           <button 
             type="button" 
-            data-action="reset" 
+            data-action="register" 
             data-id="${safeId}"
             class="px-2 py-1 flat-pill text-[var(--text-primary)] hover:bg-[var(--line-hair)] hover:border-[var(--line-strong)] transition-colors cursor-pointer flex items-center gap-1"
-            title="Calibrar Relevo"
+            title="Registrar servicio"
           >
-            <span class="text-xs leading-none">↻</span> RESET
+            <span class="text-xs leading-none">+</span> REGISTRAR
           </button>
         </div>
       </div>
