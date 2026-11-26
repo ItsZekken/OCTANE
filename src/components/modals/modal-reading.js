@@ -34,7 +34,9 @@ import { renderDigitalLcdGauge } from '../fuel-gauges/gauge-digital-lcd.js';
 import { renderSightGlassGauge } from '../fuel-gauges/gauge-sight-glass.js';
 import { parseIntegerMetric, formatThousandsLive, setCursorAtEnd } from '../../core/number-utils.js';
 import { createNumericKeypad } from '../keypad/numeric-keypad.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:reading';
 let modalRootEl = null;
 let activeGauge = null;
 let currentLevelPct = 50;
@@ -52,12 +54,6 @@ export function initReadingModal() {
   modalRootEl.id = 'octane-reading-modal-container';
   modalRootEl.className = 'fixed inset-0 z-50 hidden select-none';
   document.body.appendChild(modalRootEl);
-
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalRootEl && !modalRootEl.classList.contains('hidden')) {
-      closeReadingModal();
-    }
-  });
 }
 
 /**
@@ -275,6 +271,13 @@ export async function openReadingModal(options = {}) {
   `;
 
   modalRootEl.classList.remove('hidden');
+  pushOverlayLayer(LAYER_ID, () => closeReadingModal());
+  modalRootEl.onclick = (e) => {
+    const card = modalRootEl.querySelector('.reading-card');
+    if (e.target && e.target.isConnected && card && !card.contains(e.target)) {
+      closeReadingModal();
+    }
+  };
 
   const stageEl = modalRootEl.querySelector('#reading-gauge-stage');
   const heroPctEl = modalRootEl.querySelector('#reading-hero-pct');
@@ -563,12 +566,13 @@ export async function openReadingModal(options = {}) {
  * Closes and unmounts the Reading Modal.
  */
 export function closeReadingModal() {
-  playHorologyTick(900, 0.012, 0.02);
+  removeOverlayLayer(LAYER_ID);
   if (activeGauge && typeof activeGauge.destroy === 'function') {
     activeGauge.destroy();
     activeGauge = null;
   }
-  if (modalRootEl) {
+  if (modalRootEl && !modalRootEl.classList.contains('hidden')) {
+    playHorologyTick(900, 0.012, 0.02);
     modalRootEl.classList.add('hidden');
     modalRootEl.innerHTML = '';
   }

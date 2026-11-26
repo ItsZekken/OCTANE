@@ -11,7 +11,9 @@
 import { store, playHorologyTick } from '../../core/state.js';
 import { formatDateShort } from '../../core/telemetry-engine.js';
 import { computeStationHonestyIndex } from '../../core/geospatial-intelligence.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:kpi-detail';
 let kpiModalRoot = null;
 let activeState = {
     type: 'efficiency',
@@ -36,12 +38,6 @@ function ensureKpiModalRoot() {
     kpiModalRoot.id = 'octane-kpi-detail-modal';
     kpiModalRoot.className = 'fixed inset-0 z-50 hidden select-none';
     document.body.appendChild(kpiModalRoot);
-
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && kpiModalRoot && !kpiModalRoot.classList.contains('hidden')) {
-            closeKpiDetailModal();
-        }
-    });
 
     return kpiModalRoot;
 }
@@ -110,10 +106,12 @@ export function openKpiDetailModal(kpiType = 'efficiency', payload = {}) {
 
     resetSelectedIndexForType();
     root.classList.remove('hidden');
+    pushOverlayLayer(LAYER_ID, () => closeKpiDetailModal());
     renderModalContent();
 }
 
 export function closeKpiDetailModal() {
+    removeOverlayLayer(LAYER_ID);
     if (kpiModalRoot && !kpiModalRoot.classList.contains('hidden')) {
         playHorologyTick(850, 0.012, 0.02);
         kpiModalRoot.classList.add('hidden');
@@ -571,14 +569,16 @@ function renderModalContent() {
         }
     }
 
+    const prevScroll = kpiModalRoot.querySelector('#kpi-modal-scroll-body')?.scrollTop || 0;
+
     kpiModalRoot.innerHTML = `
         <div class="kpi-modal-backdrop fixed inset-0 bg-black/80 transition-opacity"></div>
 
-        <div class="fixed inset-0 z-10 flex items-center justify-center sm:p-4">
+        <div id="kpi-modal-backdrop-wrap" class="fixed inset-0 z-10 flex items-center justify-center sm:p-4">
             <div class="w-full h-[100dvh] sm:h-[88dvh] sm:max-w-2xl bg-[var(--bg-void)] sm:border sm:border-[var(--line-hair)] text-[var(--text-primary)] flex flex-col overflow-hidden">
 
                 <!-- 4 Tabs + Close -->
-                <header class="border-b border-[var(--line-hair)] bg-[var(--bg-surface)] flex items-stretch shrink-0">
+                <header class="border-b border-[var(--line-hair)] bg-[var(--bg-surface)] flex items-stretch shrink-0 pt-safe">
                     <div class="flex-1 grid grid-cols-4 divide-x divide-[var(--line-hair)]">
                         ${tabs.map(t => `
                             <button type="button" data-kpi-tab="${t.id}"
@@ -595,7 +595,7 @@ function renderModalContent() {
                 </header>
 
                 <!-- Scrollable Minimal Body -->
-                <div class="flex-1 overflow-y-auto divide-y divide-[var(--line-hair)] overscroll-contain">
+                <div id="kpi-modal-scroll-body" class="flex-1 overflow-y-auto divide-y divide-[var(--line-hair)] overscroll-contain pb-safe">
 
                     <!-- Hero Readout -->
                     <div class="px-5 py-5 bg-[var(--bg-void)] flex items-end justify-between gap-3">
@@ -637,6 +637,11 @@ function renderModalContent() {
     `;
 
     bindModalEvents(series);
+    if (prevScroll > 0 && renderModalContent._preserveScroll) {
+        const bodyEl = kpiModalRoot.querySelector('#kpi-modal-scroll-body');
+        if (bodyEl) bodyEl.scrollTop = prevScroll;
+    }
+    renderModalContent._preserveScroll = false;
 }
 
 function updateChartInteractionInPlace(series) {
@@ -703,6 +708,9 @@ function bindModalEvents(series) {
 
     kpiModalRoot.querySelector('#kpi-detail-close-btn')?.addEventListener('click', closeKpiDetailModal);
     kpiModalRoot.querySelector('.kpi-modal-backdrop')?.addEventListener('click', closeKpiDetailModal);
+    kpiModalRoot.querySelector('#kpi-modal-backdrop-wrap')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeKpiDetailModal();
+    });
 
     kpiModalRoot.querySelector('#kpi-open-intel-fuel')?.addEventListener('click', () => {
         closeKpiDetailModal();
@@ -721,6 +729,7 @@ function bindModalEvents(series) {
                 playHorologyTick(1100, 0.012, 0.025);
                 activeState.type = nextType;
                 resetSelectedIndexForType();
+                renderModalContent._preserveScroll = false;
                 renderModalContent();
             }
         });
@@ -733,6 +742,7 @@ function bindModalEvents(series) {
                 playHorologyTick(1050, 0.012, 0.02);
                 activeState.usageWindow = win;
                 resetSelectedIndexForType();
+                renderModalContent._preserveScroll = true;
                 renderModalContent();
             }
         });

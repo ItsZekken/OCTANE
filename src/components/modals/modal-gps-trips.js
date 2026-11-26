@@ -31,6 +31,15 @@ import {
     resolvePlaceLabel,
     analyzeOptimalDeparture
 } from '../../core/geospatial-intelligence.js';
+import {
+    pushOverlayLayer,
+    removeOverlayLayer,
+    removeOverlayLayersByPrefix
+} from '../../core/navigation-manager.js';
+
+const LAYER_ROOT = 'gps-trips';
+const LAYER_DAY = 'gps-trips:day';
+const LAYER_TRIP = 'gps-trips:trip';
 
 let modalRootEl = null;
 let currentScope = 'cycle'; // 'cycle' | '7days' | 'all'
@@ -48,11 +57,43 @@ let currentLevel = 'days';
 let activeDay = null;
 let activeTrip = null;
 
+// Scroll memory per navigation level
+let savedDaysScrollTop = 0;
+let savedDayTripsScrollTop = 0;
+let lastDayScrollDate = '';
+
 let isRefreshing = false;
 let isLoading = false;
 let loadRequestToken = 0;
 let archiveProgressLabel = '';
 let modalStoreUnsub = null;
+
+function captureCurrentLevelScroll() {
+    if (!modalRootEl) return;
+    if (currentLevel === 'days') {
+        const listEl = modalRootEl.querySelector('#gps-days-list-scroll');
+        if (listEl) savedDaysScrollTop = Math.max(0, Number(listEl.scrollTop) || 0);
+    } else if (currentLevel === 'day') {
+        const tripsEl = modalRootEl.querySelector('#gps-day-trips-scroll');
+        if (tripsEl) {
+            savedDayTripsScrollTop = Math.max(0, Number(tripsEl.scrollTop) || 0);
+            lastDayScrollDate = activeDay?.date || '';
+        }
+    }
+}
+
+function restoreLevelScroll(selector, targetTop) {
+    if (!modalRootEl || !selector) return;
+    const safeTop = Math.max(0, Number(targetTop) || 0);
+    const apply = () => {
+        const el = modalRootEl?.querySelector(selector);
+        if (el) el.scrollTop = safeTop;
+    };
+    apply();
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(apply);
+    }
+}
 
 function resolveTripPlaceLabel(trip, endType = 'start', preferRaw = false) {
     if (!trip) return endType === 'start' ? 'Origen' : 'Destino';
@@ -158,20 +199,71 @@ function initModalRoot() {
 
     modalRootEl = document.createElement('div');
     modalRootEl.id = 'octane-gps-trips-modal';
-    modalRootEl.className = 'fixed inset-0 z-50 hidden bg-[#09090b] text-[var(--text-primary)] select-none overflow-hidden';
+    modalRootEl.className = 'fixed inset-0 z-50 hidden bg-[var(--bg-void)] text-[var(--text-primary)] select-none overflow-hidden';
     document.body.appendChild(modalRootEl);
+}
 
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modalRootEl && !modalRootEl.classList.contains('hidden')) {
-            handleBackAction();
-        }
-    });
+/**
+ * Transitions from Level 0 (Days) into Level 1 (Day) while preserving list scroll position.
+ */
+function enterLevelDay(dayObj) {
+    if (!dayObj) return;
+    captureCurrentLevelScroll();
+    if (dayObj.date !== lastDayScrollDate) {
+        savedDayTripsScrollTop = 0;
+        lastDayScrollDate = dayObj.date || '';
+    }
+    playHorologyTick(1100, 0.015, 0.025);
+    activeDay = dayObj;
+    activeTrip = null;
+    currentLevel = 'day';
+    pushOverlayLayer(LAYER_DAY, () => stepBackToDays({ fromPopState: true }));
+    renderLevelDay();
+}
 
-    window.addEventListener('popstate', (e) => {
-        if (modalRootEl && !modalRootEl.classList.contains('hidden')) {
-            handleBackAction(true);
-        }
-    });
+/**
+ * Transitions from Level 1 (Day) into Level 2 (Trip) while preserving day trips scroll position.
+ */
+function enterLevelTrip(tripObj) {
+    if (!tripObj || !activeDay) return;
+    captureCurrentLevelScroll();
+    playHorologyTick(1150, 0.015, 0.025);
+    activeTrip = tripObj;
+    currentLevel = 'trip';
+    pushOverlayLayer(LAYER_TRIP, () => stepBackToDay({ fromPopState: true }));
+    renderLevelTrip();
+}
+
+/**
+ * Steps back from Level 2 (Trip) to Level 1 (Day), restoring saved day-trips scroll.
+ */
+function stepBackToDay({ fromPopState = false } = {}) {
+    if (!fromPopState) {
+        removeOverlayLayer(LAYER_TRIP);
+    }
+    playHorologyTick(900, 0.01, 0.02);
+    currentLevel = 'day';
+    activeTrip = null;
+    renderLevelDay();
+}
+
+/**
+ * Steps back from Level 1 (Day) to Level 0 (Days), restoring saved days-list scroll.
+ */
+function stepBackToDays({ fromPopState = false } = {}) {
+    if (!fromPopState) {
+        removeOverlayLayer(LAYER_TRIP);
+        removeOverlayLayer(LAYER_DAY);
+    }
+    playHorologyTick(850, 0.01, 0.02);
+    currentLevel = 'days';
+    activeDay = null;
+    activeTrip = null;
+    if (routeMapController) {
+        routeMapController.destroy();
+        routeMapController = null;
+    }
+    renderLevelDays();
 }
 
 /**
@@ -179,22 +271,11 @@ function initModalRoot() {
  */
 function handleBackAction(fromPopState = false) {
     if (currentLevel === 'trip') {
-        playHorologyTick(900, 0.01, 0.02);
-        currentLevel = 'day';
-        activeTrip = null;
-        renderLevelDay();
+        stepBackToDay({ fromPopState });
     } else if (currentLevel === 'day') {
-        playHorologyTick(850, 0.01, 0.02);
-        currentLevel = 'days';
-        activeDay = null;
-        activeTrip = null;
-        if (routeMapController) {
-            routeMapController.destroy();
-            routeMapController = null;
-        }
-        renderLevelDays();
+        stepBackToDays({ fromPopState });
     } else {
-        closeGpsTripsModal();
+        closeGpsTripsModal({ fromPopState });
     }
 }
 
@@ -233,9 +314,13 @@ export async function openGpsTripsModal(options = {}) {
     currentLevel = 'days';
     activeDay = null;
     activeTrip = null;
+    savedDaysScrollTop = 0;
+    savedDayTripsScrollTop = 0;
+    lastDayScrollDate = '';
     archiveProgressLabel = '';
 
     modalRootEl.classList.remove('hidden');
+    pushOverlayLayer(LAYER_ROOT, () => closeGpsTripsModal({ fromPopState: true }));
 
     // Subscribe to live store updates so background historical archiving updates Level 0 in real time
     if (modalStoreUnsub) {
@@ -251,6 +336,7 @@ export async function openGpsTripsModal(options = {}) {
                 const prevCount = currentTrips.length;
                 hydrateFromCachedProfile(nextState.vehicleProfile, currentScope);
                 if (currentLevel === 'days' && currentTrips.length !== prevCount) {
+                    captureCurrentLevelScroll();
                     renderLevelDays();
                 }
             }
@@ -273,11 +359,12 @@ export async function openGpsTripsModal(options = {}) {
 /**
  * Closes and resets the modal.
  */
-export function closeGpsTripsModal() {
+export function closeGpsTripsModal(options = {}) {
     loadRequestToken++;
     isLoading = false;
     isRefreshing = false;
     archiveProgressLabel = '';
+    removeOverlayLayersByPrefix(LAYER_ROOT);
     if (modalStoreUnsub) {
         try { modalStoreUnsub(); } catch (_) {}
         modalStoreUnsub = null;
@@ -286,7 +373,7 @@ export function closeGpsTripsModal() {
         try { routeMapController.destroy(); } catch (_) {}
         routeMapController = null;
     }
-    if (modalRootEl) {
+    if (modalRootEl && !modalRootEl.classList.contains('hidden')) {
         playHorologyTick(800, 0.01, 0.02);
         modalRootEl.classList.add('hidden');
         modalRootEl.innerHTML = '';
@@ -294,6 +381,9 @@ export function closeGpsTripsModal() {
     currentLevel = 'days';
     activeDay = null;
     activeTrip = null;
+    savedDaysScrollTop = 0;
+    savedDayTripsScrollTop = 0;
+    lastDayScrollDate = '';
 }
 
 /**
@@ -336,8 +426,9 @@ async function loadTripsData(opts = {}) {
                     archiveProgressLabel = `ARCHIVANDO · ${prog.completedWindows}/${prog.totalWindows}`;
                 }
 
-                // Stream updates cleanly on Level 0 without interrupting active map inspection
+                // Stream updates cleanly on Level 0 without interrupting active scroll or map inspection
                 if (currentLevel === 'days' && modalRootEl && !modalRootEl.classList.contains('hidden')) {
+                    captureCurrentLevelScroll();
                     renderLevelDays();
                 }
             }
@@ -358,11 +449,18 @@ async function loadTripsData(opts = {}) {
         // If currently viewing a specific day, update it
         if (activeDay) {
             activeDay = currentDays.find(d => d.date === activeDay.date) || null;
-            if (!activeDay) currentLevel = 'days';
+            if (!activeDay) {
+                removeOverlayLayer(LAYER_TRIP);
+                removeOverlayLayer(LAYER_DAY);
+                currentLevel = 'days';
+            }
         }
         if (activeTrip && activeDay) {
             activeTrip = activeDay.trips.find(t => t.id === activeTrip.id) || null;
-            if (!activeTrip) currentLevel = 'day';
+            if (!activeTrip) {
+                removeOverlayLayer(LAYER_TRIP);
+                currentLevel = 'day';
+            }
         }
     } catch (err) {
         console.warn('[OCTANE GPS] Error loading trips:', err?.message);
@@ -372,6 +470,7 @@ async function loadTripsData(opts = {}) {
             isRefreshing = false;
             archiveProgressLabel = '';
             if (modalRootEl && !modalRootEl.classList.contains('hidden')) {
+                captureCurrentLevelScroll();
                 renderView();
             }
         }
@@ -408,9 +507,9 @@ function renderLevelDays() {
     const activeScopeText = scopeLabels[currentScope] || 'CICLO ACTIVO';
 
     modalRootEl.innerHTML = `
-        <div class="w-full h-[100dvh] flex flex-col bg-[#09090b] text-[var(--text-primary)] font-mono">
+        <div class="w-full h-[100dvh] flex flex-col bg-[var(--bg-void)] text-[var(--text-primary)] font-mono">
             <!-- Barra Superior Táctica -->
-            <div class="px-5 py-3.5 border-b border-[var(--line-hair)] flex items-center justify-between shrink-0">
+            <div class="px-5 py-3.5 border-b border-[var(--line-hair)] flex items-center justify-between shrink-0 pt-safe">
                 <button id="gps-modal-close-btn" class="w-9 h-9 -ml-2 flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-95 transition-all cursor-pointer" aria-label="Cerrar">
                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M6 18L18 6M6 6l12 12" />
@@ -439,10 +538,10 @@ function renderLevelDays() {
                             <span>${activeScopeText}</span>
                             <span class="text-[var(--accent-amber)] text-[10px]">▾</span>
                         </button>
-                        <div id="gps-scope-dropdown" class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-44 bg-[#09090b] border border-[var(--line-strong)] rounded shadow-2xl py-1 z-30 font-mono text-xs">
-                            <button data-scope-opt="cycle" class="w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-white/5 ${currentScope === 'cycle' ? 'text-[var(--accent-amber)] font-bold' : 'text-[var(--text-secondary)]'}">Ciclo Activo</button>
-                            <button data-scope-opt="7days" class="w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-white/5 ${currentScope === '7days' ? 'text-[var(--accent-amber)] font-bold' : 'text-[var(--text-secondary)]'}">Últimos 7 Días</button>
-                            <button data-scope-opt="all" class="w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-white/5 ${currentScope === 'all' ? 'text-[var(--accent-amber)] font-bold' : 'text-[var(--text-secondary)]'}">Historial Completo</button>
+                        <div id="gps-scope-dropdown" class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-1.5 w-44 bg-[var(--bg-surface)] border border-[var(--line-strong)] py-1 z-30 font-mono text-xs">
+                            <button data-scope-opt="cycle" class="w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-[var(--bg-elevated)] ${currentScope === 'cycle' ? 'text-[var(--accent-amber)] font-bold' : 'text-[var(--text-secondary)]'}">Ciclo Activo</button>
+                            <button data-scope-opt="7days" class="w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-[var(--bg-elevated)] ${currentScope === '7days' ? 'text-[var(--accent-amber)] font-bold' : 'text-[var(--text-secondary)]'}">Últimos 7 Días</button>
+                            <button data-scope-opt="all" class="w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-[var(--bg-elevated)] ${currentScope === 'all' ? 'text-[var(--accent-amber)] font-bold' : 'text-[var(--text-secondary)]'}">Historial Completo</button>
                         </div>
                     </div>
                     <span id="gps-archive-progress" class="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--accent-amber)] tabular-nums ${(isLoading || isRefreshing) && archiveProgressLabel ? '' : 'hidden'}">
@@ -461,7 +560,7 @@ function renderLevelDays() {
             ` : ''}
 
             <!-- Lista de Días con Glifo Cartográfico (Mobile First) -->
-            <div class="flex-1 overflow-y-auto divide-y divide-[var(--line-hair)] overscroll-contain">
+            <div id="gps-days-list-scroll" class="flex-1 overflow-y-auto divide-y divide-[var(--line-hair)] overscroll-contain pb-safe">
                 ${currentDays.length === 0 ? `
                     <div class="px-6 py-16 text-center text-[var(--text-secondary)] text-xs tracking-widest uppercase">
                         ${isLoading ? 'CONSULTANDO TELEMETRÍA GPS...' : 'CERO TRAYECTOS EN ESTE ALCANCE'}
@@ -485,7 +584,7 @@ function renderLevelDays() {
                                     <path d="${day.routeGlyph}" fill="none" stroke="#FF5500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
                             ` : `
-                                <div class="w-4 h-[2px] bg-white/20"></div>
+                                <div class="w-4 h-[2px] bg-[var(--line-strong)]"></div>
                             `}
                         </div>
 
@@ -503,6 +602,7 @@ function renderLevelDays() {
     `;
 
     bindLevelDaysEvents();
+    restoreLevelScroll('#gps-days-list-scroll', savedDaysScrollTop);
 }
 
 /**
@@ -510,7 +610,7 @@ function renderLevelDays() {
  */
 function bindLevelDaysEvents() {
     const closeBtn = modalRootEl.querySelector('#gps-modal-close-btn');
-    if (closeBtn) closeBtn.addEventListener('click', closeGpsTripsModal);
+    if (closeBtn) closeBtn.addEventListener('click', () => closeGpsTripsModal());
 
     const refreshBtn = modalRootEl.querySelector('#gps-modal-refresh-btn');
     if (refreshBtn) refreshBtn.addEventListener('click', () => loadTripsData({ forceRefresh: true }));
@@ -531,6 +631,9 @@ function bindLevelDaysEvents() {
                 scopeDropdown.classList.add('hidden');
                 if (newScope !== currentScope) {
                     currentScope = newScope;
+                    savedDaysScrollTop = 0;
+                    savedDayTripsScrollTop = 0;
+                    lastDayScrollDate = '';
                     playHorologyTick(1100, 0.01, 0.02);
 
                     // Instant 0 ms render from accumulated local cache
@@ -547,7 +650,11 @@ function bindLevelDaysEvents() {
             });
         });
 
-        document.addEventListener('click', () => scopeDropdown.classList.add('hidden'), { once: true });
+        modalRootEl.onclick = (e) => {
+            if (!scopeDropdown.classList.contains('hidden') && !scopeDropdown.contains(e.target) && !scopeTrigger.contains(e.target)) {
+                scopeDropdown.classList.add('hidden');
+            }
+        };
     }
 
     const optRibbon = modalRootEl.querySelector('#gps-optimal-departure-ribbon');
@@ -564,10 +671,7 @@ function bindLevelDaysEvents() {
             const dateStr = row.dataset.dayDate;
             const dayObj = currentDays.find(d => d.date === dateStr);
             if (dayObj) {
-                playHorologyTick(1100, 0.015, 0.025);
-                activeDay = dayObj;
-                currentLevel = 'day';
-                renderView();
+                enterLevelDay(dayObj);
             }
         });
     });
@@ -584,10 +688,11 @@ function ensureTacticalDayFrame() {
         return;
     }
 
+    modalRootEl.onclick = null;
     modalRootEl.innerHTML = `
-        <div id="gps-tactical-frame" data-day-date="${activeDay.date}" class="w-full h-[100dvh] flex flex-col bg-[#09090b] text-[var(--text-primary)] font-mono">
+        <div id="gps-tactical-frame" data-day-date="${activeDay.date}" class="w-full h-[100dvh] flex flex-col bg-[var(--bg-void)] text-[var(--text-primary)] font-mono">
             <!-- Barra Superior: Regresar -->
-            <div class="px-4 py-3 border-b border-[var(--line-hair)] flex items-center justify-between shrink-0 bg-[var(--bg-void)]">
+            <div class="px-4 py-3 border-b border-[var(--line-hair)] flex items-center justify-between shrink-0 bg-[var(--bg-void)] pt-safe">
                 <button id="gps-level-back-btn" class="flex items-center gap-2 py-1 px-2 -ml-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] active:scale-95 transition-all cursor-pointer font-mono text-xs">
                     <span class="text-[var(--accent-amber)] font-bold text-sm">←</span>
                     <span id="gps-level-back-title" class="font-semibold uppercase tracking-wider text-[var(--text-primary)]"></span>
@@ -611,7 +716,7 @@ function ensureTacticalDayFrame() {
     if (backBtn) backBtn.addEventListener('click', () => handleBackAction());
 
     const closeBtn = modalRootEl.querySelector('#gps-day-close-btn');
-    if (closeBtn) closeBtn.addEventListener('click', closeGpsTripsModal);
+    if (closeBtn) closeBtn.addEventListener('click', () => closeGpsTripsModal());
 
     const mapContainer = modalRootEl.querySelector('#gps-day-map-container');
     if (mapContainer && activeDay) {
@@ -658,7 +763,7 @@ function renderLevelDay() {
             </div>
 
             <!-- Hoja / Lista Inferior: Viajes de este día -->
-            <div class="flex-1 overflow-y-auto divide-y divide-[var(--line-hair)] overscroll-contain">
+            <div id="gps-day-trips-scroll" class="flex-1 overflow-y-auto divide-y divide-[var(--line-hair)] overscroll-contain pb-safe">
                 ${activeDay.trips.map((t) => `
                     <div data-trip-id="${t.id}" class="gps-trip-row px-5 py-3.5 flex items-center justify-between gap-3 bg-[var(--bg-void)] hover:bg-[var(--bg-elevated)]/30 active:bg-[var(--bg-elevated)]/60 cursor-pointer transition-colors select-none">
                         <!-- Origen y Destino con hora -->
@@ -691,13 +796,12 @@ function renderLevelDay() {
                 const tripId = row.dataset.tripId;
                 const tripObj = activeDay.trips.find(t => t.id === tripId);
                 if (tripObj) {
-                    playHorologyTick(1150, 0.015, 0.025);
-                    activeTrip = tripObj;
-                    currentLevel = 'trip';
-                    renderLevelTrip();
+                    enterLevelTrip(tripObj);
                 }
             });
         });
+
+        restoreLevelScroll('#gps-day-trips-scroll', activeDay.date === lastDayScrollDate ? savedDayTripsScrollTop : 0);
     }
 
     if (routeMapController) {

@@ -37,7 +37,9 @@ import {
   setCursorAtEnd
 } from '../../core/number-utils.js';
 import { createNumericKeypad } from '../keypad/numeric-keypad.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:refuel';
 let modalRootEl = null;
 const GAL_TO_L = 3.78541;
 
@@ -159,12 +161,6 @@ export function initRefuelModal() {
   modalRootEl.id = 'octane-refuel-modal-container';
   modalRootEl.className = 'fixed inset-0 z-50 hidden select-none';
   document.body.appendChild(modalRootEl);
-
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalRootEl && !modalRootEl.classList.contains('hidden')) {
-      closeRefuelModal();
-    }
-  });
 }
 
 /**
@@ -536,6 +532,13 @@ export async function openRefuelModal(options = {}) {
   `;
 
   modalRootEl.classList.remove('hidden');
+  pushOverlayLayer(LAYER_ID, () => closeRefuelModal());
+  modalRootEl.onclick = (e) => {
+    const card = modalRootEl.querySelector('.refuel-card');
+    if (e.target && e.target.isConnected && card && !card.contains(e.target)) {
+      closeRefuelModal();
+    }
+  };
 
   const tabBtns = modalRootEl.querySelectorAll('.refuel-tab-btn');
   const heroLabel = modalRootEl.querySelector('#refuel-hero-label');
@@ -1016,8 +1019,9 @@ export async function openRefuelModal(options = {}) {
  * Closes and unmounts the Refuel Modal.
  */
 export function closeRefuelModal() {
-  playHorologyTick(900, 0.012, 0.02);
-  if (modalRootEl) {
+  removeOverlayLayer(LAYER_ID);
+  if (modalRootEl && !modalRootEl.classList.contains('hidden')) {
+    playHorologyTick(900, 0.012, 0.02);
     modalRootEl.classList.add('hidden');
     modalRootEl.innerHTML = '';
   }

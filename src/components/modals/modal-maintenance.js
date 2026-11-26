@@ -35,7 +35,9 @@ import {
     extractSpecReadouts,
 } from '../cluster/service-schemas.js';
 import { parseIntegerMetric, formatThousandsLive, setCursorAtEnd } from '../../core/number-utils.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:maintenance';
 let modalRootEl = null;
 
 const MONTHS_ES = Object.freeze([
@@ -108,19 +110,30 @@ export function initMaintenanceModal() {
     modalRootEl.id = 'octane-maintenance-modal-container';
     modalRootEl.className = 'fixed inset-0 z-50 hidden select-none';
     document.body.appendChild(modalRootEl);
+}
 
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modalRootEl && !modalRootEl.classList.contains('hidden')) {
+/**
+ * Shows the maintenance modal root and registers it on the Back-button stack.
+ */
+function activateMaintenanceOverlay() {
+    if (!modalRootEl) return;
+    modalRootEl.classList.remove('hidden');
+    pushOverlayLayer(LAYER_ID, () => closeMaintenanceModal());
+    modalRootEl.onclick = (e) => {
+        if (!e.target || !e.target.isConnected) return;
+        const wrap = modalRootEl.querySelector('.z-10');
+        if (e.target === wrap) {
             closeMaintenanceModal();
         }
-    });
+    };
 }
 
 /**
  * Closes and hides the maintenance modal dialog.
  */
 export function closeMaintenanceModal() {
-    if (!modalRootEl) return;
+    removeOverlayLayer(LAYER_ID);
+    if (!modalRootEl || modalRootEl.classList.contains('hidden')) return;
     modalRootEl.classList.add('hidden');
     modalRootEl.innerHTML = '';
 }
@@ -629,7 +642,7 @@ export function openRegisterServiceModal({ item, currentOdo = 0, entryToEdit = n
       </div>
     `;
 
-    modalRootEl.classList.remove('hidden');
+    activateMaintenanceOverlay();
 
     const odoInput = document.getElementById('maint-odo-input');
     const costInput = document.getElementById('maint-cost-input');
@@ -1002,7 +1015,7 @@ export function openEditComponentModal({ item, onSave, onDelete }) {
       </div>
     `;
 
-    modalRootEl.classList.remove('hidden');
+    activateMaintenanceOverlay();
 
     const nameInput = document.getElementById('edit-comp-name');
     const intervalInput = document.getElementById('edit-comp-interval');
@@ -1210,7 +1223,7 @@ export function openAddComponentModal({ currentOdo = 0, defaultGroup = null, onS
       </div>
     `;
 
-    modalRootEl.classList.remove('hidden');
+    activateMaintenanceOverlay();
 
     const nameInput = document.getElementById('new-comp-name');
     const intervalInput = document.getElementById('new-comp-interval');
@@ -1477,7 +1490,7 @@ export function openHistoryMaintenanceModal({ item, currentOdo = 0, onRegister, 
       </div>
     `;
 
-    modalRootEl.classList.remove('hidden');
+    activateMaintenanceOverlay();
 
     const closeX = document.getElementById('maint-close-x');
     const backdrop = document.getElementById('maint-modal-backdrop');

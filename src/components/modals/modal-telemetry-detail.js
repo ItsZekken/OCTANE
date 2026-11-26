@@ -14,7 +14,9 @@ import { todayLocalYmd, localYmd } from '../../core/date-utils.js';
 import { playHorologyTick } from '../../core/state.js';
 import { formatVol, formatDateWithWeekday, GAL_TO_L, DEFAULT_TANK_CAPACITY_GAL } from '../../core/telemetry-engine.js';
 import { sanitizeFuelCostCop } from '../../core/number-utils.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:telemetry-detail';
 let detailModalRoot = null;
 
 /**
@@ -31,19 +33,14 @@ export function initTelemetryDetailModal() {
   detailModalRoot.id = 'octane-telemetry-detail-modal';
   detailModalRoot.className = 'fixed inset-0 z-50 hidden select-none';
   document.body.appendChild(detailModalRoot);
-
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && detailModalRoot && !detailModalRoot.classList.contains('hidden')) {
-      closeTelemetryDetailModal();
-    }
-  });
 }
 
 /**
  * Cierra el modal de detalle de telemetría.
  */
 export function closeTelemetryDetailModal() {
-  if (detailModalRoot) {
+  removeOverlayLayer(LAYER_ID);
+  if (detailModalRoot && !detailModalRoot.classList.contains('hidden')) {
     playHorologyTick(850, 0.01, 0.02);
     detailModalRoot.classList.add('hidden');
     detailModalRoot.innerHTML = '';
@@ -291,6 +288,7 @@ export function openTelemetryDetailModal(log, options = {}) {
   `;
 
   detailModalRoot.classList.remove('hidden');
+  pushOverlayLayer(LAYER_ID, () => closeTelemetryDetailModal());
 
   const closeBtn = detailModalRoot.querySelector('#telemetry-detail-close-btn');
   const cancelBtn = detailModalRoot.querySelector('#telemetry-detail-cancel-btn');
@@ -300,6 +298,12 @@ export function openTelemetryDetailModal(log, options = {}) {
   closeBtn?.addEventListener('click', closeTelemetryDetailModal);
   cancelBtn?.addEventListener('click', closeTelemetryDetailModal);
   backdrop?.addEventListener('click', closeTelemetryDetailModal);
+  detailModalRoot.onclick = (e) => {
+    const card = detailModalRoot.querySelector('.bg-\\[var\\(--bg-surface\\)\\]');
+    if (e.target && e.target.isConnected && card && !card.contains(e.target)) {
+      closeTelemetryDetailModal();
+    }
+  };
 
   editBtn?.addEventListener('click', () => {
     closeTelemetryDetailModal();

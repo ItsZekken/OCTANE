@@ -426,6 +426,15 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 
 
 /* ==========================================================================
+   Unified Overlay Scroll Lock (Preserves underlying window.scrollY cleanly)
+   ========================================================================== */
+html.octane-scroll-locked,
+body.octane-scroll-locked {
+    overflow: hidden !important;
+    overscroll-behavior: none;
+}
+
+/* ==========================================================================
    Tactical Diagnostic & Financial Report — Zero-Scrollbar & Precision Grid
    ========================================================================== */
 #modal-diagnostic-sheet {

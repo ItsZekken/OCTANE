@@ -26,7 +26,9 @@ import {
   fmtCop,
   fmtCompact
 } from '../../core/diagnostic-engine.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:diagnostic';
 let modalContainer = null;
 let currentPeriodKey = 'this_month';
 let ignoredAnomalies = new Set();
@@ -46,8 +48,8 @@ export function initDiagnosticModal() {
   modalContainer.className = 'fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-black/85 opacity-0 pointer-events-none transition-opacity duration-150 select-none';
   document.body.appendChild(modalContainer);
 
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalContainer && !modalContainer.classList.contains('pointer-events-none')) {
+  modalContainer.addEventListener('click', (e) => {
+    if (e.target === modalContainer && !modalContainer.classList.contains('pointer-events-none')) {
       closeDiagnosticModal();
     }
   });
@@ -61,7 +63,8 @@ export function initDiagnosticModal() {
  * Cierra el modal de informe financiero.
  */
 export function closeDiagnosticModal() {
-  if (modalContainer) {
+  removeOverlayLayer(LAYER_ID);
+  if (modalContainer && !modalContainer.classList.contains('pointer-events-none')) {
     playHorologyTick(850, 0.012, 0.02);
     modalContainer.classList.remove('opacity-100', 'pointer-events-auto');
     modalContainer.classList.add('opacity-0', 'pointer-events-none');
@@ -81,6 +84,7 @@ export async function openDiagnosticModal(periodFilter = 'this_month') {
 
   modalContainer.classList.remove('opacity-0', 'pointer-events-none');
   modalContainer.classList.add('opacity-100', 'pointer-events-auto');
+  pushOverlayLayer(LAYER_ID, () => closeDiagnosticModal());
 
   await renderDiagnosticContent();
 }
@@ -647,12 +651,15 @@ async function renderDiagnosticContent() {
       const targetId = e.currentTarget.getAttribute('data-id');
       if (!targetId) return;
 
+      const prevScroll = modalContainer.querySelector('#modal-diagnostic-sheet')?.scrollTop || 0;
       playHorologyTick(900, 0.03, 0.05);
       try {
         await deleteRideSession(targetId);
         showToast('REGISTRO DUPLICADO ELIMINADO');
         window.dispatchEvent(new CustomEvent('octane:rides-updated', { detail: { deletedId: targetId } }));
         await renderDiagnosticContent();
+        const sheet = modalContainer.querySelector('#modal-diagnostic-sheet');
+        if (sheet) sheet.scrollTop = prevScroll;
       } catch (err) {
         showToast('ERROR AL ELIMINAR REGISTRO');
       }
@@ -666,9 +673,12 @@ async function renderDiagnosticContent() {
       const sig = e.currentTarget.getAttribute('data-sig');
       if (!sig) return;
 
+      const prevScroll = modalContainer.querySelector('#modal-diagnostic-sheet')?.scrollTop || 0;
       playHorologyTick(1100, 0.015, 0.02);
       ignoredAnomalies.add(sig);
       await renderDiagnosticContent();
+      const sheet = modalContainer.querySelector('#modal-diagnostic-sheet');
+      if (sheet) sheet.scrollTop = prevScroll;
     });
   });
 }

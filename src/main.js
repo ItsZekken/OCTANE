@@ -4,7 +4,6 @@
  * Zero dummy data, 5 architectural views, precision Web Audio, and modal coordination.
  */
 
-import { closeAppDialog } from './components/dialogs/app-dialog.js';
 import './style/tokens.css';
 import { store, playHorologyTick, showToast } from './core/state.js';
 import {
@@ -26,19 +25,26 @@ import { syncGpsTelemetry } from './core/iopgps-sync.js';
 import { renderHeader, setHeaderUser, setHeaderVehicleTag } from './components/header-bar.js';
 import { renderNavDock, setActiveNavTab } from './components/nav-dock.js';
 import { renderFabContextual, updateFabContext } from './components/fab-contextual.js';
-import { openReadingModal, closeReadingModal, initReadingModal } from './components/modals/modal-reading.js';
-import { openRefuelModal, closeRefuelModal, initRefuelModal } from './components/modals/modal-refuel.js';
-import { openOnboardingModal, closeOnboardingModal, initOnboardingModal } from './components/modals/modal-onboarding.js';
-import { openMaintenanceModal, closeMaintenanceModal, initMaintenanceModal } from './components/modals/modal-maintenance.js';
-import { openLegalDocModal, closeLegalDocModal, initLegalDocModal } from './components/modals/modal-legal-doc.js';
-import { openRideEntryModal, closeRideEntryModal, initRideEntryModal } from './components/modals/modal-ride-entry.js';
-import { closeMovementDetailModal, initMovementDetailModal } from './components/modals/modal-movement-detail.js';
-import { openTelemetryDetailModal, closeTelemetryDetailModal, initTelemetryDetailModal } from './components/modals/modal-telemetry-detail.js';
-import { openDiagnosticModal, closeDiagnosticModal, initDiagnosticModal } from './components/modals/modal-diagnostic.js';
-import { closeGpsIntelligenceModal, initGpsIntelligenceModal } from './components/modals/modal-gps-intelligence.js';
+import { openReadingModal, initReadingModal } from './components/modals/modal-reading.js';
+import { openRefuelModal, initRefuelModal } from './components/modals/modal-refuel.js';
+import { openOnboardingModal, initOnboardingModal } from './components/modals/modal-onboarding.js';
+import { openMaintenanceModal, initMaintenanceModal } from './components/modals/modal-maintenance.js';
+import { openLegalDocModal, initLegalDocModal } from './components/modals/modal-legal-doc.js';
+import { openRideEntryModal, initRideEntryModal } from './components/modals/modal-ride-entry.js';
+import { initMovementDetailModal } from './components/modals/modal-movement-detail.js';
+import { initTelemetryDetailModal } from './components/modals/modal-telemetry-detail.js';
+import { openDiagnosticModal, initDiagnosticModal } from './components/modals/modal-diagnostic.js';
+import { initGpsIntelligenceModal } from './components/modals/modal-gps-intelligence.js';
 import { initViewportManager } from './core/viewport-manager.js';
 import { initMicroTooltips } from './components/micro-tooltip.js';
 import { refreshAlerts, initAlertsEngine } from './core/alerts-engine.js';
+import {
+  initNavigationManager,
+  pushOverlayLayer,
+  removeOverlayLayer,
+  hasBlockingOverlay
+} from './core/navigation-manager.js';
+import { maybeShowReleaseNotes } from './components/modals/modal-release-notes.js';
 import { renderCockpit, destroyCockpit, refreshCockpit } from './views/view-cockpit.js';
 import { renderClusterView, destroyClusterView } from './views/view-cluster.js';
 import { renderGloveboxView, destroyGloveboxView } from './views/view-glovebox.js';
@@ -50,6 +56,7 @@ let headerContainer = null;
 let mainContainer = null;
 let navContainer = null;
 let currentActiveView = 'cockpit';
+const viewScrollPositions = new Map();
 
 /**
  * Valid view IDs supported by the OCTANE router
@@ -59,14 +66,20 @@ const VALID_VIEWS = ['cockpit', 'cluster', 'glovebox', 'rides', 'settings'];
 /**
  * Mounts the view associated with viewId into the main application container.
  * @param {string} viewId
+ * @param {Object} [options={}]
  */
-export async function navigateTo(viewId) {
+export async function navigateTo(viewId, options = {}) {
   if (!VALID_VIEWS.includes(viewId)) {
     viewId = 'cockpit';
   }
 
   if (viewId === currentActiveView && mainContainer.firstElementChild) {
     return;
+  }
+
+  // Remember scroll position of the view we are leaving
+  if (mainContainer.firstElementChild && typeof window !== 'undefined') {
+    viewScrollPositions.set(currentActiveView, window.scrollY || 0);
   }
 
   // Cleanup active view if leaving previous view
@@ -104,11 +117,20 @@ export async function navigateTo(viewId) {
 
   currentActiveView = viewId;
 
-  // Update store without pushing page history or persisting tab in URL hash
+  // Update store and keep Back-button return-to-Cockpit state synced for non-home views
   store.setState({ currentView: viewId });
+  if (viewId !== 'cockpit') {
+    pushOverlayLayer('nav:tab', () => {
+      navigateTo('cockpit', { fromBack: true });
+    }, { lockScroll: false, closeOnEscape: false, blocking: false });
+  } else if (!options.fromBack) {
+    removeOverlayLayer('nav:tab');
+  }
+
   try {
     if (typeof window !== 'undefined' && window.history && typeof window.history.replaceState === 'function') {
-      window.history.replaceState({ view: viewId }, '', window.location.pathname + window.location.search);
+      const currentState = (window.history.state && typeof window.history.state === 'object') ? window.history.state : {};
+      window.history.replaceState({ ...currentState, view: viewId }, '', window.location.pathname + window.location.search);
     }
   } catch (_) {}
 
@@ -141,8 +163,12 @@ export async function navigateTo(viewId) {
       break;
   }
 
-  // Scroll to top
-  window.scrollTo({ top: 0, behavior: 'instant' });
+  // Restore saved scroll position for this view (0 on first visit)
+  const targetScrollY = viewScrollPositions.get(viewId) || 0;
+  window.scrollTo({ top: targetScrollY, behavior: 'instant' });
+  if (targetScrollY > 0 && typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => window.scrollTo({ top: targetScrollY, behavior: 'instant' }));
+  }
 }
 
 /**
@@ -288,7 +314,8 @@ async function bootstrapApp() {
   // 11. Initial Route Resolution: Always start in Cockpit
   try {
     if (window.location.hash) {
-      window.history.replaceState({ view: 'cockpit' }, '', window.location.pathname + window.location.search);
+      const currentState = (window.history.state && typeof window.history.state === 'object') ? window.history.state : {};
+      window.history.replaceState({ ...currentState, view: 'cockpit' }, '', window.location.pathname + window.location.search);
     }
   } catch (_) {}
   await navigateTo('cockpit');
@@ -296,8 +323,9 @@ async function bootstrapApp() {
   // 12. Check first-time calibration / onboarding
   const hasTelemetry = Array.isArray(telemetryLogs) && telemetryLogs.length > 0;
   const isProfileConfigured = Boolean(vehicleProfile && (vehicleProfile.isConfigured === true || vehicleProfile.onboardingCompleted === true));
+  const isFirstTimeOnboarding = !hasTelemetry && !isProfileConfigured;
 
-  if (!hasTelemetry && !isProfileConfigured) {
+  if (isFirstTimeOnboarding) {
     setTimeout(() => {
       openOnboardingModal();
     }, 150);
@@ -306,6 +334,9 @@ async function bootstrapApp() {
     vehicleProfile.onboardingCompleted = true;
     saveVehicleProfile(vehicleProfile).catch(() => {});
   }
+
+  // 12b. One-time human-readable release notes popup per update version
+  maybeShowReleaseNotes({ isFirstTimeOnboarding, delayMs: 320 });
 
   // 13. Background IOPGPS Telemetry Sync (live odometer, voltage & incremental daily backfill from 2026-02-01)
   setTimeout(() => {
@@ -404,71 +435,8 @@ function setupGlobalListeners() {
     }
   });
 
-  // Modal Back-Button Interception (Hardware/Browser Back closes open modal instead of changing page)
-  const MODAL_SELECTORS_AND_CLOSERS = [
-    { id: 'octane-app-dialog', close: () => closeAppDialog() },
-    { id: 'octane-reading-modal-container', close: () => closeReadingModal() },
-    { id: 'octane-refuel-modal-container', close: () => closeRefuelModal() },
-    { id: 'octane-ride-entry-modal-container', close: () => closeRideEntryModal() },
-    { id: 'octane-movement-detail-modal', close: () => closeMovementDetailModal() },
-    { id: 'octane-telemetry-detail-modal', close: () => closeTelemetryDetailModal() },
-    { id: 'modal-diagnostic-root', close: () => closeDiagnosticModal() },
-    { id: 'octane-gps-intelligence-modal', close: () => closeGpsIntelligenceModal() },
-    { id: 'octane-maintenance-modal-container', close: () => closeMaintenanceModal() },
-    { id: 'octane-legal-doc-modal-container', close: () => closeLegalDocModal() },
-    { id: 'octane-onboarding-modal-container', close: () => closeOnboardingModal() },
-    { id: 'modal-change-vehicle', close: (el) => el.classList.add('hidden') },
-    { id: 'modal-change-gauge', close: (el) => el.classList.add('hidden') }
-  ];
-
-  function isAnyModalOpen() {
-    for (const m of MODAL_SELECTORS_AND_CLOSERS) {
-      const el = document.getElementById(m.id);
-      if (el && !el.classList.contains('hidden')) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function closeTopmostOpenModal() {
-    for (const m of MODAL_SELECTORS_AND_CLOSERS) {
-      const el = document.getElementById(m.id);
-      if (el && !el.classList.contains('hidden')) {
-        m.close(el);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  if (typeof MutationObserver !== 'undefined' && document.body) {
-    const modalObserver = new MutationObserver(() => {
-      if (isAnyModalOpen()) {
-        try {
-          if (!window.history.state || !window.history.state.octaneModal) {
-            window.history.pushState({ octaneModal: true, view: currentActiveView }, '');
-          }
-        } catch (_) {}
-      }
-    });
-    modalObserver.observe(document.body, {
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class']
-    });
-  }
-
-  window.addEventListener('popstate', () => {
-    if (closeTopmostOpenModal()) {
-      return;
-    }
-    try {
-      if (window.location.hash) {
-        window.history.replaceState({ view: currentActiveView }, '', window.location.pathname + window.location.search);
-      }
-    } catch (_) {}
-  });
+  // Unified Overlay Back-Button, Escape & Scroll-Lock Manager
+  initNavigationManager({ getCurrentView: () => currentActiveView });
 
   // Network Online / Offline Detection
   window.addEventListener('online', () => {
@@ -482,8 +450,11 @@ function setupGlobalListeners() {
     showToast('MODO SIN CONEXIÓN');
   });
 
-  // Keyboard Shortcuts (Power user ergonomics)
+  // Keyboard Shortcuts (Power user ergonomics — disabled while any modal is open)
   window.addEventListener('keydown', (e) => {
+    if (hasBlockingOverlay()) {
+      return;
+    }
     // Avoid capturing inside inputs or textareas
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) {

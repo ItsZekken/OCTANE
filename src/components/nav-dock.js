@@ -149,13 +149,19 @@ export function closeSplitLauncher() {
 function bindNavEvents() {
   if (!currentContainer) return;
 
-  // View Navigation Tabs
+  // View Navigation Tabs (tapping active tab smoothly returns to top)
   const tabBtns = currentContainer.querySelectorAll('.nav-tab-btn');
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const tabId = btn.dataset.nav;
 
-      if (tabId === activeTabId) return;
+      if (tabId === activeTabId) {
+        if (typeof window !== 'undefined' && window.scrollY > 12) {
+          playHorologyTick(1050, 0.01, 0.02);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return;
+      }
 
       playHorologyTick(950, 0.015, 0.03);
       activeTabId = tabId;

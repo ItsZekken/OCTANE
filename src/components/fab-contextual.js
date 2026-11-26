@@ -12,7 +12,9 @@
 
 import { playHorologyTick } from '../core/telemetry-engine.js';
 import store from '../core/state.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../core/navigation-manager.js';
 
+const FAB_LAYER_ID = 'fab:menu';
 let fabContainerEl = null;
 let currentView = 'cockpit';
 let isMenuOpen = false;
@@ -51,7 +53,10 @@ export function renderFabContextual() {
  */
 export function updateFabContext(viewId) {
   currentView = viewId || 'cockpit';
-  isMenuOpen = false;
+  if (isMenuOpen) {
+    isMenuOpen = false;
+    removeOverlayLayer(FAB_LAYER_ID);
+  }
   updateFabDisplay();
 }
 
@@ -61,6 +66,7 @@ export function updateFabContext(viewId) {
 export function closeFabOptions() {
   if (!isMenuOpen) return;
   isMenuOpen = false;
+  removeOverlayLayer(FAB_LAYER_ID);
   updateMenuVisibility();
 }
 
@@ -259,6 +265,11 @@ function bindFabEvents() {
       }
 
       isMenuOpen = !isMenuOpen;
+      if (isMenuOpen) {
+        pushOverlayLayer(FAB_LAYER_ID, () => closeFabOptions(), { lockScroll: false, blocking: false });
+      } else {
+        removeOverlayLayer(FAB_LAYER_ID);
+      }
       updateMenuVisibility();
     }
   });

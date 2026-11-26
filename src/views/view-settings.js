@@ -44,7 +44,12 @@ import { renderAnalog180Gauge } from '../components/fuel-gauges/gauge-analog-180
 import { renderDigitalLcdGauge } from '../components/fuel-gauges/gauge-digital-lcd.js';
 import { renderSightGlassGauge } from '../components/fuel-gauges/gauge-sight-glass.js';
 import { AVAILABLE_MODELS, getInlineVehicleSvg } from '../assets/vehicles-svg/models-inline.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../core/navigation-manager.js';
+import { APP_VERSION } from '../core/release-notes.js';
+import { openReleaseNotesModal } from '../components/modals/modal-release-notes.js';
 
+const LAYER_VEHICLE_MODAL = 'settings:change-vehicle';
+const LAYER_GAUGE_MODAL = 'settings:change-gauge';
 let modalGaugePreviewInstance = null;
 const GAL_TO_L = 3.78541;
 
@@ -159,6 +164,8 @@ function getGaugeLabel(style) {
  * @param {HTMLElement} container
  */
 export async function renderSettingsView(container) {
+  const isRerender = Boolean(container && container.querySelector('.view-settings'));
+  const prevScrollY = (isRerender && typeof window !== 'undefined') ? (window.scrollY || 0) : 0;
   playHorologyTick(1200, 0.015, 0.03);
 
   let profile = {
@@ -644,12 +651,27 @@ export async function renderSettingsView(container) {
         </div>
       </section>
 
+      <!-- SECTION 6: VERSIÓN Y NOVEDADES -->
+      <section class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] overflow-hidden">
+        <button
+          id="btn-open-release-notes"
+          type="button"
+          class="w-full px-5 py-3.5 flex items-center justify-between gap-3 text-left hover:bg-[var(--bg-elevated)]/30 active:bg-[var(--bg-elevated)]/50 transition-colors cursor-pointer font-mono"
+        >
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="w-1.5 h-1.5 bg-[var(--accent-amber)] shrink-0"></span>
+            <span class="text-[10px] uppercase tracking-[0.2em] text-[var(--text-primary)] font-semibold">OCTANE v${APP_VERSION}</span>
+          </div>
+          <span class="text-[10px] uppercase tracking-widest text-[var(--text-secondary)] shrink-0">NOVEDADES ›</span>
+        </button>
+      </section>
+
     </div>
 
     <!-- MODAL 1: CAMBIAR VEHÍCULO (ACORDEONES POR MARCA) -->
     <div id="modal-change-vehicle" class="fixed inset-0 z-50 hidden select-none">
       <div class="fixed inset-0 bg-black/85 transition-opacity" id="backdrop-change-vehicle"></div>
-      <div class="fixed inset-0 overflow-y-auto flex items-center justify-center p-3 sm:p-4 z-10">
+      <div id="wrap-change-vehicle" class="fixed inset-0 overflow-y-auto flex items-center justify-center p-3 sm:p-4 z-10">
         <div class="relative w-full max-w-lg bg-[var(--bg-surface)] border border-[var(--line-hair)] text-[var(--text-primary)] flex flex-col max-h-[90vh] overflow-hidden">
           
           <!-- Modal Header -->
@@ -873,15 +895,21 @@ export async function renderSettingsView(container) {
     pendingVehicle = { ...profile };
     updateModalVehiclePreview();
     modalChangeVehicle.classList.remove('hidden');
+    pushOverlayLayer(LAYER_VEHICLE_MODAL, () => closeVehicleModal());
   }
 
   function closeVehicleModal() {
+    removeOverlayLayer(LAYER_VEHICLE_MODAL);
+    if (modalChangeVehicle.classList.contains('hidden')) return;
     playHorologyTick(900, 0.012, 0.02);
     modalChangeVehicle.classList.add('hidden');
   }
 
   btnOpenChangeVehicle.addEventListener('click', openVehicleModal);
   backdropChangeVehicle.addEventListener('click', closeVehicleModal);
+  container.querySelector('#wrap-change-vehicle')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeVehicleModal();
+  });
   closeModalVehicleX.addEventListener('click', closeVehicleModal);
   btnCancelModalVehicle.addEventListener('click', closeVehicleModal);
 
@@ -1042,9 +1070,18 @@ export async function renderSettingsView(container) {
     });
     mountModalGaugePreview(pendingGauge);
     modalChangeGauge.classList.remove('hidden');
+    pushOverlayLayer(LAYER_GAUGE_MODAL, () => closeGaugeModal());
+    modalChangeGauge.onclick = (e) => {
+      const card = modalChangeGauge.querySelector('.bg-\\[var\\(--bg-surface\\)\\]');
+      if (e.target && e.target.isConnected && card && !card.contains(e.target)) {
+        closeGaugeModal();
+      }
+    };
   }
 
   function closeGaugeModal() {
+    removeOverlayLayer(LAYER_GAUGE_MODAL);
+    if (modalChangeGauge.classList.contains('hidden')) return;
     playHorologyTick(900, 0.012, 0.02);
     if (modalGaugePreviewInstance && typeof modalGaugePreviewInstance.destroy === 'function') {
       modalGaugePreviewInstance.destroy();
@@ -1542,12 +1579,26 @@ export async function renderSettingsView(container) {
       }
     });
   }
+
+  // On-demand Release Notes trigger (shows current version summary without altering seen state)
+  const btnOpenReleaseNotes = container.querySelector('#btn-open-release-notes');
+  if (btnOpenReleaseNotes) {
+    btnOpenReleaseNotes.addEventListener('click', () => {
+      openReleaseNotesModal({ markSeen: false });
+    });
+  }
+
+  if (prevScrollY > 0 && typeof window !== 'undefined') {
+    window.scrollTo({ top: prevScrollY, behavior: 'instant' });
+  }
 }
 
 /**
  * Tears down live gauge preview and background animation loops.
  */
 export function destroySettingsView() {
+  removeOverlayLayer(LAYER_VEHICLE_MODAL);
+  removeOverlayLayer(LAYER_GAUGE_MODAL);
   if (modalGaugePreviewInstance && typeof modalGaugePreviewInstance.destroy === 'function') {
     modalGaugePreviewInstance.destroy();
     modalGaugePreviewInstance = null;

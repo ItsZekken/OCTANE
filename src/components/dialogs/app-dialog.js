@@ -7,8 +7,10 @@
  */
 
 import { playHorologyTick } from '../../core/state.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
 const ROOT_ID = 'octane-app-dialog';
+const LAYER_ID = 'dialog:app';
 let pendingResolve = null;
 
 function getRoot() {
@@ -31,6 +33,7 @@ function esc(s) {
  * También lo usa el botón atrás del navegador (ver main.js).
  */
 export function closeAppDialog() {
+  removeOverlayLayer(LAYER_ID);
   const root = document.getElementById(ROOT_ID);
   if (root) {
     root.classList.add('hidden');
@@ -69,9 +72,11 @@ function open({ title, bodyHtml, confirmLabel, danger, cancelValue, readValue })
       </div>
     `;
     root.classList.remove('hidden');
+    pushOverlayLayer(LAYER_ID, () => closeAppDialog(), { closeOnEscape: false });
 
     const finish = (value) => {
       pendingResolve = null;
+      removeOverlayLayer(LAYER_ID);
       root.classList.add('hidden');
       root.innerHTML = '';
       document.removeEventListener('keydown', onKey, true);

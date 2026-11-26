@@ -13,9 +13,12 @@ import { playHorologyTick } from '../core/telemetry-engine.js';
 import store from '../core/state.js';
 import { getVehicleProfile, getCanonicalTripKey, mergeTripsByDateMaps } from '../core/db-local.js';
 import { backfillMissingGpsTrips, getGpsConfig } from '../core/iopgps-sync.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../core/navigation-manager.js';
 
 export const GHOST_RACE_CORRIDOR_RADIUS_M = 450;
 export const GHOST_RACE_DEPARTURE_WINDOW_MIN = 90;
+
+const LAYER_ID = 'modal:ghost-race';
 
 let modalRootEl = null;
 let isModalActive = false;
@@ -597,20 +600,12 @@ export async function openGhostRaceModal(options = {}) {
         window.addEventListener('message', boundMessageListener);
     }
 
-    if (!boundKeyDownListener) {
-        boundKeyDownListener = handleKeyDown;
-        window.addEventListener('keydown', boundKeyDownListener);
-    }
-
     if (!boundStateListener) {
         boundStateListener = handleStateUpdate;
         window.addEventListener('octane:update-state', boundStateListener);
     }
 
-    // Lock background scroll while full-screen instrument is active
-    try {
-        document.documentElement.style.overflow = 'hidden';
-    } catch (_) {}
+    pushOverlayLayer(LAYER_ID, () => closeGhostRaceModal());
 
     // Smooth entry transition
     modalRootEl.classList.remove('hidden');
@@ -637,6 +632,7 @@ export async function openGhostRaceModal(options = {}) {
  */
 export function closeGhostRaceModal() {
     openSessionToken++;
+    removeOverlayLayer(LAYER_ID);
     if (!isModalActive && (!modalRootEl || modalRootEl.classList.contains('hidden'))) {
         return;
     }
@@ -648,10 +644,6 @@ export function closeGhostRaceModal() {
     isModalActive = false;
     pendingInitPayload = null;
     hasSentInitPayload = false;
-
-    try {
-        document.documentElement.style.overflow = '';
-    } catch (_) {}
 
     if (modalRootEl) {
         modalRootEl.classList.remove('opacity-100');

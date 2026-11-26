@@ -35,7 +35,21 @@ Cualquier agente de inteligencia artificial o desarrollador que modifique este r
 
 ---
 
-## 3. Protocolo de Verificación Obligatorio
+## 3. Política Obligatoria de Actualizaciones y Notas de Versión
+En **toda** actualización publicada a producción (`main`) que incluya mejoras o correcciones visibles:
+1. **Incrementar la versión de forma sincronizada** en:
+   - `src/core/release-notes.js` (`APP_VERSION` y nueva entrada al inicio de `RELEASES`).
+   - `public/sw.js` (`CACHE_NAME = 'octane-vX.Y.Z'`).
+   - `package.json` (`"version": "X.Y.Z"`).
+2. **Redactar una nota de cambios breve y NO técnica**:
+   - Lenguaje humano, claro, directo y enfocado en lo que percibe el conductor (2 a 5 puntos cortos).
+   - **Prohibido** mencionar términos internos de programación (`IndexedDB`, `JSON`, `API`, `Service Worker`, `popstate`, `localStorage`, nombres de archivos, etc.) y prohibido usar etiquetas `<p>`.
+3. **Presentación una única vez por actualización**:
+   - El aviso de nueva versión (`src/components/modals/modal-release-notes.js`) debe mostrarse **una sola vez por versión** al usuario (registrado por versión en `localStorage`) y cerrarse inmediatamente **al tocar en cualquier parte de la pantalla** (o al pulsar atrás / `Escape`).
+
+---
+
+## 4. Protocolo de Verificación Obligatorio
 Antes de dar por completada una tarea o realizar un despliegue:
 1. Comprobar que el build de producción finaliza sin errores: `npm run build`.
 2. Ejecutar la suite completa de pruebas:
@@ -43,6 +57,11 @@ Antes de dar por completada una tarea o realizar un despliegue:
    node tests/test-core.js
    node tests/test-gps-trips-modal.js
    node tests/test-rides-engine.js
+   node tests/test-gps-intelligence.js
+   node tests/test-gauge-calibration.js
+   node tests/test-export-backup.js
+   node tests/test-ux-release-nav.js
    ```
 3. Validar la armonía visual en modo oscuro (`Modo Carbón`) y modo claro (`Modo Papel`).
 4. Verificar que no se hayan introducido credenciales con `Select-String`.
+5. Confirmar que `APP_VERSION`, `public/sw.js` (`CACHE_NAME`) y `package.json` coincidan si se publica una nueva actualización.

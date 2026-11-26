@@ -27,7 +27,9 @@ import { renderDigitalLcdGauge } from '../fuel-gauges/gauge-digital-lcd.js';
 import { renderSightGlassGauge } from '../fuel-gauges/gauge-sight-glass.js';
 import { renderVehicleSearchBox, mapBodySilhouette } from '../vehicles/vehicle-search-box.js';
 import { getInlineVehicleSvg } from '../../assets/vehicles-svg/models-inline.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:onboarding';
 const GAL_TO_L = 3.78541;
 const L_TO_GAL = 1 / 3.78541;
 
@@ -143,13 +145,27 @@ export function openOnboardingModal(options = {}) {
     modalContainer.classList.remove('opacity-0', 'pointer-events-none');
     modalContainer.classList.add('opacity-100', 'pointer-events-auto');
     playHorologyTick(1200, 0.02, 0.04);
+
+    const handleOnboardingBack = () => {
+        if (!isOpen) return;
+        if (currentStep > 1) {
+            playHorologyTick(900, 0.012, 0.02);
+            currentStep -= 1;
+            renderStep();
+            pushOverlayLayer(LAYER_ID, handleOnboardingBack, { closeOnEscape: Boolean(options.isEdit) });
+            return;
+        }
+        closeOnboardingModal();
+    };
+    pushOverlayLayer(LAYER_ID, handleOnboardingBack, { closeOnEscape: Boolean(options.isEdit) });
 }
 
 /**
  * Closes onboarding and cleans up any preview gauge instances.
  */
 export function closeOnboardingModal() {
-    if (!modalContainer) return;
+    removeOverlayLayer(LAYER_ID);
+    if (!modalContainer || !isOpen) return;
     isOpen = false;
     teardownActiveGaugePreview();
     modalContainer.classList.remove('opacity-100', 'pointer-events-auto');

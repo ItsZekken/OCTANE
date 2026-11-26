@@ -33,7 +33,9 @@ import { calculateCostPerKm, formatCop, formatCompactCop } from '../../core/ride
 import { parseIntegerMetric, formatThousandsLive, parseDistanceKm } from '../../core/number-utils.js';
 import { createNumericKeypad } from '../keypad/numeric-keypad.js';
 import { ensureFieldInView } from '../../core/viewport-manager.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:ride-entry';
 let modalRootEl = null;
 
 const PLATFORMS_STORAGE_KEY = 'octane_custom_platforms';
@@ -80,12 +82,6 @@ export function initRideEntryModal() {
   modalRootEl.className = 'fixed inset-0 z-50 hidden select-none';
   document.body.appendChild(modalRootEl);
 
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalRootEl && !modalRootEl.classList.contains('hidden')) {
-      closeRideEntryModal();
-    }
-  });
-
   return modalRootEl;
 }
 
@@ -93,7 +89,8 @@ export function initRideEntryModal() {
  * Closes the ride entry modal dialog.
  */
 export function closeRideEntryModal() {
-  if (!modalRootEl) return;
+  removeOverlayLayer(LAYER_ID);
+  if (!modalRootEl || modalRootEl.classList.contains('hidden')) return;
   modalRootEl.classList.add('hidden');
   modalRootEl.innerHTML = '';
 }
@@ -289,6 +286,13 @@ export async function openRideEntryModal(options = {}) {
     `;
 
     modalRootEl.classList.remove('hidden');
+    pushOverlayLayer(LAYER_ID, () => closeRideEntryModal());
+    modalRootEl.onclick = (e) => {
+      const card = modalRootEl.querySelector('.bg-\\[var\\(--bg-surface\\)\\]');
+      if (e.target && e.target.isConnected && card && !card.contains(e.target)) {
+        closeRideEntryModal();
+      }
+    };
     bindModalEvents();
   }
 

@@ -15,7 +15,9 @@ import { saveLegalDoc, deleteLegalDoc } from '../../core/db-local.js';
 import { calculateActiveAlerts } from '../../core/alerts-engine.js';
 import { triggerCloudSync } from '../../core/firebase-sync.js';
 import { parseIntegerMetric, formatThousandsLive } from '../../core/number-utils.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:legal-doc';
 let modalContainer = null;
 let currentDoc = null;
 
@@ -68,12 +70,6 @@ export function initLegalDocModal() {
   modalContainer.className = 'fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 opacity-0 pointer-events-none transition-opacity duration-150 select-none';
   document.body.appendChild(modalContainer);
 
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalContainer && !modalContainer.classList.contains('pointer-events-none')) {
-      closeLegalDocModal();
-    }
-  });
-
   window.addEventListener('octane:open-legal-doc-modal', (e) => {
     openLegalDocModal(e.detail || null);
   });
@@ -93,13 +89,15 @@ export function openLegalDocModal(doc = null) {
 
   modalContainer.classList.remove('opacity-0', 'pointer-events-none');
   modalContainer.classList.add('opacity-100', 'pointer-events-auto');
+  pushOverlayLayer(LAYER_ID, () => closeLegalDocModal());
 }
 
 /**
  * Closes the legal doc modal.
  */
 export function closeLegalDocModal() {
-  if (!modalContainer) return;
+  removeOverlayLayer(LAYER_ID);
+  if (!modalContainer || modalContainer.classList.contains('pointer-events-none')) return;
   modalContainer.classList.remove('opacity-100', 'pointer-events-auto');
   modalContainer.classList.add('opacity-0', 'pointer-events-none');
   modalContainer.innerHTML = '';

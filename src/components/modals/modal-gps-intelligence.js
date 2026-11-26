@@ -20,8 +20,10 @@ import {
   analyzeOptimalDeparture,
   computeParkingSentinel
 } from '../../core/geospatial-intelligence.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
 const ROOT_ID = 'octane-gps-intelligence-modal';
+const LAYER_ID = 'modal:gps-intelligence';
 const VALID_TABS = ['fuel', 'health', 'routes'];
 
 let modalRoot = null;
@@ -84,12 +86,6 @@ export function initGpsIntelligenceModal() {
   window.addEventListener('octane:open-gps-intelligence', (e) => {
     openGpsIntelligenceModal(e.detail || {});
   });
-
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalRoot && !modalRoot.classList.contains('hidden')) {
-      closeGpsIntelligenceModal();
-    }
-  });
 }
 
 /**
@@ -115,6 +111,7 @@ export function openGpsIntelligenceModal(options = { tab: 'fuel' }) {
     : null;
 
   root.classList.remove('hidden');
+  pushOverlayLayer(LAYER_ID, () => closeGpsIntelligenceModal());
   renderModal();
 }
 
@@ -122,6 +119,7 @@ export function openGpsIntelligenceModal(options = { tab: 'fuel' }) {
  * Closes and clears the GPS Intelligence detail modal.
  */
 export function closeGpsIntelligenceModal() {
+  removeOverlayLayer(LAYER_ID);
   if (modalRoot && !modalRoot.classList.contains('hidden')) {
     playHorologyTick(850, 0.012, 0.02);
     modalRoot.classList.add('hidden');
@@ -608,13 +606,15 @@ function renderModal() {
     bodyHtml = renderFuelTab(state);
   }
 
+  const prevScroll = modalRoot.querySelector('#intel-modal-scroll-body')?.scrollTop || 0;
+
   modalRoot.innerHTML = `
     <div class="intel-modal-backdrop fixed inset-0 bg-black/80 transition-opacity"></div>
 
-    <div class="fixed inset-0 z-10 flex items-center justify-center sm:p-4">
+    <div id="intel-modal-backdrop-wrap" class="fixed inset-0 z-10 flex items-center justify-center sm:p-4">
       <div class="w-full h-[100dvh] sm:h-[88dvh] sm:max-w-2xl bg-[var(--bg-void)] sm:border sm:border-[var(--line-hair)] text-[var(--text-primary)] flex flex-col overflow-hidden">
         <!-- Top 3-Tab Header -->
-        <header class="border-b border-[var(--line-hair)] bg-[var(--bg-surface)] flex items-stretch shrink-0">
+        <header class="border-b border-[var(--line-hair)] bg-[var(--bg-surface)] flex items-stretch shrink-0 pt-safe">
           <div class="flex-1 grid grid-cols-3 divide-x divide-[var(--line-hair)]">
             ${tabs.map(t => `
               <button type="button" data-intel-tab="${t.id}"
@@ -631,7 +631,7 @@ function renderModal() {
         </header>
 
         <!-- Scrollable Flat Body -->
-        <div class="flex-1 overflow-y-auto divide-y divide-[var(--line-hair)] overscroll-contain">
+        <div id="intel-modal-scroll-body" class="flex-1 overflow-y-auto divide-y divide-[var(--line-hair)] overscroll-contain pb-safe">
           ${bodyHtml}
         </div>
       </div>
@@ -639,6 +639,11 @@ function renderModal() {
   `;
 
   bindModalEvents();
+  if (prevScroll > 0 && renderModal._preserveScroll) {
+    const bodyEl = modalRoot.querySelector('#intel-modal-scroll-body');
+    if (bodyEl) bodyEl.scrollTop = prevScroll;
+  }
+  renderModal._preserveScroll = false;
 }
 
 function bindModalEvents() {
@@ -646,6 +651,9 @@ function bindModalEvents() {
 
   modalRoot.querySelector('#intel-detail-close-btn')?.addEventListener('click', closeGpsIntelligenceModal);
   modalRoot.querySelector('.intel-modal-backdrop')?.addEventListener('click', closeGpsIntelligenceModal);
+  modalRoot.querySelector('#intel-modal-backdrop-wrap')?.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeGpsIntelligenceModal();
+  });
 
   modalRoot.querySelectorAll('[data-intel-tab]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -653,6 +661,7 @@ function bindModalEvents() {
       if (nextTab && nextTab !== activeTab) {
         playHorologyTick(1120, 0.012, 0.024);
         activeTab = nextTab;
+        renderModal._preserveScroll = false;
         renderModal();
       }
     });
@@ -664,6 +673,7 @@ function bindModalEvents() {
       if ((nextScope === 'cycle' || nextScope === 'month') && nextScope !== activeFuelScope) {
         playHorologyTick(1050, 0.01, 0.02);
         activeFuelScope = nextScope;
+        renderModal._preserveScroll = true;
         renderModal();
       }
     });

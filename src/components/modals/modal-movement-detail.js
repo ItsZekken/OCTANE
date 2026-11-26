@@ -12,7 +12,9 @@
 import { playHorologyTick } from '../../core/state.js';
 import { formatDateShort } from '../../core/telemetry-engine.js';
 import { openRideEntryModal } from './modal-ride-entry.js';
+import { pushOverlayLayer, removeOverlayLayer } from '../../core/navigation-manager.js';
 
+const LAYER_ID = 'modal:movement-detail';
 let modalRootEl = null;
 
 /**
@@ -64,12 +66,6 @@ export function initMovementDetailModal() {
   modalRootEl.className = 'fixed inset-0 z-50 hidden select-none';
   document.body.appendChild(modalRootEl);
 
-  window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalRootEl && !modalRootEl.classList.contains('hidden')) {
-      closeMovementDetailModal();
-    }
-  });
-
   return modalRootEl;
 }
 
@@ -77,7 +73,8 @@ export function initMovementDetailModal() {
  * Closes the detail modal.
  */
 export function closeMovementDetailModal() {
-  if (!modalRootEl) return;
+  removeOverlayLayer(LAYER_ID);
+  if (!modalRootEl || modalRootEl.classList.contains('hidden')) return;
   modalRootEl.classList.add('hidden');
   modalRootEl.innerHTML = '';
 }
@@ -239,6 +236,13 @@ export function openMovementDetailModal(movement, options = {}) {
   `;
 
   modalRootEl.classList.remove('hidden');
+  pushOverlayLayer(LAYER_ID, () => closeMovementDetailModal());
+  modalRootEl.onclick = (e) => {
+    const card = modalRootEl.querySelector('.bg-\\[var\\(--bg-surface\\)\\]');
+    if (e.target && e.target.isConnected && card && !card.contains(e.target)) {
+      closeMovementDetailModal();
+    }
+  };
 
   // Bind close buttons
   modalRootEl.querySelector('#detail-close-btn')?.addEventListener('click', () => {
