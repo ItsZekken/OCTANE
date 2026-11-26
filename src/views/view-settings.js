@@ -207,6 +207,10 @@ export async function renderSettingsView(container) {
   const gpsCfg = getGpsConfig(profile);
   const proxyInfo = resolveProxyMode(gpsCfg);
   const isTemporaryBridge = Boolean(gpsCfg.username && !gpsCfg.proxyUrl && proxyInfo.mode === 'public-bridge');
+  const gpsDaysCount = profile.gpsCache?.days ? Object.keys(profile.gpsCache.days).length : 0;
+  const gpsTripsCount = profile.gpsCache?.tripsByDate
+    ? Object.values(profile.gpsCache.tripsByDate).reduce((acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0), 0)
+    : 0;
 
   container.innerHTML = `
     <div class="view-settings w-full space-y-6 pb-20 select-none">
@@ -382,91 +386,111 @@ export async function renderSettingsView(container) {
         </div>
       </section>
 
-      <!-- SECTION 2B: TELEMETRÍA GPS -->
-      <section class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] p-5 space-y-4">
-        <div class="flex items-center justify-between border-b border-[var(--line-hair)] pb-3">
-          <span class="font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">TELEMETRÍA GPS</span>
-          <span id="gps-settings-status-badge" class="font-mono text-[10px] uppercase tracking-widest ${profile.gpsCache?.live?.totalMile ? 'text-[var(--accent-volt)]' : (isTemporaryBridge ? 'text-[var(--accent-amber)]' : 'text-[var(--text-secondary)]')}">
-            ${profile.gpsCache?.live?.totalMile
-              ? `${Number(profile.gpsCache.live.totalMile).toLocaleString('es-CO')} KM · ${Number(profile.gpsCache.live.externalVoltage || 0).toFixed(2)}V`
-              : (isTemporaryBridge ? 'PUENTE TEMPORAL' : (gpsCfg.username ? 'CREDENCIALES GUARDADAS' : 'SIN VINCULAR'))}
-          </span>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
-          <div class="space-y-1">
-            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">USUARIO IOPGPS</label>
-            <input 
-              id="set-gps-user" 
-              type="text" 
-              autocomplete="username"
-              placeholder="Tu usuario o placa"
-              value="${gpsCfg.username}" 
-              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
-            />
+      <!-- SECTION 2B: TELEMETRÍA GPS (ACORDEÓN COLAPSABLE) -->
+      <section class="flat-frame bg-[var(--bg-surface)] border border-[var(--line-hair)] overflow-hidden">
+        <button
+          id="gps-config-accordion-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="gps-config-accordion-body"
+          class="w-full px-5 py-4 flex items-center justify-between gap-3 text-left hover:bg-[var(--bg-elevated)]/30 active:bg-[var(--bg-elevated)]/50 transition-colors cursor-pointer"
+        >
+          <div class="min-w-0">
+            <span class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">TELEMETRÍA GPS</span>
+            <span class="block font-mono text-[10px] uppercase tracking-wider text-[var(--text-muted)] tabular-nums mt-0.5 truncate">
+              ${gpsDaysCount > 0 || gpsTripsCount > 0
+                ? `${gpsDaysCount} DÍAS · ${gpsTripsCount} VIAJES GUARDADOS`
+                : (gpsCfg.username ? 'CONFIGURACIÓN GUARDADA' : 'TOCA PARA CONFIGURAR')}
+            </span>
           </div>
-
-          <div class="space-y-1">
-            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">CONTRASEÑA IOPGPS</label>
-            <input 
-              id="set-gps-pass" 
-              type="password" 
-              autocomplete="current-password"
-              placeholder="••••••••"
-              value="${gpsCfg.password}" 
-              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
-            />
+          <div class="flex items-center gap-2.5 shrink-0">
+            <span id="gps-settings-status-badge" class="font-mono text-[10px] uppercase tracking-widest tabular-nums ${profile.gpsCache?.live?.totalMile ? 'text-[var(--accent-volt)]' : (isTemporaryBridge ? 'text-[var(--accent-amber)]' : 'text-[var(--text-secondary)]')}">
+              ${profile.gpsCache?.live?.totalMile
+                ? `${Number(profile.gpsCache.live.totalMile).toLocaleString('es-CO')} KM · ${Number(profile.gpsCache.live.externalVoltage || 0).toFixed(2)}V`
+                : (isTemporaryBridge ? 'PUENTE TEMPORAL' : (gpsCfg.username ? 'CONECTADO' : 'SIN VINCULAR'))}
+            </span>
+            <svg id="gps-config-accordion-chevron" class="w-4 h-4 text-[var(--text-secondary)] transition-transform duration-200 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
           </div>
+        </button>
 
-          <div class="space-y-1">
-            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">IMEI DEL DISPOSITIVO (OPCIONAL)</label>
-            <input 
-              id="set-gps-imei" 
-              type="text" 
-              placeholder="Auto-detectar de la cuenta"
-              value="${gpsCfg.imei}" 
-              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm tabular-nums" 
-            />
-          </div>
-
-          <div class="space-y-1">
-            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">FECHA DE INSTALACIÓN GPS</label>
-            <input 
-              id="set-gps-start" 
-              type="date" 
-              value="${gpsCfg.installStartDate || DEFAULT_GPS_CONFIG.installStartDate}" 
-              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm tabular-nums" 
-            />
-          </div>
-
-          <div class="space-y-1 sm:col-span-2">
-            <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">PROXY PRIVADO (OPCIONAL)</label>
-            <input 
-              id="set-gps-proxy-url" 
-              type="url" 
-              placeholder="https://tu-enlace.workers.dev"
-              value="${gpsCfg.proxyUrl || ''}" 
-              class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
-            />
-            <span class="block text-[9px] text-[var(--text-muted)] tracking-tight">Enlace propio para sincronizar sin puente temporal.</span>
-          </div>
-
-          <div class="sm:col-span-2 pt-3 border-t border-[var(--line-hair)] flex items-center justify-between font-mono">
-            <div>
-              <span class="font-mono text-xs font-medium text-[var(--text-primary)] block">ALERTAS DE ESTACIÓN (NOTIFICACIONES)</span>
-              <span class="text-[10px] text-[var(--text-secondary)] block">Avisa al detenerse en una estación conocida para registrar tanqueada.</span>
+        <div id="gps-config-accordion-body" class="hidden border-t border-[var(--line-hair)] p-5 space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+            <div class="space-y-1">
+              <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">USUARIO IOPGPS</label>
+              <input 
+                id="set-gps-user" 
+                type="text" 
+                autocomplete="username"
+                placeholder="Tu usuario o placa"
+                value="${gpsCfg.username}" 
+                class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
+              />
             </div>
-            <input id="set-gps-station-alerts" type="checkbox" ${gpsCfg.stationAlertsEnabled ? 'checked' : ''} class="w-4 h-4 rounded-sm accent-[var(--accent-amber)] cursor-pointer" />
-          </div>
-        </div>
 
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[var(--line-hair)] font-mono">
-          <span id="gps-settings-meta" class="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider tabular-nums">
-            ${isTemporaryBridge ? '<span class="text-[var(--accent-amber)]">PUENTE TEMPORAL</span> · ' : ''}${profile.gpsCache?.days ? `${Object.keys(profile.gpsCache.days).length} DÍAS EN MEMORIA` : 'SE RECUERDA AUTOMÁTICAMENTE AL GUARDAR'}${profile.gpsCache?.live?.address ? ` · ${String(profile.gpsCache.live.address).split(',')[0].toUpperCase()}` : ''}
-          </span>
-          <button id="sync-gps-now-btn" type="button" class="h-10 px-5 border border-[var(--accent-amber)] text-[var(--accent-amber)] hover:bg-[var(--accent-amber)] hover:text-[var(--bg-void)] font-mono text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer active:scale-95">
-            Guardar y sincronizar GPS
-          </button>
+            <div class="space-y-1">
+              <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">CONTRASEÑA IOPGPS</label>
+              <input 
+                id="set-gps-pass" 
+                type="password" 
+                autocomplete="current-password"
+                placeholder="••••••••"
+                value="${gpsCfg.password}" 
+                class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
+              />
+            </div>
+
+            <div class="space-y-1">
+              <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">IMEI DEL DISPOSITIVO (OPCIONAL)</label>
+              <input 
+                id="set-gps-imei" 
+                type="text" 
+                placeholder="Auto-detectar de la cuenta"
+                value="${gpsCfg.imei}" 
+                class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm tabular-nums" 
+              />
+            </div>
+
+            <div class="space-y-1">
+              <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">FECHA DE INSTALACIÓN GPS</label>
+              <input 
+                id="set-gps-start" 
+                type="date" 
+                value="${gpsCfg.installStartDate || DEFAULT_GPS_CONFIG.installStartDate}" 
+                class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm tabular-nums" 
+              />
+            </div>
+
+            <div class="space-y-1 sm:col-span-2">
+              <label class="block font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">PROXY PRIVADO (OPCIONAL)</label>
+              <input 
+                id="set-gps-proxy-url" 
+                type="url" 
+                placeholder="https://tu-enlace.workers.dev"
+                value="${gpsCfg.proxyUrl || ''}" 
+                class="w-full bg-transparent border-0 border-b border-[var(--line-hair)] focus:border-[var(--accent-amber)] transition-colors py-2 outline-none text-[var(--text-primary)] font-mono text-sm" 
+              />
+              <span class="block text-[9px] text-[var(--text-muted)] tracking-tight">Enlace propio para sincronizar sin puente temporal.</span>
+            </div>
+
+            <div class="sm:col-span-2 pt-3 border-t border-[var(--line-hair)] flex items-center justify-between font-mono">
+              <div>
+                <span class="font-mono text-xs font-medium text-[var(--text-primary)] block">ALERTAS DE ESTACIÓN (NOTIFICACIONES)</span>
+                <span class="text-[10px] text-[var(--text-secondary)] block">Avisa al detenerse en una estación conocida para registrar tanqueada.</span>
+              </div>
+              <input id="set-gps-station-alerts" type="checkbox" ${gpsCfg.stationAlertsEnabled ? 'checked' : ''} class="w-4 h-4 rounded-sm accent-[var(--accent-amber)] cursor-pointer" />
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-[var(--line-hair)] font-mono">
+            <span id="gps-settings-meta" class="text-[10px] text-[var(--text-secondary)] uppercase tracking-wider tabular-nums">
+              ${isTemporaryBridge ? '<span class="text-[var(--accent-amber)]">PUENTE TEMPORAL</span> · ' : ''}${gpsDaysCount > 0 ? `${gpsDaysCount} DÍAS · ${gpsTripsCount} VIAJES` : 'SE RECUERDA AUTOMÁTICAMENTE AL GUARDAR'}${profile.gpsCache?.live?.address ? ` · ${String(profile.gpsCache.live.address).split(',')[0].toUpperCase()}` : ''}
+            </span>
+            <button id="sync-gps-now-btn" type="button" class="h-10 px-5 border border-[var(--accent-amber)] text-[var(--accent-amber)] hover:bg-[var(--accent-amber)] hover:text-[var(--bg-void)] font-mono text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer active:scale-95">
+              Guardar y sincronizar GPS
+            </button>
+          </div>
         </div>
       </section>
 
@@ -1206,6 +1230,22 @@ export async function renderSettingsView(container) {
     });
   }
 
+  // Collapsible GPS Telemetry Accordion Toggle
+  const gpsAccordionBtn = container.querySelector('#gps-config-accordion-toggle');
+  const gpsAccordionBody = container.querySelector('#gps-config-accordion-body');
+  const gpsAccordionChevron = container.querySelector('#gps-config-accordion-chevron');
+  if (gpsAccordionBtn && gpsAccordionBody) {
+    gpsAccordionBtn.addEventListener('click', () => {
+      const willOpen = gpsAccordionBody.classList.contains('hidden');
+      playHorologyTick(willOpen ? 1150 : 920, 0.012, 0.02);
+      gpsAccordionBody.classList.toggle('hidden', !willOpen);
+      gpsAccordionBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (gpsAccordionChevron) {
+        gpsAccordionChevron.classList.toggle('rotate-180', willOpen);
+      }
+    });
+  }
+
   // Sync GPS Telemetry Button Handler
   const syncGpsBtn = container.querySelector('#sync-gps-now-btn');
   if (syncGpsBtn) {
@@ -1245,7 +1285,7 @@ export async function renderSettingsView(container) {
         if (store && typeof store.setState === 'function') {
           store.setState({ vehicleProfile: profile });
         }
-        const res = await syncGpsTelemetry({ forceFullBackfill: true, silent: false });
+        const res = await syncGpsTelemetry({ forceFullBackfill: true, retryEmptyDrivenDays: true, silent: false });
         if (res && res.ok) {
           renderSettingsView(container);
         } else {

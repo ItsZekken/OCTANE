@@ -483,6 +483,9 @@ export function mergeTripsMetaMaps(baseMeta = null, incomingMeta = null) {
         if (newer.tracksUnavailable === false) {
             delete out[dateKey].tracksUnavailable;
         }
+        if (newer.emptyUpstreamConfirmed === false) {
+            delete out[dateKey].emptyUpstreamConfirmed;
+        }
     }
 
     return out;

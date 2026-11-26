@@ -277,8 +277,9 @@ export function sanitizeSnapshotForCloud(snapshot) {
             if (gpsCache.tripsMeta && typeof gpsCache.tripsMeta === 'object') {
                 for (const dateKey of Object.keys(gpsCache.tripsMeta)) {
                     const meta = gpsCache.tripsMeta[dateKey];
-                    if (meta && typeof meta === 'object' && 'tracksUnavailable' in meta) {
-                        delete meta.tracksUnavailable;
+                    if (meta && typeof meta === 'object') {
+                        if ('tracksUnavailable' in meta) delete meta.tracksUnavailable;
+                        if ('emptyUpstreamConfirmed' in meta) delete meta.emptyUpstreamConfirmed;
                     }
                 }
             }

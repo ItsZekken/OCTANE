@@ -22,6 +22,7 @@ import {
     groupTripsByDay,
     computeTripsSummary,
     classifyTripDatesToFetch,
+    getGpsConfig,
     IOPGPS_INSTALL_DATE
 } from '../../core/iopgps-sync.js';
 import { createRouteMap } from '../gps/gps-route-map.js';
@@ -50,6 +51,8 @@ let activeTrip = null;
 let isRefreshing = false;
 let isLoading = false;
 let loadRequestToken = 0;
+let archiveProgressLabel = '';
+let modalStoreUnsub = null;
 
 function resolveTripPlaceLabel(trip, endType = 'start', preferRaw = false) {
     if (!trip) return endType === 'start' ? 'Origen' : 'Destino';
@@ -79,7 +82,7 @@ function refreshGeospatialContext(profile, fallbackTrips = []) {
 /**
  * Resolves start and end YYYY-MM-DD dates for a given scope.
  */
-function resolveScopeDates(scope) {
+function resolveScopeDates(scope, profile = null) {
     const today = todayLocalYmd();
 
     if (scope === '7days') {
@@ -89,7 +92,16 @@ function resolveScopeDates(scope) {
     }
 
     if (scope === 'all') {
-        return { start: IOPGPS_INSTALL_DATE || '2026-02-01', end: today };
+        const activeProfile = profile || store.getState()?.vehicleProfile || null;
+        const cfg = getGpsConfig(activeProfile);
+        const candidates = [cfg.installDate || IOPGPS_INSTALL_DATE || '2026-02-01'];
+        const daysObj = activeProfile?.gpsCache?.days;
+        if (daysObj && typeof daysObj === 'object') {
+            const firstDay = Object.keys(daysObj).sort()[0];
+            if (firstDay) candidates.push(firstDay);
+        }
+        const start = candidates.filter(Boolean).sort()[0] || '2026-02-01';
+        return { start, end: today };
     }
 
     // Default 'cycle': active tank cycle
@@ -190,7 +202,7 @@ function handleBackAction(fromPopState = false) {
  * Hydrates in-memory modal state from local IndexedDB cache in 0 ms (no network).
  */
 function hydrateFromCachedProfile(profile, scope) {
-    const { start, end } = resolveScopeDates(scope);
+    const { start, end } = resolveScopeDates(scope, profile);
     const cached = getCachedGpsTrips(start, end, profile);
     const fuelPriceCop = Number(profile?.fuelPriceCop) || 16000;
     const baseEff = Number(profile?.benchmarkEff) || Number(profile?.defaultEfficiencyKmGal) || 33.71;
@@ -221,8 +233,29 @@ export async function openGpsTripsModal(options = {}) {
     currentLevel = 'days';
     activeDay = null;
     activeTrip = null;
+    archiveProgressLabel = '';
 
     modalRootEl.classList.remove('hidden');
+
+    // Subscribe to live store updates so background historical archiving updates Level 0 in real time
+    if (modalStoreUnsub) {
+        try { modalStoreUnsub(); } catch (_) {}
+        modalStoreUnsub = null;
+    }
+    if (store && typeof store.subscribe === 'function') {
+        modalStoreUnsub = store.subscribe((nextState, prevState) => {
+            if (!modalRootEl || modalRootEl.classList.contains('hidden')) return;
+            const nextTripsMap = nextState?.vehicleProfile?.gpsCache?.tripsByDate;
+            const prevTripsMap = prevState?.vehicleProfile?.gpsCache?.tripsByDate;
+            if (nextTripsMap && nextTripsMap !== prevTripsMap) {
+                const prevCount = currentTrips.length;
+                hydrateFromCachedProfile(nextState.vehicleProfile, currentScope);
+                if (currentLevel === 'days' && currentTrips.length !== prevCount) {
+                    renderLevelDays();
+                }
+            }
+        });
+    }
 
     // 1. Instant zero-latency cache load
     const profile = await getVehicleProfile().catch(() => null);
@@ -244,6 +277,11 @@ export function closeGpsTripsModal() {
     loadRequestToken++;
     isLoading = false;
     isRefreshing = false;
+    archiveProgressLabel = '';
+    if (modalStoreUnsub) {
+        try { modalStoreUnsub(); } catch (_) {}
+        modalStoreUnsub = null;
+    }
     if (routeMapController) {
         try { routeMapController.destroy(); } catch (_) {}
         routeMapController = null;
@@ -273,12 +311,15 @@ async function loadTripsData(opts = {}) {
     } else {
         isLoading = true;
     }
+    archiveProgressLabel = requestedScope === 'all' ? 'ARCHIVANDO HISTORIAL...' : '';
     renderHeaderControls();
 
     try {
-        const { start, end } = resolveScopeDates(requestedScope);
+        const baseProfile = await getVehicleProfile().catch(() => null);
+        const { start, end } = resolveScopeDates(requestedScope, baseProfile);
         const res = await fetchGpsCycleTrips(start, end, {
             forceRefresh: force,
+            retryEmptyDrivenDays: Boolean(force && requestedScope === 'all'),
             onProgress: (prog) => {
                 if (reqToken !== loadRequestToken || requestedScope !== currentScope) return;
                 const progTrips = Array.isArray(prog?.trips) ? prog.trips : [];
@@ -290,6 +331,10 @@ async function loadTripsData(opts = {}) {
                 currentDays = groupTripsByDay(progTrips, { fuelPriceCop, baseEff });
                 currentSummary = prog?.summary || computeTripsSummary(progTrips, [], { fuelPriceCop, baseEff });
                 refreshGeospatialContext(snapProfile, progTrips);
+
+                if (prog?.totalWindows > 1) {
+                    archiveProgressLabel = `ARCHIVANDO · ${prog.completedWindows}/${prog.totalWindows}`;
+                }
 
                 // Stream updates cleanly on Level 0 without interrupting active map inspection
                 if (currentLevel === 'days' && modalRootEl && !modalRootEl.classList.contains('hidden')) {
@@ -325,6 +370,7 @@ async function loadTripsData(opts = {}) {
         if (reqToken === loadRequestToken) {
             isLoading = false;
             isRefreshing = false;
+            archiveProgressLabel = '';
             if (modalRootEl && !modalRootEl.classList.contains('hidden')) {
                 renderView();
             }
@@ -387,7 +433,7 @@ function renderLevelDays() {
                     ${totalKm.toLocaleString('es-CO')} <span class="text-sm font-mono tracking-widest text-[var(--accent-amber)] font-normal uppercase">KM</span>
                 </div>
                 <!-- Menú Selector de Alcance Discreto (Dropdown) -->
-                <div class="mt-3 flex items-center justify-center">
+                <div class="mt-3 flex flex-col items-center justify-center gap-1.5">
                     <div class="relative inline-block">
                         <button id="gps-scope-trigger" type="button" class="inline-flex items-center gap-1.5 px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--line-hair)] rounded-full bg-[var(--bg-elevated)]/30 active:scale-95 transition-all cursor-pointer">
                             <span>${activeScopeText}</span>
@@ -399,6 +445,9 @@ function renderLevelDays() {
                             <button data-scope-opt="all" class="w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider hover:bg-white/5 ${currentScope === 'all' ? 'text-[var(--accent-amber)] font-bold' : 'text-[var(--text-secondary)]'}">Historial Completo</button>
                         </div>
                     </div>
+                    <span id="gps-archive-progress" class="font-mono text-[9px] uppercase tracking-[0.18em] text-[var(--accent-amber)] tabular-nums ${(isLoading || isRefreshing) && archiveProgressLabel ? '' : 'hidden'}">
+                        ${archiveProgressLabel}
+                    </span>
                 </div>
             </div>
 
@@ -765,6 +814,16 @@ function renderHeaderControls() {
             refreshBtn.classList.add('animate-spin', 'text-[var(--accent-amber)]');
         } else {
             refreshBtn.classList.remove('animate-spin', 'text-[var(--accent-amber)]');
+        }
+    }
+    const progEl = modalRootEl?.querySelector('#gps-archive-progress');
+    if (progEl) {
+        if ((isLoading || isRefreshing) && archiveProgressLabel) {
+            progEl.textContent = archiveProgressLabel;
+            progEl.classList.remove('hidden');
+        } else {
+            progEl.textContent = '';
+            progEl.classList.add('hidden');
         }
     }
 }

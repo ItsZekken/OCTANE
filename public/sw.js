@@ -4,7 +4,7 @@
  * Transparent pass-through for Firebase Auth & Cloud Firestore requests.
  */
 
-const CACHE_NAME = 'octane-v1.0.13';
+const CACHE_NAME = 'octane-v1.0.14';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',

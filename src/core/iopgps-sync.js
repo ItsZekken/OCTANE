@@ -45,7 +45,7 @@ export const DEFAULT_IOPGPS_CONFIG = Object.freeze({
 export const DEFAULT_GPS_CONFIG = DEFAULT_IOPGPS_CONFIG;
 
 const TOKEN_TTL_MS = 6 * 24 * 60 * 60 * 1000; // 6 days (server token lasts 7 days)
-export const MAX_TRIP_FETCH_WINDOW_DAYS = 10;
+export const MAX_TRIP_FETCH_WINDOW_DAYS = 5;
 export const TODAY_TRIPS_TTL_MS = 5 * 60 * 1000; // 5 min freshness TTL for today's open trips
 let activeSyncPromise = null;
 let activeTripBackfillPromise = null;
@@ -523,6 +523,9 @@ export async function fetchIopgps(pathWithQuery, options = {}) {
     if (res.status === 401 && !options.isRetry) {
         const auth = await loginIopgps(cfg);
         return fetchIopgps(pathWithQuery, { ...options, token: auth.accessToken, isRetry: true });
+    }
+    if (!res.ok) {
+        throw new Error(`HTTP ${res.status} al consultar GPS`);
     }
 
     const json = await res.json();
@@ -1767,6 +1770,7 @@ export function classifyTripDatesToFetch(startDateStr, endDateStr, profile = nul
     const nowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
     const forceRefresh = Boolean(options.forceRefresh);
     const forceFullRefetch = Boolean(options.forceFullRefetch);
+    const retryEmptyDrivenDays = Boolean(options.retryEmptyDrivenDays);
     const todayTtlMs = Number.isFinite(Number(options.todayTtlMs)) ? Number(options.todayTtlMs) : TODAY_TRIPS_TTL_MS;
     const requireTracks = options.requireTracks !== false;
 
@@ -1783,9 +1787,27 @@ export function classifyTripDatesToFetch(startDateStr, endDateStr, profile = nul
     const tripsByDate = (gpsCache.tripsByDate && typeof gpsCache.tripsByDate === 'object') ? gpsCache.tripsByDate : {};
     const tripsMeta = (gpsCache.tripsMeta && typeof gpsCache.tripsMeta === 'object') ? gpsCache.tripsMeta : {};
     const daysMap = (gpsCache.days && typeof gpsCache.days === 'object') ? gpsCache.days : {};
+    const syncedDayWindows = (gpsCache.syncedDayWindows && typeof gpsCache.syncedDayWindows === 'object') ? gpsCache.syncedDayWindows : {};
     const live = gpsCache.live || null;
     const lastTripsSyncedDate = String(gpsCache.lastTripsSyncedDate || '').slice(0, 10);
     const lastTripsSyncedAtMs = gpsCache.lastTripsSyncedAt ? (Date.parse(gpsCache.lastTripsSyncedAt) || 0) : 0;
+
+    // Precompute synced past 30-day windows that actually contain at least one day entry
+    // (IOPGPS omits 0-km days from statistics/miles, so absent days inside a populated synced window had 0 km)
+    const populatedSyncedSpans = [];
+    const dayMapKeys = Object.keys(daysMap);
+    for (const [winKey, isSynced] of Object.entries(syncedDayWindows)) {
+        if (!isSynced) continue;
+        const parts = String(winKey).split('..');
+        if (parts.length !== 2) continue;
+        const [ws, we] = parts;
+        if (we < todayStr && dayMapKeys.some(dk => dk >= ws && dk <= we)) {
+            populatedSyncedSpans.push([ws, we]);
+        }
+    }
+
+    const isImplicitZeroDay = (d) =>
+        populatedSyncedSpans.some(([ws, we]) => d >= ws && d <= we);
 
     const datesToFetch = [];
     const zeroActivityPastDays = [];
@@ -1840,27 +1862,41 @@ export function classifyTripDatesToFetch(startDateStr, endDateStr, profile = nul
         const dayStat = daysMap[d] || null;
         const dayStatKm = dayStat ? (Number(dayStat.km ?? dayStat.miles) || 0) : null;
         const dayStatRuns = dayStat ? (Number(dayStat.runNo) || 0) : null;
-        const knownZeroDay = dayStat !== null && dayStatKm === 0 && dayStatRuns === 0;
+        const dayStatDriven = Boolean(dayStat && ((dayStatKm !== null && dayStatKm >= 0.5) || (dayStatRuns !== null && dayStatRuns > 0)));
+        const knownZeroDay = (dayStat !== null && dayStatKm === 0 && dayStatRuns === 0)
+            || (dayStat === null && isImplicitZeroDay(d));
 
-        if (!forceFullRefetch && dayTrips === undefined && knownZeroDay) {
-            zeroActivityPastDays.push(d);
+        const hasStoredTrips = Array.isArray(dayTrips) && dayTrips.length > 0;
+
+        if (!forceFullRefetch && !hasStoredTrips && knownZeroDay) {
+            if (dayTrips === undefined || !meta?.finalized) {
+                zeroActivityPastDays.push(d);
+            }
             sealedCount++;
             continue;
         }
 
         const missingTracks = requireTracks && dayHasMissingTracks(dayTrips);
+
+        // Legacy entries without `tripsMeta` are ONLY trusted as finalized when they actually have stored trips;
+        // legacy `[]` entries (which older versions wrote when >31-day queries returned empty) must be healed.
         const isFinalized = meta
             ? Boolean(meta.finalized || (meta.syncedOnDate && String(meta.syncedOnDate).slice(0, 10) > d))
-            : Boolean(
-                (dayTrips !== undefined && lastTripsSyncedDate && lastTripsSyncedDate > d) ||
-                (Array.isArray(dayTrips) && dayTrips.length > 0 && !lastTripsSyncedDate)
-            );
+            : Boolean(hasStoredTrips && (!lastTripsSyncedDate || lastTripsSyncedDate > d));
+
+        const missingDrivenTrips = Boolean(
+            dayStatDriven &&
+            !hasStoredTrips &&
+            (retryEmptyDrivenDays || !meta?.emptyUpstreamConfirmed)
+        );
 
         let reason = '';
         if (forceFullRefetch) {
             reason = 'force_full';
         } else if (dayTrips === undefined) {
             reason = 'missing';
+        } else if (missingDrivenTrips) {
+            reason = 'missing_driven_day';
         } else if (!isFinalized) {
             reason = 'unfinalized_past';
         } else if (missingTracks && !meta?.tracksUnavailable) {
@@ -1966,9 +2002,15 @@ export function groupDatesIntoFetchWindows(dates = [], maxSpanDays = MAX_TRIP_FE
  */
 export function isValidTravelApiResponse(travelRes) {
     if (!travelRes || typeof travelRes !== 'object') return false;
-    const code = travelRes.code ?? travelRes.resultBean?.code;
-    if (code !== undefined && code !== 0 && code !== 1) return false;
-    return Array.isArray(travelRes.data) || code === 0 || code === 1;
+    const rawCode = travelRes.code ?? travelRes.resultBean?.code;
+    if (rawCode !== undefined && rawCode !== null && rawCode !== '') {
+        const numCode = Number(rawCode);
+        if (!Number.isFinite(numCode) || (numCode !== 0 && numCode !== 1 && numCode !== 200)) {
+            return false;
+        }
+        return true;
+    }
+    return Array.isArray(travelRes.data);
 }
 
 function normalizeRawIopgpsTrips(rawTrips, { baseEff, fuelPriceCop, massKg }) {
@@ -2145,6 +2187,7 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
         nowMs,
         forceRefresh: Boolean(options.forceRefresh),
         forceFullRefetch: Boolean(options.forceFullRefetch),
+        retryEmptyDrivenDays: Boolean(options.retryEmptyDrivenDays),
         todayTtlMs: options.todayTtlMs,
         requireTracks: options.requireTracks !== false
     });
@@ -2248,7 +2291,32 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
         { order: options.windowOrder || 'desc', bridgeableDates: bridgeable }
     );
     const maxWindows = Number.isFinite(Number(options.maxWindows)) ? Math.max(1, Number(options.maxWindows)) : allWindows.length;
-    const windows = allWindows.slice(0, maxWindows);
+    const queue = allWindows.slice(0, maxWindows);
+    let totalWindowsEstimate = queue.length;
+    let completedWindows = 0;
+
+    const daysMapSnapshot = (profile?.gpsCache?.days && typeof profile.gpsCache.days === 'object')
+        ? profile.gpsCache.days
+        : {};
+    const isDayDrivenInStats = (d) => {
+        const st = daysMapSnapshot[d];
+        if (!st || typeof st !== 'object') return false;
+        return (Number(st.km ?? st.miles) || 0) >= 0.5 || (Number(st.runNo) || 0) > 0;
+    };
+    const buildWindowFromDates = (dateSlice) => {
+        const sorted = [...dateSlice].sort();
+        const ws = sorted[0];
+        const we = sorted[sorted.length - 1];
+        const startD = new Date(`${ws}T00:00:00-05:00`);
+        const endD = new Date(`${we}T23:59:59-05:00`);
+        return {
+            startYmd: ws,
+            endYmd: we,
+            startUnix: Math.floor(startD.getTime() / 1000),
+            endUnix: Math.floor(endD.getTime() / 1000),
+            dates: sorted
+        };
+    };
 
     const allFetchedIdles = [];
     const allNewlyFetchedTrips = [];
@@ -2256,40 +2324,85 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
     let consecutiveFailures = 0;
     const maxConsecutiveFailures = Number.isFinite(Number(options.maxConsecutiveFailures))
         ? Number(options.maxConsecutiveFailures)
-        : 2;
+        : 3;
     const delayMs = Math.max(0, Number(options.delayBetweenWindowsMs) || 0);
+    let processedCount = 0;
 
-    for (let wIdx = 0; wIdx < windows.length; wIdx++) {
-        const win = windows[wIdx];
-        if (wIdx > 0 && delayMs > 0) {
+    while (queue.length > 0) {
+        const win = queue.shift();
+        if (processedCount > 0 && delayMs > 0) {
             await new Promise((r) => setTimeout(r, delayMs));
         }
+        processedCount++;
 
         let travelRes = null;
         let idleRes = null;
+        let requestFailed = false;
         try {
             const rawResp = await fetchSingleTripWindowRaw(cfg, win, apiClient);
             travelRes = rawResp?.travelRes;
             idleRes = rawResp?.idleRes;
         } catch (err) {
             console.warn(`[OCTANE GPS] Trip window ${win.startYmd}..${win.endYmd} failed:`, err?.message);
+            requestFailed = true;
+        }
+
+        const isValid = !requestFailed && isValidTravelApiResponse(travelRes);
+        if (!isValid) {
+            if (!requestFailed) {
+                console.warn(
+                    `[OCTANE GPS] Invalid travel response for ${win.startYmd}..${win.endYmd}`,
+                    travelRes?.code ?? travelRes?.resultBean?.code,
+                    travelRes?.msg || travelRes?.message || ''
+                );
+            }
+            // Adaptive bisection: if a multi-day window fails (span limit or payload timeout), split in half and retry
+            if (Array.isArray(win.dates) && win.dates.length > 1) {
+                const mid = Math.ceil(win.dates.length / 2);
+                const olderHalf = win.dates.slice(0, mid);
+                const newerHalf = win.dates.slice(mid);
+                if (options.windowOrder === 'asc') {
+                    queue.unshift(buildWindowFromDates(olderHalf), buildWindowFromDates(newerHalf));
+                } else {
+                    queue.unshift(buildWindowFromDates(newerHalf), buildWindowFromDates(olderHalf));
+                }
+                totalWindowsEstimate += 1;
+                continue;
+            }
+
             consecutiveFailures++;
+            completedWindows++;
             if (consecutiveFailures >= maxConsecutiveFailures) break;
             continue;
         }
 
-        if (!isValidTravelApiResponse(travelRes)) {
-            console.warn(`[OCTANE GPS] Invalid travel response for ${win.startYmd}..${win.endYmd}`);
-            consecutiveFailures++;
-            if (consecutiveFailures >= maxConsecutiveFailures) break;
+        const rawTrips = Array.isArray(travelRes?.data) ? travelRes.data : [];
+        const rawIdles = Array.isArray(idleRes?.data) ? idleRes.data : [];
+
+        // Guard against silent upstream truncation: if a multi-day window with proven driving in gpsCache.days
+        // returns 0 trips, bisect down to 1-day queries before confirming upstream retention expiry.
+        if (
+            rawTrips.length === 0 &&
+            Array.isArray(win.dates) &&
+            win.dates.length > 1 &&
+            win.dates.some(d => d < todayStr && isDayDrivenInStats(d))
+        ) {
+            const mid = Math.ceil(win.dates.length / 2);
+            const olderHalf = win.dates.slice(0, mid);
+            const newerHalf = win.dates.slice(mid);
+            if (options.windowOrder === 'asc') {
+                queue.unshift(buildWindowFromDates(olderHalf), buildWindowFromDates(newerHalf));
+            } else {
+                queue.unshift(buildWindowFromDates(newerHalf), buildWindowFromDates(olderHalf));
+            }
+            totalWindowsEstimate += 1;
             continue;
         }
 
         consecutiveFailures = 0;
         fetchedWindowsCount++;
+        completedWindows++;
 
-        const rawTrips = Array.isArray(travelRes?.data) ? travelRes.data : [];
-        const rawIdles = Array.isArray(idleRes?.data) ? idleRes.data : [];
         if (rawIdles.length > 0) allFetchedIdles.push(...rawIdles);
 
         const normalizedTrips = normalizeRawIopgpsTrips(rawTrips, { baseEff, fuelPriceCop, massKg });
@@ -2320,12 +2433,20 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
             const returnedDayTrips = windowTripsByDate[d] || [];
             const prevMissingTracks = dayHasMissingTracks(prevDayTrips);
             const gotTracksBack = returnedDayTrips.some(t => Array.isArray(t.trackPoints) && t.trackPoints.length >= 2);
+            const hadStoredTrips = Array.isArray(prevDayTrips) && prevDayTrips.length > 0;
+            const emptyUpstreamConfirmed = Boolean(
+                isPast &&
+                isDayDrivenInStats(d) &&
+                returnedDayTrips.length === 0 &&
+                !hadStoredTrips
+            );
 
             windowMeta[d] = {
                 finalized: isPast,
                 syncedOnDate: todayStr,
                 syncedAt: nowIso,
-                ...(isPast && prevMissingTracks && !gotTracksBack ? { tracksUnavailable: true } : { tracksUnavailable: false })
+                ...(isPast && prevMissingTracks && !gotTracksBack ? { tracksUnavailable: true } : { tracksUnavailable: false }),
+                ...(emptyUpstreamConfirmed ? { emptyUpstreamConfirmed: true } : { emptyUpstreamConfirmed: false })
             };
         }
 
@@ -2373,8 +2494,8 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
                 const prog = buildReconciledResult(profile, allFetchedIdles, false, fetchedWindowsCount);
                 options.onProgress({
                     ...prog,
-                    completedWindows: wIdx + 1,
-                    totalWindows: windows.length
+                    completedWindows,
+                    totalWindows: Math.max(completedWindows, totalWindowsEstimate)
                 });
             } catch (_) {}
         }
@@ -2444,10 +2565,11 @@ export async function backfillMissingGpsTrips(options = {}) {
             const res = await fetchGpsCycleTrips(startDate, endDate, {
                 forceRefresh: false,
                 forceFullRefetch: Boolean(options.forceFullRefetch),
+                retryEmptyDrivenDays: Boolean(options.retryEmptyDrivenDays),
                 windowOrder: 'desc',
-                delayBetweenWindowsMs: options.delayBetweenWindowsMs !== undefined ? options.delayBetweenWindowsMs : 220,
+                delayBetweenWindowsMs: options.delayBetweenWindowsMs !== undefined ? options.delayBetweenWindowsMs : 180,
                 maxWindows: options.maxWindows,
-                maxConsecutiveFailures: 2,
+                maxConsecutiveFailures: 3,
                 onProgress: options.onProgress
             });
 
@@ -2686,6 +2808,7 @@ export async function syncGpsTelemetry(options = {}) {
                 backfillMissingGpsTrips({
                     startDate: installDate,
                     endDate: todayStr,
+                    retryEmptyDrivenDays: Boolean(options.forceFullBackfill || options.retryEmptyDrivenDays),
                     silent: true
                 }).catch(() => {});
             }

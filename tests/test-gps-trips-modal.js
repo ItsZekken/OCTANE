@@ -1,5 +1,8 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   groupTripsByDay,
@@ -10,6 +13,7 @@ import {
   buildCanonicalTripId,
   classifyTripDatesToFetch,
   groupDatesIntoFetchWindows,
+  isValidTravelApiResponse,
   fetchGpsCycleTrips
 } from '../src/core/iopgps-sync.js';
 import {
@@ -355,7 +359,7 @@ describe('Immutable-Past Incremental GPS Cache & Archiving', () => {
       skipCloudSync: true
     };
 
-    // 1. Initial load of 12-day span (Nov 15..Nov 26): chunks into <=10-day windows and skips 0-km Nov 16
+    // 1. Initial load of 12-day span (Nov 15..Nov 26): chunks into <=5-day windows and skips 0-km Nov 16
     const first = await fetchGpsCycleTrips('2026-11-15', '2026-11-26', {
       ...deps,
       todayStr: '2026-11-26',
@@ -363,7 +367,7 @@ describe('Immutable-Past Incremental GPS Cache & Archiving', () => {
     });
     assert.equal(first.fromCache, false);
     assert.equal(first.trips.length, 3);
-    assert.equal(apiCalls.length, 2, '12-day span must be split into 2 safe <=10-day windows');
+    assert.equal(apiCalls.length, 3, '12-day span must be split into 3 safe <=5-day windows');
     assert.equal(storedProfile.gpsCache.tripsMeta['2026-11-15'].finalized, true);
     assert.equal(storedProfile.gpsCache.tripsMeta['2026-11-16'].finalized, true);
     assert.equal(storedProfile.gpsCache.tripsMeta['2026-11-26'].finalized, false);
@@ -376,7 +380,7 @@ describe('Immutable-Past Incremental GPS Cache & Archiving', () => {
     });
     assert.equal(second.fromCache, true);
     assert.equal(second.trips.length, 3);
-    assert.equal(apiCalls.length, 2, 'Must make zero API calls when cache is fresh');
+    assert.equal(apiCalls.length, 3, 'Must make zero API calls when cache is fresh');
 
     // 3. Next day (Nov 27): fetches ONLY Nov 26 (unfinalized yesterday) + Nov 27 (today) in 1 tiny call
     const third = await fetchGpsCycleTrips('2026-11-15', '2026-11-27', {
@@ -384,8 +388,8 @@ describe('Immutable-Past Incremental GPS Cache & Archiving', () => {
       todayStr: '2026-11-27',
       nowMs: Date.parse('2026-11-27T15:00:00Z')
     });
-    assert.equal(apiCalls.length, 3, 'Only 1 incremental window for yesterday+today should be fetched');
-    const lastCallUrl = new URL(`https://example.test${apiCalls[2]}`);
+    assert.equal(apiCalls.length, 4, 'Only 1 incremental window for yesterday+today should be fetched');
+    const lastCallUrl = new URL(`https://example.test${apiCalls[3]}`);
     const spanSec = Number(lastCallUrl.searchParams.get('endTime')) - Number(lastCallUrl.searchParams.get('startTime'));
     assert.ok(spanSec <= 2 * 86400, `Expected <=2-day incremental fetch, got ${spanSec}s`);
     assert.equal(storedProfile.gpsCache.tripsMeta['2026-11-26'].finalized, true);
@@ -538,5 +542,125 @@ describe('Immutable-Past Incremental GPS Cache & Archiving', () => {
     assert.equal(ghostTrips.length, 4, 'Ghost Race must include all 4 accumulated trips across past + current cycles');
     assert.equal(ghostTrips[0].id, 't_nov_24', 'Fastest trip (1740s) must rank #1 (PB)');
     assert.equal(ghostTrips[0].rank, 1);
+  });
+
+  test('recovers poisoned legacy [] days proven driven in gpsCache.days and skips implicit zero days in syncedDayWindows', () => {
+    const profile = {
+      gpsCache: {
+        days: {
+          '2026-11-10': { date: '2026-11-10', km: 24.5, runNo: 2 }, // driven!
+          '2026-11-12': { date: '2026-11-12', km: 18.0, runNo: 2 }, // driven!
+          '2026-11-18': { date: '2026-11-18', km: 15.0, runNo: 1 }
+        },
+        syncedDayWindows: {
+          '2026-11-01..2026-11-17': true
+        },
+        // Legacy buggy cache wrote [] across all past days when >31-day query failed
+        tripsByDate: {
+          '2026-11-10': [],
+          '2026-11-11': [], // absent from daysMap inside populated syncedDayWindow -> implicit 0-km parked day!
+          '2026-11-12': [],
+          '2026-11-18': [{ id: 't18', date: '2026-11-18', distanceKm: 15, trackPoints: makeTrack(10.95, -74.80, 11.01, -74.85, 1795000000) }]
+        },
+        lastTripsSyncedDate: '2026-11-26'
+      }
+    };
+
+    const plan = classifyTripDatesToFetch('2026-11-10', '2026-11-18', profile, {
+      todayStr: '2026-11-26',
+      nowMs: Date.parse('2026-11-26T15:00:00Z')
+    });
+
+    assert.equal(plan.datesToFetch.includes('2026-11-10'), true, 'Poisoned [] driven day must be recovered');
+    assert.equal(plan.datesToFetch.includes('2026-11-12'), true, 'Poisoned [] driven day must be recovered');
+    assert.equal(plan.datesToFetch.includes('2026-11-11'), false, 'Implicit 0-km day in synced window must not be fetched');
+    assert.equal(plan.datesToFetch.includes('2026-11-18'), false, 'Legacy day with real trips + tracks stays sealed');
+  });
+
+  test('isValidTravelApiResponse handles numeric/string success codes and fetchGpsCycleTrips bisects failing multi-day windows', async () => {
+    assert.equal(isValidTravelApiResponse({ code: 0, data: [] }), true);
+    assert.equal(isValidTravelApiResponse({ code: '0', data: [] }), true);
+    assert.equal(isValidTravelApiResponse({ code: 200, data: [] }), true);
+    assert.equal(isValidTravelApiResponse({ code: '200', data: [] }), true);
+    assert.equal(isValidTravelApiResponse({ code: -1, msg: 'span exceeded' }), false);
+    assert.equal(isValidTravelApiResponse({ code: 500, msg: 'timeout' }), false);
+
+    let storedProfile = {
+      id: 'main',
+      fuelPriceCop: 16000,
+      benchmarkEff: 34,
+      gpsConfig: { enabled: true, username: 'demo_user', password: 'demo_password', imei: '000000000000001' },
+      gpsCache: {
+        days: {
+          '2026-11-14': { date: '2026-11-14', km: 12.1, runNo: 1 },
+          '2026-11-15': { date: '2026-11-15', km: 12.2, runNo: 1 },
+          '2026-11-16': { date: '2026-11-16', km: 12.3, runNo: 1 },
+          '2026-11-17': { date: '2026-11-17', km: 12.4, runNo: 1 }
+        },
+        tripsByDate: {},
+        tripsMeta: {}
+      }
+    };
+
+    const queriedSpansDays = [];
+    const mockApiClient = async (pathStr) => {
+      if (!pathStr.includes('/travel')) return { code: 0, data: [] };
+      const u = new URL(`https://example.test${pathStr}`);
+      const sUnix = Number(u.searchParams.get('startTime'));
+      const eUnix = Number(u.searchParams.get('endTime'));
+      const spanDays = Math.max(1, Math.ceil((eUnix - sUnix) / 86400));
+      queriedSpansDays.push(spanDays);
+
+      // Simulate strict upstream limit: reject any query > 2 days
+      if (spanDays > 2) {
+        return { code: -1, msg: 'Query time cannot exceed 2 days' };
+      }
+
+      const allMock = [
+        makeRawApiTrip('2026-11-14', 7, 12.1, 10.9587, -74.8067, 11.0181, -74.8516),
+        makeRawApiTrip('2026-11-15', 7, 12.2, 10.9587, -74.8067, 11.0181, -74.8516),
+        makeRawApiTrip('2026-11-16', 7, 12.3, 10.9587, -74.8067, 11.0181, -74.8516),
+        makeRawApiTrip('2026-11-17', 7, 12.4, 10.9587, -74.8067, 11.0181, -74.8516)
+      ];
+      const matched = allMock.filter(t => (t.startTime / 1000) >= sUnix && (t.startTime / 1000) <= eUnix);
+      return { code: '0', data: matched };
+    };
+
+    const res = await fetchGpsCycleTrips('2026-11-14', '2026-11-17', {
+      profileProvider: async () => JSON.parse(JSON.stringify(storedProfile)),
+      profileSaver: async (next) => {
+        storedProfile = {
+          ...storedProfile,
+          ...next,
+          gpsCache: {
+            ...(storedProfile.gpsCache || {}),
+            ...(next.gpsCache || {}),
+            tripsByDate: mergeTripsByDateMaps(storedProfile.gpsCache?.tripsByDate, next.gpsCache?.tripsByDate)
+          }
+        };
+        return JSON.parse(JSON.stringify(storedProfile));
+      },
+      apiClient: mockApiClient,
+      logsProvider: async () => [],
+      engineSnap: null,
+      skipCloudSync: true,
+      todayStr: '2026-11-26',
+      nowMs: Date.parse('2026-11-26T15:00:00Z')
+    });
+
+    assert.equal(res.trips.length, 4, 'Adaptive bisection must recover all 4 days after 4-day query fails');
+    assert.ok(queriedSpansDays.includes(4) && queriedSpansDays.includes(2), 'Should attempt 4-day then bisect into 2-day chunks');
+    assert.equal(storedProfile.gpsCache.tripsMeta['2026-11-14'].finalized, true);
+    assert.equal(storedProfile.gpsCache.tripsMeta['2026-11-17'].finalized, true);
+  });
+
+  test('view-settings.js hides GPS telemetry credentials inside a collapsed-by-default accordion with zero <p> tags', () => {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const settingsSrc = fs.readFileSync(path.resolve(__dirname, '../src/views/view-settings.js'), 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    assert.ok(settingsSrc.includes('id="gps-config-accordion-toggle"'), 'Accordion toggle button must exist');
+    assert.ok(settingsSrc.includes('id="gps-config-accordion-body" class="hidden'), 'GPS form body must be collapsed by default');
+    assert.equal(/<p[\s>]/i.test(settingsSrc), false, 'view-settings.js must keep zero <p> HTML tags');
   });
 });
