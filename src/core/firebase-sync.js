@@ -274,6 +274,15 @@ export function sanitizeSnapshotForCloud(snapshot) {
                 }
             }
 
+            if (gpsCache.tripsMeta && typeof gpsCache.tripsMeta === 'object') {
+                for (const dateKey of Object.keys(gpsCache.tripsMeta)) {
+                    const meta = gpsCache.tripsMeta[dateKey];
+                    if (meta && typeof meta === 'object' && 'tracksUnavailable' in meta) {
+                        delete meta.tracksUnavailable;
+                    }
+                }
+            }
+
             if (Array.isArray(gpsCache.voltageHistory) && gpsCache.voltageHistory.length > CLOUD_VOLTAGE_HISTORY_CAP) {
                 gpsCache.voltageHistory = gpsCache.voltageHistory.slice(-CLOUD_VOLTAGE_HISTORY_CAP);
             }
@@ -296,6 +305,9 @@ export function sanitizeSnapshotForCloud(snapshot) {
                     const toPrune = sortedDates.slice(0, sortedDates.length - CLOUD_MAX_TRIPS_DATES);
                     for (const dateKey of toPrune) {
                         delete tripsByDate[dateKey];
+                        if (profile?.gpsCache?.tripsMeta && dateKey in profile.gpsCache.tripsMeta) {
+                            delete profile.gpsCache.tripsMeta[dateKey];
+                        }
                     }
                 }
             }

@@ -11,7 +11,15 @@
 
 import { todayLocalYmd } from './date-utils.js';
 import { store, showToast } from './state.js';
-import { getVehicleProfile, saveVehicleProfile, getTelemetryLogs } from './db-local.js';
+import {
+    getVehicleProfile,
+    saveVehicleProfile,
+    getTelemetryLogs,
+    getCanonicalTripKey,
+    mergeTripsByDateMaps,
+    mergeTripsMetaMaps,
+    mergeGpsDaysMaps
+} from './db-local.js';
 import { calculateTelemetryModel } from './telemetry-engine.js';
 import { triggerCloudSync } from './firebase-sync.js';
 import { calculateDistanceMeters, checkStopNearStation, notifyGasStationStop } from './gas-station-matcher.js';
@@ -37,7 +45,11 @@ export const DEFAULT_IOPGPS_CONFIG = Object.freeze({
 export const DEFAULT_GPS_CONFIG = DEFAULT_IOPGPS_CONFIG;
 
 const TOKEN_TTL_MS = 6 * 24 * 60 * 60 * 1000; // 6 days (server token lasts 7 days)
+export const MAX_TRIP_FETCH_WINDOW_DAYS = 10;
+export const TODAY_TRIPS_TTL_MS = 5 * 60 * 1000; // 5 min freshness TTL for today's open trips
 let activeSyncPromise = null;
+let activeTripBackfillPromise = null;
+const inFlightTripWindows = new Map();
 
 /**
  * Pure JavaScript 32-bit lowercase MD5 implementation (RFC 1321).
@@ -1179,7 +1191,7 @@ export function getCachedGpsTrips(startDateStr, endDateStr, profile = null) {
         if (Array.isArray(dayTrips)) {
             for (const t of dayTrips) {
                 if (t) {
-                    const tid = t.id || `${t.startTimeMs}_${t.distanceKm}`;
+                    const tid = getCanonicalTripKey(t) || t.id || `${t.startTimeMs}_${t.distanceKm}`;
                     if (!seenIds.has(tid)) {
                         seenIds.add(tid);
                         trips.push(t);
@@ -1637,9 +1649,10 @@ export async function reconcileCachedGpsTripsNow({ profile = null, engineResults
         ...activeProfile,
         gpsCache: {
             ...activeProfile.gpsCache,
-            tripsByDate: reconciledMap
+            tripsByDate: reconciledMap,
+            lastTripsReconciledAt: new Date().toISOString()
         }
-    });
+    }, { authoritativeTripsReconcile: true });
 
     if (store && typeof store.setState === 'function') {
         store.setState({ vehicleProfile: updatedProfile });
@@ -1649,115 +1662,317 @@ export async function reconcileCachedGpsTripsNow({ profile = null, engineResults
 }
 
 /**
- * Fetches point-to-point trips (/rest/device/track/{imei}/travel) and computes physical
- * kinematics (accelerations, braking, traffic congestion, and solar A/C load) for a date range.
- * 
- * Persistent Date Cache:
- * - Checks profile.gpsCache.tripsByDate first. If all days in range (except today if not synchronized)
- *   are in cache and !options.forceRefresh, returns instantly from cache (fromCache: true, 0 ms).
- * - Enriches each trip with estGallons, estCostCop, and clean trackPoints.
- * - Saves normalized trips to profile.gpsCache.tripsByDate and persists in IndexedDB.
+ * Builds a deterministic, query-window-independent trip ID from start/end timestamps.
+ * Avoids index-based IDs (`trip_${startMs}_${idx}`) that change across query ranges.
  *
- * @param {string} startDateStr - "YYYY-MM-DD"
- * @param {string} endDateStr - "YYYY-MM-DD"
- * @param {Object} [options={}] - { forceRefresh: boolean }
- * @returns {Promise<{ trips: Array<Object>, summary: Object, fromCache: boolean }>}
+ * @param {number} startMs
+ * @param {number} [endMs=0]
+ * @param {number} [distKm=0]
+ * @returns {string}
  */
-export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {}) {
-    const profile = await getVehicleProfile().catch(() => null);
-    const cfg = getGpsConfig(profile);
-    const forceRefresh = Boolean(options.forceRefresh);
+export function buildCanonicalTripId(startMs, endMs = 0, distKm = 0) {
+    const s = Math.round(Number(startMs) || 0);
+    const e = Math.round(Number(endMs) || 0);
+    if (s > 0 && e > 0) return `trip_${s}_${e}`;
+    if (s > 0) return `trip_${s}`;
+    return `trip_${Date.now()}_${Math.round((Number(distKm) || 0) * 100)}`;
+}
 
-    const startD = new Date(`${startDateStr}T00:00:00-05:00`);
-    const endD = new Date(`${endDateStr}T23:59:59-05:00`);
-    if (isNaN(startD.getTime()) || isNaN(endD.getTime()) || startD > endD) {
-        return { trips: [], summary: null, fromCache: false };
+/**
+ * Parses a canonical YYYY-MM-DD date string into UTC midnight ms (DST-safe calendar arithmetic).
+ * @param {string} ymd
+ * @returns {number}
+ */
+function parseYmdUtcMs(ymd) {
+    const clean = String(ymd || '').slice(0, 10);
+    const match = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return NaN;
+    return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function formatUtcMsToYmd(ms) {
+    const d = new Date(ms);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+/**
+ * Shifts a YYYY-MM-DD calendar date by `deltaDays` (DST- and timezone-safe).
+ * @param {string} ymd
+ * @param {number} deltaDays
+ * @returns {string}
+ */
+export function shiftDateYmd(ymd, deltaDays) {
+    const base = parseYmdUtcMs(ymd);
+    if (!Number.isFinite(base)) return '';
+    return formatUtcMsToYmd(base + Math.trunc(deltaDays) * 86400000);
+}
+
+/**
+ * Enumerates every calendar YYYY-MM-DD date between startDateStr and endDateStr inclusive.
+ * Timezone- and DST-safe.
+ * @param {string} startDateStr
+ * @param {string} endDateStr
+ * @returns {Array<string>}
+ */
+export function enumerateDateRange(startDateStr, endDateStr) {
+    const startMs = parseYmdUtcMs(startDateStr);
+    const endMs = parseYmdUtcMs(endDateStr);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs > endMs) return [];
+
+    const out = [];
+    for (let cur = startMs; cur <= endMs; cur += 86400000) {
+        out.push(formatUtcMsToYmd(cur));
     }
+    return out;
+}
 
-    // Build day range list
-    const daysInRange = [];
-    const cur = new Date(startD.getTime());
-    while (cur <= endD) {
-        const y = cur.getFullYear();
-        const m = String(cur.getMonth() + 1).padStart(2, '0');
-        const d = String(cur.getDate()).padStart(2, '0');
-        daysInRange.push(`${y}-${m}-${d}`);
-        cur.setDate(cur.getDate() + 1);
-    }
-
-    const todayStr = todayLocalYmd();
-    const tripsByDate = profile?.gpsCache?.tripsByDate || {};
-
-    // Check if every day in range is present in cache:
-    // If today is in the range, it is only considered cached if tripsByDate[todayStr] exists AND
-    // profile.gpsCache.lastTripsSyncedDate === todayStr (i.e. synchronized today).
-    // Otherwise, today is not synchronized, so we must fetch.
-    const allDaysCached = daysInRange.length > 0 && daysInRange.every(d => {
-        if (d === todayStr) {
-            const isTodaySynced = tripsByDate[todayStr] !== undefined &&
-                profile?.gpsCache?.lastTripsSyncedDate === todayStr;
-            return isTodaySynced;
-        }
-        return tripsByDate[d] !== undefined;
+/**
+ * Checks whether a day's trip array contains any driven trip lacking full trackPoints geometry
+ * (for example, trip summaries imported from Firestore where heavy polylines were stripped).
+ * @param {Array<Object>} dayTrips
+ * @returns {boolean}
+ */
+export function dayHasMissingTracks(dayTrips) {
+    if (!Array.isArray(dayTrips) || dayTrips.length === 0) return false;
+    return dayTrips.some((t) => {
+        if (!t || typeof t !== 'object') return false;
+        const km = Number(t.distanceKm ?? t.mileageKm) || 0;
+        if (km <= 0) return false;
+        return !Array.isArray(t.trackPoints) || t.trackPoints.length < 2;
     });
+}
 
-    if (!forceRefresh && allDaysCached) {
-        const engineSnap = store.getState()?.telemetryEngineResults;
-        const closedCycles = engineSnap?.closedCycles || engineSnap?.allClosedCycles || engineSnap?.fullEraCycles || [];
-        const fuelPriceCop = Number(profile?.fuelPriceCop) || 16000;
-        const baseEff = Number(engineSnap?.adaptiveEff) ||
-            Number(profile?.benchmarkEff) ||
-            Number(profile?.defaultEfficiencyKmGal) ||
-            33.71;
+/**
+ * Pure planner that classifies every date in `[startDateStr, endDateStr]` into:
+ * - sealed past dates (already persisted in local storage — 0 API calls)
+ * - zero-activity past dates known from `gpsCache.days` (sealed locally — 0 API calls)
+ * - `datesToFetch`: ONLY missing, unfinalized, missing-track, or stale-today dates.
+ *
+ * Immutable-past invariant:
+ * Once a past day (`d < todayStr`) has been synced after day `d` ended and has complete
+ * tracks (or `tracksUnavailable` because upstream retention expired), it is NEVER re-fetched
+ * during normal syncs or standard refresh actions (`forceRefresh: true`).
+ *
+ * @param {string} startDateStr
+ * @param {string} endDateStr
+ * @param {Object|null} [profile=null]
+ * @param {Object} [options={}]
+ * @returns {{ allDays: Array<string>, datesToFetch: Array<string>, zeroActivityPastDays: Array<string>, sealedCount: number, reasonByDate: Object }}
+ */
+export function classifyTripDatesToFetch(startDateStr, endDateStr, profile = null, options = {}) {
+    const todayStr = String(options.todayStr || todayLocalYmd()).slice(0, 10);
+    const nowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
+    const forceRefresh = Boolean(options.forceRefresh);
+    const forceFullRefetch = Boolean(options.forceFullRefetch);
+    const todayTtlMs = Number.isFinite(Number(options.todayTtlMs)) ? Number(options.todayTtlMs) : TODAY_TRIPS_TTL_MS;
+    const requireTracks = options.requireTracks !== false;
 
-        const reconciledMap = (closedCycles.length > 0 || engineSnap?.fuelPhysicsModel?.mode === 'ridge')
-            ? reconcileTripsAgainstClosedCycles(
-                profile?.gpsCache?.tripsByDate || {},
-                closedCycles,
-                fuelPriceCop,
-                { fuelPhysicsModel: engineSnap?.fuelPhysicsModel }
-            )
-            : reconcileTripsAgainstClosedCycles(profile?.gpsCache?.tripsByDate || {}, [], fuelPriceCop);
-        const cachedTrips = getCachedGpsTrips(startDateStr, endDateStr, {
-            ...profile,
-            gpsCache: { ...(profile?.gpsCache || {}), tripsByDate: reconciledMap }
-        });
+    const cleanStart = String(startDateStr || '').slice(0, 10);
+    const rawEnd = String(endDateStr || '').slice(0, 10);
+    const effectiveEnd = rawEnd && todayStr && rawEnd > todayStr ? todayStr : rawEnd;
+    const allDays = enumerateDateRange(cleanStart, effectiveEnd);
 
-        // Re-hydrate any missing cost/gallons in cached trips from earlier versions
-        for (const t of cachedTrips) {
-            const km = Number(t.distanceKm ?? t.mileageKm) || 0;
-            if ((!t.estGallons || !t.estCostCop) && km > 0) {
-                t.estGallons = Number((km / baseEff).toFixed(3));
-                t.estCostCop = Math.round(t.estGallons * fuelPriceCop);
-            }
-        }
-        const summary = computeTripsSummary(cachedTrips, [], { fuelPriceCop, baseEff });
-        return {
-            trips: cachedTrips,
-            summary,
-            fromCache: true
-        };
+    if (allDays.length === 0) {
+        return { allDays: [], datesToFetch: [], zeroActivityPastDays: [], sealedCount: 0, reasonByDate: {} };
     }
 
-    const startUnix = Math.floor(startD.getTime() / 1000);
-    const endUnix = Math.floor(endD.getTime() / 1000);
+    const gpsCache = profile?.gpsCache || {};
+    const tripsByDate = (gpsCache.tripsByDate && typeof gpsCache.tripsByDate === 'object') ? gpsCache.tripsByDate : {};
+    const tripsMeta = (gpsCache.tripsMeta && typeof gpsCache.tripsMeta === 'object') ? gpsCache.tripsMeta : {};
+    const daysMap = (gpsCache.days && typeof gpsCache.days === 'object') ? gpsCache.days : {};
+    const live = gpsCache.live || null;
+    const lastTripsSyncedDate = String(gpsCache.lastTripsSyncedDate || '').slice(0, 10);
+    const lastTripsSyncedAtMs = gpsCache.lastTripsSyncedAt ? (Date.parse(gpsCache.lastTripsSyncedAt) || 0) : 0;
 
-    const [travelRes, idleRes] = await Promise.all([
-        fetchIopgps(`/rest/device/track/${encodeURIComponent(cfg.imei)}/travel?startTime=${startUnix}&endTime=${endUnix}&locationType=1&mapType=0&stayThreshold=180`),
-        fetchIopgps(`/rest/device/stayAccOn/report/list?startTime=${startUnix}&endTime=${endUnix}&imei=${encodeURIComponent(cfg.imei)}&currentPage=1&pageSize=300&mapType=0&zoneId=${encodeURIComponent(cfg.zoneId)}`).catch(() => null)
-    ]);
+    const datesToFetch = [];
+    const zeroActivityPastDays = [];
+    const reasonByDate = {};
+    let sealedCount = 0;
 
-    const rawTrips = Array.isArray(travelRes?.data) ? travelRes.data : [];
-    const rawIdles = Array.isArray(idleRes?.data) ? idleRes.data : [];
+    for (const d of allDays) {
+        if (d > todayStr) continue;
 
-    const baseEff = Number(store.getState()?.telemetryEngineResults?.adaptiveEff) ||
-        Number(profile?.benchmarkEff) ||
-        Number(profile?.defaultEfficiencyKmGal) ||
-        33.71;
-    const fuelPriceCop = Number(profile?.fuelPriceCop) || 16000;
-    const massKg = (Number(profile?.curbWeightKg) || 970) + 75;
+        if (d === todayStr) {
+            const todayTrips = tripsByDate[todayStr];
+            const todayMeta = tripsMeta[todayStr] || null;
+            const todaySyncedMs = (todayMeta?.syncedAt ? (Date.parse(todayMeta.syncedAt) || 0) : 0)
+                || (lastTripsSyncedDate === todayStr ? lastTripsSyncedAtMs : 0);
+            const cachedTodayKm = Array.isArray(todayTrips)
+                ? todayTrips.reduce((sum, t) => sum + (Number(t?.distanceKm ?? t?.mileageKm) || 0), 0)
+                : 0;
+            const liveTodayKm = live?.date === todayStr ? (Number(live.todayMile) || 0) : 0;
+            const dayStatKm = Number(daysMap[todayStr]?.km ?? daysMap[todayStr]?.miles) || 0;
+            const latestTodayKm = Math.max(liveTodayKm, dayStatKm);
+            const dayStatRuns = Number(daysMap[todayStr]?.runNo) || 0;
 
-    const trips = rawTrips.map((t, idx) => {
+            let reason = '';
+            if (forceFullRefetch) {
+                reason = 'force_full';
+            } else if (forceRefresh) {
+                reason = 'force_refresh';
+            } else if (todayTrips === undefined) {
+                reason = 'missing';
+            } else if (requireTracks && dayHasMissingTracks(todayTrips)) {
+                reason = 'missing_tracks';
+            } else if (todaySyncedMs <= 0) {
+                reason = 'today_stale';
+            } else if (latestTodayKm > cachedTodayKm + 0.35 || (dayStatRuns > 0 && todayTrips.length < dayStatRuns)) {
+                reason = 'today_activity';
+            } else if ((nowMs - todaySyncedMs) > todayTtlMs) {
+                reason = 'today_stale';
+            }
+
+            if (reason) {
+                datesToFetch.push(d);
+                reasonByDate[d] = reason;
+            } else {
+                sealedCount++;
+            }
+            continue;
+        }
+
+        // Past day (d < todayStr)
+        const dayTrips = tripsByDate[d];
+        const meta = tripsMeta[d] || null;
+        const dayStat = daysMap[d] || null;
+        const dayStatKm = dayStat ? (Number(dayStat.km ?? dayStat.miles) || 0) : null;
+        const dayStatRuns = dayStat ? (Number(dayStat.runNo) || 0) : null;
+        const knownZeroDay = dayStat !== null && dayStatKm === 0 && dayStatRuns === 0;
+
+        if (!forceFullRefetch && dayTrips === undefined && knownZeroDay) {
+            zeroActivityPastDays.push(d);
+            sealedCount++;
+            continue;
+        }
+
+        const missingTracks = requireTracks && dayHasMissingTracks(dayTrips);
+        const isFinalized = meta
+            ? Boolean(meta.finalized || (meta.syncedOnDate && String(meta.syncedOnDate).slice(0, 10) > d))
+            : Boolean(
+                (dayTrips !== undefined && lastTripsSyncedDate && lastTripsSyncedDate > d) ||
+                (Array.isArray(dayTrips) && dayTrips.length > 0 && !lastTripsSyncedDate)
+            );
+
+        let reason = '';
+        if (forceFullRefetch) {
+            reason = 'force_full';
+        } else if (dayTrips === undefined) {
+            reason = 'missing';
+        } else if (!isFinalized) {
+            reason = 'unfinalized_past';
+        } else if (missingTracks && !meta?.tracksUnavailable) {
+            reason = 'missing_tracks';
+        }
+
+        if (reason) {
+            datesToFetch.push(d);
+            reasonByDate[d] = reason;
+        } else {
+            sealedCount++;
+        }
+    }
+
+    return {
+        allDays,
+        datesToFetch,
+        zeroActivityPastDays,
+        sealedCount,
+        reasonByDate
+    };
+}
+
+/**
+ * Groups an arbitrary list of `YYYY-MM-DD` dates into minimal API fetch windows,
+ * each capped at `maxSpanDays` (well under IOPGPS's 31-day span limit).
+ * Never bridges over cached driven days; optionally bridges only over known zero-activity days.
+ *
+ * @param {Array<string>} [dates=[]]
+ * @param {number} [maxSpanDays=MAX_TRIP_FETCH_WINDOW_DAYS]
+ * @param {Object} [options={}] - { order: 'desc'|'asc', bridgeableDates: Set<string>|Array<string>|null }
+ * @returns {Array<{ startYmd: string, endYmd: string, startUnix: number, endUnix: number, dates: Array<string> }>}
+ */
+export function groupDatesIntoFetchWindows(dates = [], maxSpanDays = MAX_TRIP_FETCH_WINDOW_DAYS, options = {}) {
+    const cap = Math.max(1, Math.min(30, Math.trunc(Number(maxSpanDays) || MAX_TRIP_FETCH_WINDOW_DAYS)));
+    const order = options.order === 'asc' ? 'asc' : 'desc';
+    const bridgeSet = options.bridgeableDates instanceof Set
+        ? options.bridgeableDates
+        : (Array.isArray(options.bridgeableDates) ? new Set(options.bridgeableDates) : null);
+
+    const uniqueSorted = Array.from(
+        new Set(
+            (Array.isArray(dates) ? dates : [])
+                .map(d => String(d || '').slice(0, 10))
+                .filter(d => Number.isFinite(parseYmdUtcMs(d)))
+        )
+    ).sort();
+
+    if (uniqueSorted.length === 0) return [];
+
+    const canBridgeGap = (prevYmd, nextYmd) => {
+        const prevMs = parseYmdUtcMs(prevYmd);
+        const nextMs = parseYmdUtcMs(nextYmd);
+        const diffDays = Math.round((nextMs - prevMs) / 86400000);
+        if (diffDays <= 1) return true;
+        if (!bridgeSet || bridgeSet.size === 0) return false;
+        for (let cur = prevMs + 86400000; cur < nextMs; cur += 86400000) {
+            if (!bridgeSet.has(formatUtcMsToYmd(cur))) return false;
+        }
+        return true;
+    };
+
+    const chunks = [];
+    let wStart = uniqueSorted[0];
+    let wEnd = uniqueSorted[0];
+    let wDates = [uniqueSorted[0]];
+
+    const flush = () => {
+        const startD = new Date(`${wStart}T00:00:00-05:00`);
+        const endD = new Date(`${wEnd}T23:59:59-05:00`);
+        chunks.push({
+            startYmd: wStart,
+            endYmd: wEnd,
+            startUnix: Math.floor(startD.getTime() / 1000),
+            endUnix: Math.floor(endD.getTime() / 1000),
+            dates: [...wDates]
+        });
+    };
+
+    for (let i = 1; i < uniqueSorted.length; i++) {
+        const d = uniqueSorted[i];
+        const spanDays = Math.round((parseYmdUtcMs(d) - parseYmdUtcMs(wStart)) / 86400000) + 1;
+        if (spanDays <= cap && canBridgeGap(wEnd, d)) {
+            wEnd = d;
+            wDates.push(d);
+        } else {
+            flush();
+            wStart = d;
+            wEnd = d;
+            wDates = [d];
+        }
+    }
+    flush();
+
+    return order === 'desc' ? chunks.reverse() : chunks;
+}
+
+/**
+ * Checks whether an upstream IOPGPS `/travel` API response is structurally valid
+ * (preventing API/proxy errors from poisoning or wiping local trip cache).
+ * @param {any} travelRes
+ * @returns {boolean}
+ */
+export function isValidTravelApiResponse(travelRes) {
+    if (!travelRes || typeof travelRes !== 'object') return false;
+    const code = travelRes.code ?? travelRes.resultBean?.code;
+    if (code !== undefined && code !== 0 && code !== 1) return false;
+    return Array.isArray(travelRes.data) || code === 0 || code === 1;
+}
+
+function normalizeRawIopgpsTrips(rawTrips, { baseEff, fuelPriceCop, massKg }) {
+    const trips = (Array.isArray(rawTrips) ? rawTrips : []).map((t) => {
         const startMs = Number(t.startTime) || 0;
         const endMs = Number(t.endTime) || 0;
         const distKm = Number(t.mileage) || 0;
@@ -1816,7 +2031,7 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
         const lastPt = trackPoints.length > 0 ? trackPoints[trackPoints.length - 1] : null;
 
         return {
-            id: `trip_${startMs}_${idx}`,
+            id: buildCanonicalTripId(startMs, endMs, distKm),
             date: dateYmd,
             startTimeMs: startMs,
             startTimeUnix: Math.floor(startMs / 1000),
@@ -1860,31 +2075,261 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
         };
     }).sort((a, b) => b.startTimeMs - a.startTimeMs);
 
-    // Apply engine thermal dissipation and cold-start enrichment model across consecutive trips
     applyThermalDissipation(trips, { baseEff, fuelPriceCop });
+    return trips;
+}
 
-    // Group trips by date for persistent caching in profile.gpsCache.tripsByDate
-    const newTripsByDate = {};
-    for (const d of daysInRange) {
-        newTripsByDate[d] = [];
+async function fetchSingleTripWindowRaw(cfg, win, apiClient = fetchIopgps) {
+    const dedupeKey = `${cfg.imei || 'default'}:${win.startYmd}:${win.endYmd}`;
+    if (apiClient === fetchIopgps && inFlightTripWindows.has(dedupeKey)) {
+        return inFlightTripWindows.get(dedupeKey);
     }
-    for (const trip of trips) {
-        if (newTripsByDate[trip.date]) {
-            newTripsByDate[trip.date].push(trip);
-        } else {
-            newTripsByDate[trip.date] = [trip];
+
+    const reqPromise = (async () => {
+        const [travelRes, idleRes] = await Promise.all([
+            apiClient(`/rest/device/track/${encodeURIComponent(cfg.imei)}/travel?startTime=${win.startUnix}&endTime=${win.endUnix}&locationType=1&mapType=0&stayThreshold=180`),
+            apiClient(`/rest/device/stayAccOn/report/list?startTime=${win.startUnix}&endTime=${win.endUnix}&imei=${encodeURIComponent(cfg.imei)}&currentPage=1&pageSize=300&mapType=0&zoneId=${encodeURIComponent(cfg.zoneId)}`).catch(() => null)
+        ]);
+        return { travelRes, idleRes };
+    })();
+
+    if (apiClient === fetchIopgps) {
+        inFlightTripWindows.set(dedupeKey, reqPromise);
+        reqPromise.finally(() => {
+            if (inFlightTripWindows.get(dedupeKey) === reqPromise) {
+                inFlightTripWindows.delete(dedupeKey);
+            }
+        });
+    }
+
+    return reqPromise;
+}
+
+/**
+ * Fetches point-to-point trips (/rest/device/track/{imei}/travel) and computes physical
+ * kinematics for a date range using an **Immutable-Past, Incremental-Window** archive:
+ *
+ * - Past days (`d < today`) that are already sealed in `gpsCache.tripsByDate` + `tripsMeta`
+ *   with complete tracks are NEVER re-requested from the API.
+ * - Zero-activity past days known from `gpsCache.days` (`km === 0 && runNo === 0`) are
+ *   sealed locally with 0 API calls.
+ * - Only genuinely missing, unfinalized, missing-track, or stale-today dates are fetched,
+ *   chunked into <= 10-day windows (safe against IOPGPS's 31-day span limit).
+ * - Anti-wipe guarantee: API errors or upstream retention cutoffs NEVER overwrite previously
+ *   stored trips with `[]`.
+ *
+ * @param {string} startDateStr - "YYYY-MM-DD"
+ * @param {string} endDateStr - "YYYY-MM-DD"
+ * @param {Object} [options={}] - { forceRefresh, forceFullRefetch, onProgress, delayBetweenWindowsMs, maxWindows }
+ * @returns {Promise<{ trips: Array<Object>, summary: Object, fromCache: boolean, fetchedWindowsCount?: number, sealedCount?: number }>}
+ */
+export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {}) {
+    const profileProvider = typeof options.profileProvider === 'function' ? options.profileProvider : getVehicleProfile;
+    const profileSaver = typeof options.profileSaver === 'function' ? options.profileSaver : saveVehicleProfile;
+    const apiClient = typeof options.apiClient === 'function' ? options.apiClient : fetchIopgps;
+    const logsProvider = typeof options.logsProvider === 'function' ? options.logsProvider : getTelemetryLogs;
+    const todayStr = String(options.todayStr || todayLocalYmd()).slice(0, 10);
+    const nowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now();
+
+    let profile = await profileProvider().catch(() => null);
+    const cfg = getGpsConfig(profile);
+
+    const startMs = parseYmdUtcMs(startDateStr);
+    const endMs = parseYmdUtcMs(endDateStr);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs > endMs) {
+        return { trips: [], summary: null, fromCache: false, fetchedWindowsCount: 0, sealedCount: 0 };
+    }
+
+    const plan = classifyTripDatesToFetch(startDateStr, endDateStr, profile, {
+        todayStr,
+        nowMs,
+        forceRefresh: Boolean(options.forceRefresh),
+        forceFullRefetch: Boolean(options.forceFullRefetch),
+        todayTtlMs: options.todayTtlMs,
+        requireTracks: options.requireTracks !== false
+    });
+
+    const engineSnap = options.engineSnap !== undefined
+        ? options.engineSnap
+        : store.getState()?.telemetryEngineResults;
+    const closedCycles = engineSnap?.closedCycles || engineSnap?.allClosedCycles || engineSnap?.fullEraCycles || [];
+    const fuelPriceCop = Number(profile?.fuelPriceCop) || 16000;
+    const baseEff = Number(engineSnap?.adaptiveEff) ||
+        Number(profile?.benchmarkEff) ||
+        Number(profile?.defaultEfficiencyKmGal) ||
+        33.71;
+    const massKg = (Number(profile?.curbWeightKg) || 970) + 75;
+
+    // 1. Seal known zero-activity past days locally (0 API calls)
+    let didPersistAny = false;
+    if (profile && plan.zeroActivityPastDays.length > 0) {
+        const zeroTripsPatch = {};
+        const zeroMetaPatch = {};
+        const nowIso = new Date(nowMs).toISOString();
+        for (const d of plan.zeroActivityPastDays) {
+            if (profile?.gpsCache?.tripsByDate?.[d] === undefined) {
+                zeroTripsPatch[d] = [];
+            }
+            zeroMetaPatch[d] = {
+                finalized: true,
+                syncedOnDate: todayStr,
+                syncedAt: nowIso
+            };
+        }
+        profile = await profileSaver({
+            ...profile,
+            gpsCache: {
+                ...(profile.gpsCache || {}),
+                tripsByDate: mergeTripsByDateMaps(profile.gpsCache?.tripsByDate, zeroTripsPatch),
+                tripsMeta: mergeTripsMetaMaps(profile.gpsCache?.tripsMeta, zeroMetaPatch)
+            }
+        }).catch(() => profile);
+        if (!options.profileSaver) {
+            store.setState({ vehicleProfile: profile });
+        }
+        didPersistAny = true;
+    }
+
+    const buildReconciledResult = (activeProfile, rawIdles = [], fromCache = true, fetchedWindowsCount = 0) => {
+        const rawMap = activeProfile?.gpsCache?.tripsByDate || {};
+        const reconciledMap = (closedCycles.length > 0 || engineSnap?.fuelPhysicsModel?.mode === 'ridge')
+            ? reconcileTripsAgainstClosedCycles(
+                rawMap,
+                closedCycles,
+                fuelPriceCop,
+                { fuelPhysicsModel: engineSnap?.fuelPhysicsModel }
+            )
+            : reconcileTripsAgainstClosedCycles(rawMap, [], fuelPriceCop);
+        const scopedTrips = getCachedGpsTrips(startDateStr, endDateStr, {
+            ...(activeProfile || {}),
+            gpsCache: { ...(activeProfile?.gpsCache || {}), tripsByDate: reconciledMap }
+        });
+
+        for (const t of scopedTrips) {
+            const km = Number(t.distanceKm ?? t.mileageKm) || 0;
+            if ((!t.estGallons || !t.estCostCop) && km > 0) {
+                t.estGallons = Number((km / baseEff).toFixed(3));
+                t.estCostCop = Math.round(t.estGallons * fuelPriceCop);
+            }
+        }
+        const summary = computeTripsSummary(scopedTrips, rawIdles, { fuelPriceCop, baseEff });
+        return {
+            trips: scopedTrips,
+            summary,
+            fromCache,
+            fetchedWindowsCount,
+            sealedCount: plan.sealedCount
+        };
+    };
+
+    // 2. If every day in range is already cached & fresh -> 0 ms, ZERO API calls!
+    if (plan.datesToFetch.length === 0) {
+        return buildReconciledResult(profile, [], true, 0);
+    }
+
+    // Guard when GPS is not configured or has no IMEI (cannot query API)
+    if (!cfg.imei && apiClient === fetchIopgps) {
+        return buildReconciledResult(profile, [], true, 0);
+    }
+
+    // 3. Group ONLY missing/unfinalized/stale dates into <=10-day windows (newest first)
+    const bridgeable = new Set(plan.zeroActivityPastDays);
+    if (profile?.gpsCache?.tripsByDate) {
+        for (const [dk, arr] of Object.entries(profile.gpsCache.tripsByDate)) {
+            if (Array.isArray(arr) && arr.length === 0 && dk < todayStr) {
+                bridgeable.add(dk);
+            }
         }
     }
 
-    const engineSnap = store.getState()?.telemetryEngineResults;
-    const closedCycles = engineSnap?.closedCycles || engineSnap?.allClosedCycles || engineSnap?.fullEraCycles || [];
-    let finalTrips = trips;
+    const allWindows = groupDatesIntoFetchWindows(
+        plan.datesToFetch,
+        options.maxSpanDays || MAX_TRIP_FETCH_WINDOW_DAYS,
+        { order: options.windowOrder || 'desc', bridgeableDates: bridgeable }
+    );
+    const maxWindows = Number.isFinite(Number(options.maxWindows)) ? Math.max(1, Number(options.maxWindows)) : allWindows.length;
+    const windows = allWindows.slice(0, maxWindows);
 
-    if (profile) {
-        let mergedTripsByDate = {
-            ...(profile.gpsCache?.tripsByDate || {}),
-            ...newTripsByDate
-        };
+    const allFetchedIdles = [];
+    const allNewlyFetchedTrips = [];
+    let fetchedWindowsCount = 0;
+    let consecutiveFailures = 0;
+    const maxConsecutiveFailures = Number.isFinite(Number(options.maxConsecutiveFailures))
+        ? Number(options.maxConsecutiveFailures)
+        : 2;
+    const delayMs = Math.max(0, Number(options.delayBetweenWindowsMs) || 0);
+
+    for (let wIdx = 0; wIdx < windows.length; wIdx++) {
+        const win = windows[wIdx];
+        if (wIdx > 0 && delayMs > 0) {
+            await new Promise((r) => setTimeout(r, delayMs));
+        }
+
+        let travelRes = null;
+        let idleRes = null;
+        try {
+            const rawResp = await fetchSingleTripWindowRaw(cfg, win, apiClient);
+            travelRes = rawResp?.travelRes;
+            idleRes = rawResp?.idleRes;
+        } catch (err) {
+            console.warn(`[OCTANE GPS] Trip window ${win.startYmd}..${win.endYmd} failed:`, err?.message);
+            consecutiveFailures++;
+            if (consecutiveFailures >= maxConsecutiveFailures) break;
+            continue;
+        }
+
+        if (!isValidTravelApiResponse(travelRes)) {
+            console.warn(`[OCTANE GPS] Invalid travel response for ${win.startYmd}..${win.endYmd}`);
+            consecutiveFailures++;
+            if (consecutiveFailures >= maxConsecutiveFailures) break;
+            continue;
+        }
+
+        consecutiveFailures = 0;
+        fetchedWindowsCount++;
+
+        const rawTrips = Array.isArray(travelRes?.data) ? travelRes.data : [];
+        const rawIdles = Array.isArray(idleRes?.data) ? idleRes.data : [];
+        if (rawIdles.length > 0) allFetchedIdles.push(...rawIdles);
+
+        const normalizedTrips = normalizeRawIopgpsTrips(rawTrips, { baseEff, fuelPriceCop, massKg });
+        if (normalizedTrips.length > 0) allNewlyFetchedTrips.push(...normalizedTrips);
+
+        // Build per-date patch ONLY for this window's requested dates (+ any midnight-spanning trip dates)
+        const windowTripsByDate = {};
+        for (const d of win.dates) {
+            windowTripsByDate[d] = [];
+        }
+        for (const trip of normalizedTrips) {
+            if (!trip.date) continue;
+            if (!windowTripsByDate[trip.date]) {
+                windowTripsByDate[trip.date] = [];
+            }
+            windowTripsByDate[trip.date].push(trip);
+        }
+
+        // Re-read freshest profile before saving so concurrent writes are never clobbered
+        const freshProfile = await profileProvider().catch(() => profile);
+        const currentTripsByDate = freshProfile?.gpsCache?.tripsByDate || {};
+        const nowIso = new Date(Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now()).toISOString();
+        const windowMeta = {};
+
+        for (const d of win.dates) {
+            const isPast = d < todayStr;
+            const prevDayTrips = currentTripsByDate[d];
+            const returnedDayTrips = windowTripsByDate[d] || [];
+            const prevMissingTracks = dayHasMissingTracks(prevDayTrips);
+            const gotTracksBack = returnedDayTrips.some(t => Array.isArray(t.trackPoints) && t.trackPoints.length >= 2);
+
+            windowMeta[d] = {
+                finalized: isPast,
+                syncedOnDate: todayStr,
+                syncedAt: nowIso,
+                ...(isPast && prevMissingTracks && !gotTracksBack ? { tracksUnavailable: true } : { tracksUnavailable: false })
+            };
+        }
+
+        let mergedTripsByDate = mergeTripsByDateMaps(currentTripsByDate, windowTripsByDate);
         if (closedCycles.length > 0 || engineSnap?.fuelPhysicsModel?.mode === 'ridge' || Object.keys(mergedTripsByDate).length > 0) {
             mergedTripsByDate = reconcileTripsAgainstClosedCycles(
                 mergedTripsByDate,
@@ -1892,56 +2337,140 @@ export async function fetchGpsCycleTrips(startDateStr, endDateStr, options = {})
                 fuelPriceCop,
                 { fuelPhysicsModel: engineSnap?.fuelPhysicsModel }
             );
-            finalTrips = getCachedGpsTrips(startDateStr, endDateStr, {
-                ...profile,
-                gpsCache: { ...(profile.gpsCache || {}), tripsByDate: mergedTripsByDate }
-            });
         }
-        const logs = await getTelemetryLogs().catch(() => []);
+
+        const mergedTripsMeta = mergeTripsMetaMaps(freshProfile?.gpsCache?.tripsMeta, windowMeta);
+
+        if (freshProfile) {
+            const updatedGpsCache = {
+                ...(freshProfile.gpsCache || {}),
+                tripsByDate: mergedTripsByDate,
+                tripsMeta: mergedTripsMeta,
+                lastTripsSyncedAt: nowIso,
+                lastTripsSyncedDate: todayStr
+            };
+            profile = await profileSaver({
+                ...freshProfile,
+                gpsCache: updatedGpsCache
+            }).catch(() => ({ ...freshProfile, gpsCache: updatedGpsCache }));
+            if (!options.profileSaver) {
+                store.setState({ vehicleProfile: profile });
+            }
+            didPersistAny = true;
+        } else {
+            profile = {
+                gpsCache: {
+                    tripsByDate: mergedTripsByDate,
+                    tripsMeta: mergedTripsMeta,
+                    lastTripsSyncedAt: nowIso,
+                    lastTripsSyncedDate: todayStr
+                }
+            };
+        }
+
+        if (typeof options.onProgress === 'function') {
+            try {
+                const prog = buildReconciledResult(profile, allFetchedIdles, false, fetchedWindowsCount);
+                options.onProgress({
+                    ...prog,
+                    completedWindows: wIdx + 1,
+                    totalWindows: windows.length
+                });
+            } catch (_) {}
+        }
+    }
+
+    // 4. Station stop geofence check on newly fetched trips/idles & debounced cloud sync
+    if (profile && (allNewlyFetchedTrips.length > 0 || allFetchedIdles.length > 0)) {
+        const logs = await logsProvider().catch(() => []);
         const stationMatch = detectAndProcessStationStops({
-            trips: finalTrips,
-            idles: rawIdles,
+            trips: allNewlyFetchedTrips,
+            idles: allFetchedIdles,
             live: profile?.gpsCache?.live || null,
             profile,
             telemetryLogs: logs
         });
 
-        const updatedGpsCache = {
-            ...(profile.gpsCache || {}),
-            tripsByDate: mergedTripsByDate,
-            lastTripsSyncedAt: new Date().toISOString(),
-            lastTripsSyncedDate: todayStr,
-            ...(stationMatch.matchedStop ? {
-                notifiedStopIds: stationMatch.updatedNotifiedStopIds,
-                pendingStationMatch: stationMatch.pendingStationMatch
-            } : {})
-        };
-        const updatedProfile = await saveVehicleProfile({
-            ...profile,
-            gpsCache: updatedGpsCache
-        }).catch(() => profile);
-        store.setState({ vehicleProfile: updatedProfile });
-
-        if (stationMatch.matchedStop && stationMatch.station && cfg.stationAlertsEnabled === true) {
-            notifyGasStationStop(stationMatch.matchedStop, stationMatch.station).catch(() => {});
+        if (stationMatch.matchedStop) {
+            profile = await profileSaver({
+                ...profile,
+                gpsCache: {
+                    ...(profile.gpsCache || {}),
+                    notifiedStopIds: stationMatch.updatedNotifiedStopIds,
+                    pendingStationMatch: stationMatch.pendingStationMatch
+                }
+            }).catch(() => profile);
+            if (!options.profileSaver) {
+                store.setState({ vehicleProfile: profile });
+            }
+            if (stationMatch.station && cfg.stationAlertsEnabled === true) {
+                notifyGasStationStop(stationMatch.matchedStop, stationMatch.station).catch(() => {});
+            }
         }
-    } else if (closedCycles.length > 0 || engineSnap?.fuelPhysicsModel?.mode === 'ridge') {
-        const reconciledMap = reconcileTripsAgainstClosedCycles(
-            newTripsByDate,
-            closedCycles,
-            fuelPriceCop,
-            { fuelPhysicsModel: engineSnap?.fuelPhysicsModel }
-        );
-        finalTrips = Object.values(reconciledMap).flat().sort((a, b) => (Number(b.startTimeMs) || 0) - (Number(a.startTimeMs) || 0));
     }
 
-    const summary = computeTripsSummary(finalTrips, rawIdles, { fuelPriceCop, baseEff });
+    if (didPersistAny && !options.skipCloudSync && !options.profileSaver) {
+        try { triggerCloudSync(); } catch (_) {}
+    }
 
-    return {
-        trips: finalTrips,
-        summary,
-        fromCache: false
-    };
+    return buildReconciledResult(profile, allFetchedIdles, fetchedWindowsCount === 0, fetchedWindowsCount);
+}
+
+/**
+ * Non-blocking incremental historical archiver for GPS trips (`gpsCache.tripsByDate`).
+ * Walks from `todayStr` backwards to `installDate` in <= 10-day chunks, skipping every
+ * sealed past day and every zero-km day, permanently archiving past journeys in IndexedDB
+ * so GPS DATA and Ghost Race accumulate full multi-cycle history with zero repeat API calls.
+ *
+ * @param {Object} [options={}]
+ * @returns {Promise<Object|null>}
+ */
+export async function backfillMissingGpsTrips(options = {}) {
+    if (activeTripBackfillPromise && !options.forceFullRefetch) {
+        return activeTripBackfillPromise;
+    }
+
+    const runner = (async () => {
+        try {
+            const profile = await getVehicleProfile().catch(() => null);
+            const cfg = getGpsConfig(profile);
+            if (!cfg.enabled || !cfg.username || !cfg.password || !cfg.imei) {
+                return { ok: false, skipped: true };
+            }
+
+            const startDate = String(options.startDate || cfg.installDate || IOPGPS_INSTALL_DATE).slice(0, 10);
+            const endDate = String(options.endDate || todayLocalYmd()).slice(0, 10);
+
+            const res = await fetchGpsCycleTrips(startDate, endDate, {
+                forceRefresh: false,
+                forceFullRefetch: Boolean(options.forceFullRefetch),
+                windowOrder: 'desc',
+                delayBetweenWindowsMs: options.delayBetweenWindowsMs !== undefined ? options.delayBetweenWindowsMs : 220,
+                maxWindows: options.maxWindows,
+                maxConsecutiveFailures: 2,
+                onProgress: options.onProgress
+            });
+
+            return {
+                ok: true,
+                fromCache: Boolean(res?.fromCache),
+                fetchedWindowsCount: Number(res?.fetchedWindowsCount) || 0,
+                tripsCount: Array.isArray(res?.trips) ? res.trips.length : 0
+            };
+        } catch (err) {
+            console.warn('[OCTANE GPS] Background trip archive skipped:', err?.message);
+            return null;
+        }
+    })();
+
+    activeTripBackfillPromise = runner;
+    try {
+        return await runner;
+    } finally {
+        if (activeTripBackfillPromise === runner) {
+            activeTripBackfillPromise = null;
+        }
+    }
 }
 
 /**
@@ -1998,20 +2527,43 @@ export async function syncGpsTelemetry(options = {}) {
             const live = await fetchGpsLiveSnapshot(cfg.imei);
 
             // 2. Incremental backfill of daily telemetry from installDate (2026-02-01) to todayStr
-            const existingDays = { ...(profile?.gpsCache?.days || {}) };
+            //    Past 30-day windows are sealed in `syncedDayWindows` even when boundary days had 0 km;
+            //    the active tail window shrinks to only recent days since `lastSyncedDate` (yesterday..today).
+            let existingDays = { ...(profile?.gpsCache?.days || {}) };
+            const syncedDayWindows = { ...(profile?.gpsCache?.syncedDayWindows || {}) };
+            const lastSyncedDate = String(profile?.gpsCache?.lastSyncedDate || '').slice(0, 10);
             const windows = build30DayWindows(installDate, todayStr);
 
-            // Determine which windows need fetching:
-            // - Any window where startYmd or endYmd is missing from existingDays
-            // - Always refresh the last window (which contains today and recent days)
             for (let i = 0; i < windows.length; i++) {
                 const w = windows[i];
+                const winKey = `${w.startYmd}..${w.endYmd}`;
                 const isLastWindow = i === windows.length - 1;
-                const hasWindowCached = Boolean(existingDays[w.startYmd] && existingDays[w.endYmd]);
+                const isPastWindow = w.endYmd < todayStr;
+                const hasWindowCached = Boolean(
+                    syncedDayWindows[winKey] ||
+                    (existingDays[w.startYmd] && existingDays[w.endYmd])
+                );
 
                 if (options.forceFullBackfill || isLastWindow || !hasWindowCached) {
-                    const windowDays = await fetchWindowDailyTelemetry(cfg.imei, w.startUnix, w.endUnix, cfg.zoneId);
-                    Object.assign(existingDays, windowDays);
+                    let fetchStartUnix = w.startUnix;
+                    let isTailShortened = false;
+
+                    // On incremental sync of the latest window, only refresh from yesterday/lastSyncedDate..today
+                    if (isLastWindow && !options.forceFullBackfill && lastSyncedDate && lastSyncedDate >= w.startYmd) {
+                        const prevDay = shiftDateYmd(lastSyncedDate, -1) || lastSyncedDate;
+                        const tailStart = prevDay > w.startYmd ? prevDay : w.startYmd;
+                        const hasEarlierPortion = tailStart === w.startYmd || Boolean(existingDays[w.startYmd] || Object.keys(existingDays).some(dk => dk >= w.startYmd && dk < tailStart));
+                        if (hasEarlierPortion && tailStart > w.startYmd) {
+                            fetchStartUnix = Math.floor(new Date(`${tailStart}T00:00:00-05:00`).getTime() / 1000);
+                            isTailShortened = true;
+                        }
+                    }
+
+                    const windowDays = await fetchWindowDailyTelemetry(cfg.imei, fetchStartUnix, w.endUnix, cfg.zoneId);
+                    existingDays = mergeGpsDaysMaps(existingDays, windowDays);
+                    if (isPastWindow && !isTailShortened) {
+                        syncedDayWindows[winKey] = true;
+                    }
                 }
             }
 
@@ -2046,6 +2598,7 @@ export async function syncGpsTelemetry(options = {}) {
                 ...(profile?.gpsCache || {}),
                 live,
                 days: existingDays,
+                syncedDayWindows,
                 voltageHistory,
                 backfillStartDate: installDate,
                 lastSyncedDate: todayStr,
@@ -2098,7 +2651,10 @@ export async function syncGpsTelemetry(options = {}) {
                 const enrichedCache = {
                     ...(updatedProfile.gpsCache || gpsCache),
                     ...(sensitivityChanged ? { physicalSensitivity: nextSensitivity } : {}),
-                    ...(reconciledTripsByDate ? { tripsByDate: reconciledTripsByDate } : {}),
+                    ...(reconciledTripsByDate ? {
+                        tripsByDate: reconciledTripsByDate,
+                        lastTripsReconciledAt: new Date().toISOString()
+                    } : {}),
                     ...(stationMatch.matchedStop ? {
                         notifiedStopIds: stationMatch.updatedNotifiedStopIds,
                         pendingStationMatch: stationMatch.pendingStationMatch
@@ -2107,7 +2663,7 @@ export async function syncGpsTelemetry(options = {}) {
                 updatedProfile = await saveVehicleProfile({
                     ...updatedProfile,
                     gpsCache: enrichedCache
-                }).catch(() => updatedProfile);
+                }, reconciledTripsByDate ? { authoritativeTripsReconcile: true } : {}).catch(() => updatedProfile);
             }
 
             store.setState({
@@ -2123,6 +2679,16 @@ export async function syncGpsTelemetry(options = {}) {
 
             refreshAlerts().catch(() => {});
             triggerCloudSync();
+
+            // 4. Non-blocking incremental background archive of point-to-point trips
+            //    Permanently persists past trips (newest first) without blocking Cockpit live updates.
+            if (!options.skipTripsBackfill && (isBrowserRuntime() || options.backfillTrips === true)) {
+                backfillMissingGpsTrips({
+                    startDate: installDate,
+                    endDate: todayStr,
+                    silent: true
+                }).catch(() => {});
+            }
 
             if (!options.silent) {
                 showToast(`GPS SINCRONIZADO · ${live.totalMile.toLocaleString('es-CO')} KM · ${live.externalVoltage}V`);

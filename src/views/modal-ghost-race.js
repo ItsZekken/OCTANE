@@ -11,6 +11,11 @@
 
 import { playHorologyTick } from '../core/telemetry-engine.js';
 import store from '../core/state.js';
+import { getVehicleProfile, getCanonicalTripKey, mergeTripsByDateMaps } from '../core/db-local.js';
+import { backfillMissingGpsTrips, getGpsConfig } from '../core/iopgps-sync.js';
+
+export const GHOST_RACE_CORRIDOR_RADIUS_M = 450;
+export const GHOST_RACE_DEPARTURE_WINDOW_MIN = 90;
 
 let modalRootEl = null;
 let isModalActive = false;
@@ -19,6 +24,7 @@ let boundKeyDownListener = null;
 let boundStateListener = null;
 let pendingInitPayload = null;
 let hasSentInitPayload = false;
+let openSessionToken = 0;
 
 /**
  * Calculates Haversine distance in meters between two lat/lng coordinates.
@@ -58,14 +64,87 @@ export function departureTimeDiffMinutes(minA, minB) {
     return diff;
 }
 
+function parseTripEndpointsAndDeparture(t) {
+    if (!t || typeof t !== 'object') return null;
+
+    let origLat = null, origLng = null, destLat = null, destLng = null;
+    let trackCount = 0;
+
+    if (Array.isArray(t.trackPoints) && t.trackPoints.length > 0) {
+        const first = t.trackPoints[0];
+        const last = t.trackPoints[t.trackPoints.length - 1];
+        origLat = Number(first.lat);
+        origLng = Number(first.lng);
+        destLat = Number(last.lat);
+        destLng = Number(last.lng);
+        trackCount = t.trackPoints.length;
+    } else if (Array.isArray(t.pts) && t.pts.length > 0) {
+        const first = t.pts[0];
+        const last = t.pts[t.pts.length - 1];
+        origLat = Number(first[1]);
+        origLng = Number(first[2]);
+        destLat = Number(last[1]);
+        destLng = Number(last[2]);
+        trackCount = t.pts.length;
+    } else if (t.startLat !== undefined && t.endLat !== undefined) {
+        origLat = Number(t.startLat);
+        origLng = Number(t.startLng);
+        destLat = Number(t.endLat);
+        destLng = Number(t.endLng);
+    }
+
+    if (origLat === null || destLat === null || isNaN(origLat) || isNaN(destLat) || isNaN(origLng) || isNaN(destLng)) {
+        return null;
+    }
+    if (origLat === 0 && origLng === 0 && destLat === 0 && destLng === 0) {
+        return null;
+    }
+
+    // Departure minute of the day [0..1439]
+    let depMin = null;
+    if (typeof t.startTimeHm === 'string' && t.startTimeHm.includes(':')) {
+        const [h, m] = t.startTimeHm.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) depMin = h * 60 + m;
+    } else if (t.startTimeMs) {
+        const d = new Date(Number(t.startTimeMs));
+        depMin = d.getHours() * 60 + d.getMinutes();
+    } else if (t.startSecOfDay !== undefined) {
+        depMin = Math.round(Number(t.startSecOfDay) / 60);
+    } else if (typeof t.startTime === 'string' && t.startTime.includes(':')) {
+        const [h, m] = t.startTime.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) depMin = h * 60 + m;
+    }
+
+    if (depMin === null || isNaN(depMin)) {
+        return null;
+    }
+
+    return {
+        origLat,
+        origLng,
+        destLat,
+        destLng,
+        depMin,
+        trackCount,
+        startAddress: t.startAddress || t.rawStartAddress || '',
+        endAddress: t.endAddress || t.rawEndAddress || '',
+        distanceKm: Number(t.distanceKm ?? t.mileageKm ?? t.distKm) || 0
+    };
+}
+
 /**
- * Clusters point-to-point trips by origin and destination (<= 300m) and departure window (+- 45 min)
- * to detect habitual or recurrent routes (e.g. daily commute).
- * 
+ * Clusters point-to-point trips by origin and destination (<= 450m) and departure window (+- 90 min)
+ * across the entire accumulated GPS history to detect habitual or recurrent routes (e.g. daily commute).
+ *
  * @param {Object|Array} [sourceTrips] - gpsCache.tripsByDate map or flat array of trip objects
+ * @param {Object} [options={}] - { radiusMeters, departureWindowMin, minTrackPoints }
  * @returns {Object|null} Recurrent route descriptor or null if no cluster with >= 2 trips found
  */
-export function detectRecurrentRoute(sourceTrips = null) {
+export function detectRecurrentRoute(sourceTrips = null, options = {}) {
+    const radiusMeters = Number(options.radiusMeters) > 0 ? Number(options.radiusMeters) : GHOST_RACE_CORRIDOR_RADIUS_M;
+    const depWindowMin = Number(options.departureWindowMin) > 0 ? Number(options.departureWindowMin) : GHOST_RACE_DEPARTURE_WINDOW_MIN;
+    const minTrackPoints = Math.max(0, Number(options.minTrackPoints) || 0);
+
     let trips = [];
 
     if (Array.isArray(sourceTrips)) {
@@ -96,104 +175,76 @@ export function detectRecurrentRoute(sourceTrips = null) {
         return null;
     }
 
+    // Deduplicate across all dates (preferring the version with richest trackPoints)
+    const deduped = new Map();
+    for (const t of trips) {
+        if (!t || typeof t !== 'object') continue;
+        const key = getCanonicalTripKey(t) || String(t.id || t.startTimeMs || Math.random());
+        const prev = deduped.get(key);
+        const prevPts = Array.isArray(prev?.trackPoints) ? prev.trackPoints.length : (Array.isArray(prev?.pts) ? prev.pts.length : 0);
+        const curPts = Array.isArray(t.trackPoints) ? t.trackPoints.length : (Array.isArray(t.pts) ? t.pts.length : 0);
+        if (!prev || curPts > prevPts) {
+            deduped.set(key, t);
+        }
+    }
+
     // Extract normalized trip coordinates and departure minute
     const normalized = [];
-    for (const t of trips) {
-        let origLat = null, origLng = null, destLat = null, destLng = null;
-
-        if (Array.isArray(t.trackPoints) && t.trackPoints.length > 0) {
-            const first = t.trackPoints[0];
-            const last = t.trackPoints[t.trackPoints.length - 1];
-            origLat = Number(first.lat);
-            origLng = Number(first.lng);
-            destLat = Number(last.lat);
-            destLng = Number(last.lng);
-        } else if (Array.isArray(t.pts) && t.pts.length > 0) {
-            const first = t.pts[0];
-            const last = t.pts[t.pts.length - 1];
-            origLat = Number(first[1]);
-            origLng = Number(first[2]);
-            destLat = Number(last[1]);
-            destLng = Number(last[2]);
-        } else if (t.startLat !== undefined && t.endLat !== undefined) {
-            origLat = Number(t.startLat);
-            origLng = Number(t.startLng);
-            destLat = Number(t.endLat);
-            destLng = Number(t.endLng);
-        }
-
-        if (origLat === null || destLat === null || isNaN(origLat) || isNaN(destLat)) {
-            continue;
-        }
-        if (origLat === 0 && origLng === 0 && destLat === 0 && destLng === 0) {
-            continue;
-        }
-
-        // Departure minute of the day [0..1439]
-        let depMin = null;
-        if (typeof t.startTimeHm === 'string' && t.startTimeHm.includes(':')) {
-            const [h, m] = t.startTimeHm.split(':').map(Number);
-            if (!isNaN(h) && !isNaN(m)) depMin = h * 60 + m;
-        } else if (t.startTimeMs) {
-            const d = new Date(Number(t.startTimeMs));
-            depMin = d.getHours() * 60 + d.getMinutes();
-        } else if (t.startSecOfDay !== undefined) {
-            depMin = Math.round(Number(t.startSecOfDay) / 60);
-        } else if (typeof t.startTime === 'string' && t.startTime.includes(':')) {
-            const [h, m] = t.startTime.split(':').map(Number);
-            if (!isNaN(h) && !isNaN(m)) depMin = h * 60 + m;
-        }
-
-        if (depMin === null || isNaN(depMin)) {
-            continue;
-        }
-
+    for (const t of deduped.values()) {
+        const parsed = parseTripEndpointsAndDeparture(t);
+        if (!parsed) continue;
+        if (minTrackPoints > 0 && parsed.trackCount < minTrackPoints) continue;
         normalized.push({
             rawTrip: t,
-            origLat,
-            origLng,
-            destLat,
-            destLng,
-            depMin,
-            startAddress: t.startAddress || t.rawStartAddress || '',
-            endAddress: t.endAddress || t.rawEndAddress || '',
-            distanceKm: Number(t.distanceKm ?? t.mileageKm ?? t.distKm) || 0
+            ...parsed
         });
     }
 
     if (normalized.length === 0) return null;
 
-    // Cluster trips by origin/destination (<= 300m) and departure window (+- 45 min)
+    // Sort chronologically so centroid formation is deterministic across all cycles
+    normalized.sort((a, b) => (Number(a.rawTrip.startTimeMs) || 0) - (Number(b.rawTrip.startTimeMs) || 0));
+
+    // Cluster trips by origin/destination (<= radiusMeters) and departure window (+- depWindowMin)
     const clusters = [];
 
     for (const item of normalized) {
         let matchedCluster = null;
+        let bestScore = Infinity;
 
         for (const cluster of clusters) {
             const origDist = calculateDistanceMeters(item.origLat, item.origLng, cluster.centroidOrig.lat, cluster.centroidOrig.lng);
             const destDist = calculateDistanceMeters(item.destLat, item.destLng, cluster.centroidDest.lat, cluster.centroidDest.lng);
             const timeDiff = departureTimeDiffMinutes(item.depMin, cluster.avgDepMin);
 
-            if (origDist <= 300 && destDist <= 300 && timeDiff <= 45) {
-                matchedCluster = cluster;
-                break;
+            if (origDist <= radiusMeters && destDist <= radiusMeters && timeDiff <= depWindowMin) {
+                const score = origDist + destDist + timeDiff * 3;
+                if (score < bestScore) {
+                    bestScore = score;
+                    matchedCluster = cluster;
+                }
             }
         }
 
         if (matchedCluster) {
             const n = matchedCluster.items.length;
             matchedCluster.items.push(item);
-            // Running average of centroid and departure time
+            if (item.trackCount >= 10) matchedCluster.playableCount++;
+            // Running average of centroid and circular-safe departure time
             matchedCluster.centroidOrig.lat = (matchedCluster.centroidOrig.lat * n + item.origLat) / (n + 1);
             matchedCluster.centroidOrig.lng = (matchedCluster.centroidOrig.lng * n + item.origLng) / (n + 1);
             matchedCluster.centroidDest.lat = (matchedCluster.centroidDest.lat * n + item.destLat) / (n + 1);
             matchedCluster.centroidDest.lng = (matchedCluster.centroidDest.lng * n + item.destLng) / (n + 1);
-            matchedCluster.avgDepMin = Math.round((matchedCluster.avgDepMin * n + item.depMin) / (n + 1));
+            let deltaMin = item.depMin - matchedCluster.avgDepMin;
+            if (deltaMin > 720) deltaMin -= 1440;
+            if (deltaMin < -720) deltaMin += 1440;
+            matchedCluster.avgDepMin = Math.round(((matchedCluster.avgDepMin + deltaMin / (n + 1)) % 1440 + 1440) % 1440);
             if (!matchedCluster.startAddress && item.startAddress) matchedCluster.startAddress = item.startAddress;
             if (!matchedCluster.endAddress && item.endAddress) matchedCluster.endAddress = item.endAddress;
         } else {
             clusters.push({
                 items: [item],
+                playableCount: item.trackCount >= 10 ? 1 : 0,
                 centroidOrig: { lat: item.origLat, lng: item.origLng },
                 centroidDest: { lat: item.destLat, lng: item.destLng },
                 avgDepMin: item.depMin,
@@ -203,10 +254,13 @@ export function detectRecurrentRoute(sourceTrips = null) {
         }
     }
 
-    // Filter clusters with >= 2 trips (recurrence)
+    // Filter clusters with >= 2 trips (recurrence); prefer clusters with most playable GPS tracks
     const recurrentClusters = clusters
         .filter(c => c.items.length >= 2)
-        .sort((a, b) => b.items.length - a.items.length);
+        .sort((a, b) => {
+            if (b.playableCount !== a.playableCount) return b.playableCount - a.playableCount;
+            return b.items.length - a.items.length;
+        });
 
     if (recurrentClusters.length === 0) {
         return null;
@@ -240,9 +294,10 @@ export function detectRecurrentRoute(sourceTrips = null) {
             lat: Number(best.centroidDest.lat.toFixed(6)),
             lng: Number(best.centroidDest.lng.toFixed(6))
         },
-        departureWindow: `${formatHm(best.avgDepMin - 45)} - ${formatHm(best.avgDepMin + 45)}`,
+        departureWindow: `${formatHm(best.avgDepMin - depWindowMin)} - ${formatHm(best.avgDepMin + depWindowMin)}`,
         avgDepartureHm: formatHm(best.avgDepMin),
         tripsCount: best.items.length,
+        playableTripsCount: best.playableCount,
         avgDistanceKm: avgDist,
         tripIds: best.items.map(x => x.rawTrip.id || x.rawTrip.startTimeMs),
         detectedAt: new Date().toISOString()
@@ -281,29 +336,65 @@ function resolveCurrentTheme() {
 }
 
 /**
- * Extracts normalized dynamic Ghost Race trips from gpsCache when a user's
- * recurrent route has at least 3 complete GPS tracks (>= 10 points each).
+ * Extracts ALL normalized dynamic Ghost Race trips across the entire accumulated `tripsByDate`
+ * archive matching a recurrent route (by trip ID OR spatial+temporal corridor match),
+ * deduplicated by canonical trip key so past cycles continuously accumulate.
+ *
+ * @param {Object|null} [activeRoute=null]
+ * @param {Object|null} [tripsByDateOverride=null]
+ * @returns {Array<Object>|null}
  */
-function extractRecurrentDynamicTrips(activeRoute) {
-    if (!activeRoute || !Array.isArray(activeRoute.tripIds) || activeRoute.tripIds.length < 3) {
-        return null;
-    }
+export function extractRecurrentDynamicTrips(activeRoute = null, tripsByDateOverride = null) {
     try {
         const profile = store.getState()?.vehicleProfile;
-        const tripsByDate = profile?.gpsCache?.tripsByDate;
+        const tripsByDate = tripsByDateOverride || profile?.gpsCache?.tripsByDate;
         if (!tripsByDate || typeof tripsByDate !== 'object') return null;
 
-        const idSet = new Set(activeRoute.tripIds.map(String));
+        const route = activeRoute || detectRecurrentRoute(tripsByDate, { minTrackPoints: 10 });
+        if (!route) return null;
+
+        const idSet = new Set(Array.isArray(route.tripIds) ? route.tripIds.map(String) : []);
+        const hasGeoCorridor = Boolean(
+            route.origin && route.destination &&
+            Number.isFinite(Number(route.origin.lat)) && Number.isFinite(Number(route.origin.lng)) &&
+            Number.isFinite(Number(route.destination.lat)) && Number.isFinite(Number(route.destination.lng))
+        );
+        let routeDepMin = null;
+        if (typeof route.avgDepartureHm === 'string' && route.avgDepartureHm.includes(':')) {
+            const [rh, rm] = route.avgDepartureHm.split(':').map(Number);
+            if (!isNaN(rh) && !isNaN(rm)) routeDepMin = rh * 60 + rm;
+        }
+
         const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const seenKeys = new Set();
         const normalized = [];
 
         for (const [dateKey, dayTrips] of Object.entries(tripsByDate)) {
             if (!Array.isArray(dayTrips)) continue;
             for (const t of dayTrips) {
-                if (!t) continue;
+                if (!t || !Array.isArray(t.trackPoints) || t.trackPoints.length < 10) continue;
+
                 const tid = String(t.id || t.startTimeMs || '');
-                if (!idSet.has(tid)) continue;
-                if (!Array.isArray(t.trackPoints) || t.trackPoints.length < 10) continue;
+                const startMsStr = t.startTimeMs ? String(t.startTimeMs) : '';
+                let matches = idSet.has(tid) || (startMsStr && idSet.has(startMsStr));
+
+                if (!matches && hasGeoCorridor) {
+                    const parsed = parseTripEndpointsAndDeparture(t);
+                    if (parsed) {
+                        const origDist = calculateDistanceMeters(parsed.origLat, parsed.origLng, Number(route.origin.lat), Number(route.origin.lng));
+                        const destDist = calculateDistanceMeters(parsed.destLat, parsed.destLng, Number(route.destination.lat), Number(route.destination.lng));
+                        const timeOk = routeDepMin === null || departureTimeDiffMinutes(parsed.depMin, routeDepMin) <= GHOST_RACE_DEPARTURE_WINDOW_MIN;
+                        if (origDist <= GHOST_RACE_CORRIDOR_RADIUS_M && destDist <= GHOST_RACE_CORRIDOR_RADIUS_M && timeOk) {
+                            matches = true;
+                        }
+                    }
+                }
+
+                if (!matches) continue;
+
+                const dedupeKey = getCanonicalTripKey(t) || tid;
+                if (seenKeys.has(dedupeKey)) continue;
+                seenKeys.add(dedupeKey);
 
                 const firstPt = t.trackPoints[0];
                 const lastPt = t.trackPoints[t.trackPoints.length - 1];
@@ -329,19 +420,26 @@ function extractRecurrentDynamicTrips(activeRoute) {
                 }
                 if (pts.length < 10) continue;
 
-                const dObj = new Date(`${dateKey}T12:00:00`);
+                const resolvedDate = String(t.date || dateKey).slice(0, 10);
+                const dObj = new Date(`${resolvedDate}T12:00:00`);
                 const startDateObj = t.startTimeMs ? new Date(Number(t.startTimeMs)) : null;
-                const startSecOfDay = startDateObj
-                    ? startDateObj.getHours() * 3600 + startDateObj.getMinutes() * 60 + startDateObj.getSeconds()
-                    : 26100;
-                const startHm = t.startTimeHm || (startDateObj
+
+                let startSecOfDay = 26100;
+                if (startDateObj && !Number.isNaN(startDateObj.getTime())) {
+                    startSecOfDay = startDateObj.getHours() * 3600 + startDateObj.getMinutes() * 60 + startDateObj.getSeconds();
+                } else if (typeof t.startTimeHm === 'string' && t.startTimeHm.includes(':')) {
+                    const [hh, mm] = t.startTimeHm.split(':').map(Number);
+                    if (!isNaN(hh) && !isNaN(mm)) startSecOfDay = hh * 3600 + mm * 60;
+                }
+
+                const startHm = t.startTimeHm || (startDateObj && !Number.isNaN(startDateObj.getTime())
                     ? `${String(startDateObj.getHours()).padStart(2, '0')}:${String(startDateObj.getMinutes()).padStart(2, '0')}`
                     : '07:15');
                 const distKm = Number((Number(t.distanceKm ?? t.mileageKm ?? 0)).toFixed(2));
 
                 normalized.push({
-                    id: tid,
-                    date: t.date || dateKey,
+                    id: tid || dedupeKey,
+                    date: resolvedDate,
                     dayName: Number.isNaN(dObj.getTime()) ? '' : dayNames[dObj.getDay()],
                     startTime: startHm,
                     startSecOfDay,
@@ -418,13 +516,17 @@ function handleKeyDown(e) {
 
 /**
  * Opens the Ghost Race full-screen modal (edge-to-edge, single unified chrome).
- * 
+ * Always reads the full accumulated GPS trip archive from IndexedDB + store so
+ * all past cycles/months accumulate automatically instead of freezing on one cycle.
+ *
  * @param {Object} [options={}] - Optional parameters { route }
  */
-export function openGhostRaceModal(options = {}) {
+export async function openGhostRaceModal(options = {}) {
     if (typeof document === 'undefined') return;
     initModalRoot();
     if (!modalRootEl) return;
+
+    const sessionToken = ++openSessionToken;
 
     try {
         playHorologyTick(1200, 0.015, 0.03);
@@ -432,16 +534,31 @@ export function openGhostRaceModal(options = {}) {
 
     const theme = resolveCurrentTheme();
 
-    // Retrieve active recurrent route from options or localStorage
-    let activeRoute = options.route || null;
+    // Merge freshest IndexedDB profile with reactive store so zero accumulated trips are missed
+    const storeProfile = store.getState()?.vehicleProfile || null;
+    const dbProfile = await getVehicleProfile().catch(() => null);
+    if (sessionToken !== openSessionToken) return;
+
+    const tripsByDate = mergeTripsByDateMaps(
+        storeProfile?.gpsCache?.tripsByDate,
+        dbProfile?.gpsCache?.tripsByDate
+    );
+
+    // Re-scan the entire accumulated trip archive (or use explicit caller route while still matching all accumulated trips)
+    let activeRoute = options.route || detectRecurrentRoute(tripsByDate, { minTrackPoints: 10 });
     if (!activeRoute) {
-        try {
-            const raw = localStorage.getItem('octane_active_ghost_race');
-            if (raw) activeRoute = JSON.parse(raw);
-        } catch (_) {}
+        activeRoute = detectRecurrentRoute(tripsByDate);
     }
 
-    const dynamicTrips = extractRecurrentDynamicTrips(activeRoute);
+    try {
+        if (activeRoute) {
+            localStorage.setItem('octane_active_ghost_race', JSON.stringify(activeRoute));
+        } else {
+            localStorage.removeItem('octane_active_ghost_race');
+        }
+    } catch (_) {}
+
+    const dynamicTrips = extractRecurrentDynamicTrips(activeRoute, tripsByDate);
     const iframeSrc = `/ghost-race.html?theme=${encodeURIComponent(theme)}`;
 
     hasSentInitPayload = false;
@@ -505,12 +622,21 @@ export function openGhostRaceModal(options = {}) {
     });
 
     isModalActive = true;
+
+    // Quietly ensure any remaining unarchived past days continue accumulating in IndexedDB
+    try {
+        const cfg = getGpsConfig(dbProfile || storeProfile);
+        if (cfg.enabled && cfg.imei) {
+            backfillMissingGpsTrips({ silent: true }).catch(() => {});
+        }
+    } catch (_) {}
 }
 
 /**
  * Closes and resets the Ghost Race modal smoothly.
  */
 export function closeGhostRaceModal() {
+    openSessionToken++;
     if (!isModalActive && (!modalRootEl || modalRootEl.classList.contains('hidden'))) {
         return;
     }

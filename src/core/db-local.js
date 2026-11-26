@@ -296,18 +296,353 @@ export async function getVehicleProfile() {
 }
 
 /**
+ * Builds a deterministic, window-independent deduplication key for a GPS trip.
+ * Prefers `startTimeMs` / `startTimeUnix` (to the second) so trips fetched in
+ * different date windows with different legacy array-index IDs deduplicate cleanly.
+ * @param {Object} trip
+ * @returns {string}
+ */
+export function getCanonicalTripKey(trip) {
+    if (!trip || typeof trip !== 'object') return '';
+    const rawStartMs = Number(trip.startTimeMs);
+    if (Number.isFinite(rawStartMs) && rawStartMs > 0) {
+        return `ts_${Math.floor(rawStartMs / 1000)}`;
+    }
+    const rawStartUnix = Number(trip.startTimeUnix);
+    if (Number.isFinite(rawStartUnix) && rawStartUnix > 0) {
+        return `ts_${Math.floor(rawStartUnix)}`;
+    }
+    if (trip.id !== undefined && trip.id !== null && String(trip.id).trim() !== '') {
+        return `id_${String(trip.id).trim()}`;
+    }
+    return `raw_${trip.date || ''}_${trip.startTimeHm || ''}_${trip.distanceKm ?? trip.mileageKm ?? ''}`;
+}
+
+function mergeTwoTripRecords(baseTrip, incomingTrip, preferBaseScalars = false) {
+    if (!baseTrip || typeof baseTrip !== 'object') return incomingTrip;
+    if (!incomingTrip || typeof incomingTrip !== 'object') return baseTrip;
+
+    const primary = preferBaseScalars ? baseTrip : incomingTrip;
+    const secondary = preferBaseScalars ? incomingTrip : baseTrip;
+    const merged = { ...primary };
+
+    // Always preserve the richest trackPoints geometry from either side
+    const priPts = Array.isArray(primary.trackPoints) ? primary.trackPoints : [];
+    const secPts = Array.isArray(secondary.trackPoints) ? secondary.trackPoints : [];
+    if (secPts.length > priPts.length) {
+        merged.trackPoints = JSON.parse(JSON.stringify(secPts));
+    }
+
+    // Backfill endpoint coordinates & addresses if missing in primary
+    const fallbackFields = [
+        'startLat', 'startLng', 'endLat', 'endLng',
+        'rawStartAddress', 'rawEndAddress', 'startAddress', 'endAddress',
+        'startTimeMs', 'endTimeMs', 'startTimeUnix', 'endTimeUnix',
+        'startTimeHm', 'endTimeHm'
+    ];
+    for (const field of fallbackFields) {
+        if ((merged[field] === undefined || merged[field] === null || merged[field] === '') &&
+            secondary[field] !== undefined && secondary[field] !== null && secondary[field] !== '') {
+            merged[field] = secondary[field];
+        }
+    }
+
+    if ((!(Number(merged.estGallons) > 0)) && Number(secondary.estGallons) > 0) {
+        merged.estGallons = secondary.estGallons;
+    }
+    if ((!(Number(merged.estCostCop) > 0)) && Number(secondary.estCostCop) > 0) {
+        merged.estCostCop = secondary.estCostCop;
+    }
+
+    return merged;
+}
+
+/**
+ * Merges two trip arrays for the same date without losing trips or `trackPoints`.
+ * Anti-wipe guarantee: an empty incoming array `[]` never wipes non-empty existing trips.
+ *
+ * @param {Array<Object>} baseList
+ * @param {Array<Object>} incomingList
+ * @param {Object} [options={}]
+ * @returns {Array<Object>}
+ */
+export function mergeDayTripLists(baseList = [], incomingList = [], options = {}) {
+    const preferBaseScalars = Boolean(options.preferBaseScalars);
+    const hasBase = Array.isArray(baseList) && baseList.length > 0;
+    const hasIncoming = Array.isArray(incomingList) && incomingList.length > 0;
+
+    if (!hasBase && !hasIncoming) {
+        return [];
+    }
+    if (!hasBase) {
+        return JSON.parse(JSON.stringify(incomingList));
+    }
+    if (!hasIncoming) {
+        return JSON.parse(JSON.stringify(baseList));
+    }
+
+    const byKey = new Map();
+    const idToKey = new Map();
+
+    for (const bt of baseList) {
+        if (!bt || typeof bt !== 'object') continue;
+        const key = getCanonicalTripKey(bt);
+        if (!key) continue;
+        byKey.set(key, JSON.parse(JSON.stringify(bt)));
+        if (bt.id) idToKey.set(String(bt.id), key);
+    }
+
+    for (const inc of incomingList) {
+        if (!inc || typeof inc !== 'object') continue;
+        let key = getCanonicalTripKey(inc);
+        if (!byKey.has(key) && inc.id && idToKey.has(String(inc.id))) {
+            key = idToKey.get(String(inc.id));
+        }
+        const existing = byKey.get(key);
+        if (existing) {
+            const combined = mergeTwoTripRecords(existing, JSON.parse(JSON.stringify(inc)), preferBaseScalars);
+            byKey.set(key, combined);
+            if (combined.id) idToKey.set(String(combined.id), key);
+        } else {
+            const clonedInc = JSON.parse(JSON.stringify(inc));
+            byKey.set(key, clonedInc);
+            if (clonedInc.id) idToKey.set(String(clonedInc.id), key);
+        }
+    }
+
+    return Array.from(byKey.values()).sort((a, b) => (Number(a.startTimeMs) || 0) - (Number(b.startTimeMs) || 0));
+}
+
+/**
+ * Union-merges two `tripsByDate` maps without dropping dates, trips, or `trackPoints`.
+ *
+ * @param {Object|null} baseMap
+ * @param {Object|null} incomingMap
+ * @param {Object} [options={}]
+ * @returns {Object}
+ */
+export function mergeTripsByDateMaps(baseMap = null, incomingMap = null, options = {}) {
+    const safeBase = (baseMap && typeof baseMap === 'object') ? baseMap : {};
+    const safeIncoming = (incomingMap && typeof incomingMap === 'object') ? incomingMap : {};
+    const allDates = new Set([...Object.keys(safeBase), ...Object.keys(safeIncoming)]);
+    const out = {};
+
+    for (const dateKey of allDates) {
+        const bVal = safeBase[dateKey];
+        const iVal = safeIncoming[dateKey];
+
+        if (Array.isArray(bVal) && Array.isArray(iVal)) {
+            out[dateKey] = mergeDayTripLists(bVal, iVal, options);
+        } else if (Array.isArray(iVal)) {
+            out[dateKey] = JSON.parse(JSON.stringify(iVal));
+        } else if (Array.isArray(bVal)) {
+            out[dateKey] = JSON.parse(JSON.stringify(bVal));
+        }
+    }
+
+    return out;
+}
+
+/**
+ * Union-merges two `tripsMeta` maps while keeping past days finalized once sealed.
+ *
+ * @param {Object|null} baseMeta
+ * @param {Object|null} incomingMeta
+ * @returns {Object}
+ */
+export function mergeTripsMetaMaps(baseMeta = null, incomingMeta = null) {
+    const safeBase = (baseMeta && typeof baseMeta === 'object') ? baseMeta : {};
+    const safeIncoming = (incomingMeta && typeof incomingMeta === 'object') ? incomingMeta : {};
+    const allDates = new Set([...Object.keys(safeBase), ...Object.keys(safeIncoming)]);
+    const out = {};
+
+    for (const dateKey of allDates) {
+        const b = (safeBase[dateKey] && typeof safeBase[dateKey] === 'object') ? safeBase[dateKey] : null;
+        const inc = (safeIncoming[dateKey] && typeof safeIncoming[dateKey] === 'object') ? safeIncoming[dateKey] : null;
+        if (!b) {
+            out[dateKey] = { ...inc };
+            continue;
+        }
+        if (!inc) {
+            out[dateKey] = { ...b };
+            continue;
+        }
+        const bTs = b.syncedAt ? (Date.parse(b.syncedAt) || 0) : 0;
+        const iTs = inc.syncedAt ? (Date.parse(inc.syncedAt) || 0) : 0;
+        const newer = iTs >= bTs ? inc : b;
+        const older = iTs >= bTs ? b : inc;
+        const syncedOnDate = [b.syncedOnDate, inc.syncedOnDate].filter(Boolean).sort().pop() || newer.syncedOnDate || '';
+        const finalized = Boolean(b.finalized || inc.finalized || (syncedOnDate && syncedOnDate > dateKey));
+
+        out[dateKey] = {
+            ...older,
+            ...newer,
+            ...(syncedOnDate ? { syncedOnDate } : {}),
+            finalized
+        };
+        if (newer.tracksUnavailable === false) {
+            delete out[dateKey].tracksUnavailable;
+        }
+    }
+
+    return out;
+}
+
+/**
+ * Union-merges two `gpsCache.days` maps without letting zeroed records wipe real past mileage.
+ *
+ * @param {Object|null} baseDays
+ * @param {Object|null} incomingDays
+ * @returns {Object}
+ */
+export function mergeGpsDaysMaps(baseDays = null, incomingDays = null) {
+    const safeBase = (baseDays && typeof baseDays === 'object') ? baseDays : {};
+    const safeIncoming = (incomingDays && typeof incomingDays === 'object') ? incomingDays : {};
+    const allDates = new Set([...Object.keys(safeBase), ...Object.keys(safeIncoming)]);
+    const out = {};
+
+    for (const dateKey of allDates) {
+        const b = safeBase[dateKey];
+        const inc = safeIncoming[dateKey];
+        if (!b || typeof b !== 'object') {
+            if (inc && typeof inc === 'object') out[dateKey] = { ...inc };
+            continue;
+        }
+        if (!inc || typeof inc !== 'object') {
+            out[dateKey] = { ...b };
+            continue;
+        }
+        const bKm = Number(b.km ?? b.miles) || 0;
+        const iKm = Number(inc.km ?? inc.miles) || 0;
+        const bRuns = Number(b.runNo) || 0;
+        const iRuns = Number(inc.runNo) || 0;
+
+        if (iKm === 0 && iRuns === 0 && (bKm > 0 || bRuns > 0)) {
+            out[dateKey] = { ...b };
+        } else {
+            out[dateKey] = { ...b, ...inc };
+        }
+    }
+
+    return out;
+}
+
+function mergeVoltageHistoryLists(baseList, incomingList) {
+    const hasBase = Array.isArray(baseList) && baseList.length > 0;
+    const hasInc = Array.isArray(incomingList) && incomingList.length > 0;
+    if (!hasBase && !hasInc) return undefined;
+    if (!hasBase) return JSON.parse(JSON.stringify(incomingList));
+    if (!hasInc) return JSON.parse(JSON.stringify(baseList));
+
+    const seen = new Set();
+    const combined = [];
+    for (const sample of [...baseList, ...incomingList]) {
+        const key = (sample && typeof sample === 'object')
+            ? String(sample.t ?? sample.ts ?? sample.timestamp ?? sample.time ?? JSON.stringify(sample))
+            : String(sample);
+        if (!seen.has(key)) {
+            seen.add(key);
+            combined.push(sample);
+        }
+    }
+    return combined;
+}
+
+function mergeGpsCacheObjects(baseCache = null, incomingCache = null, options = {}) {
+    if (!baseCache && !incomingCache) return undefined;
+    const b = (baseCache && typeof baseCache === 'object') ? baseCache : {};
+    const inc = (incomingCache && typeof incomingCache === 'object') ? incomingCache : {};
+
+    const bTripTs = Math.max(
+        b.lastTripsReconciledAt ? (Date.parse(b.lastTripsReconciledAt) || 0) : 0,
+        b.lastTripsSyncedAt ? (Date.parse(b.lastTripsSyncedAt) || 0) : 0
+    );
+    const iTripTs = Math.max(
+        inc.lastTripsReconciledAt ? (Date.parse(inc.lastTripsReconciledAt) || 0) : 0,
+        inc.lastTripsSyncedAt ? (Date.parse(inc.lastTripsSyncedAt) || 0) : 0
+    );
+    const preferBaseScalars = options.preferBaseScalars !== undefined
+        ? Boolean(options.preferBaseScalars)
+        : (bTripTs > iTripTs && !options.authoritativeTripsReconcile);
+
+    const next = {
+        ...b,
+        ...inc
+    };
+
+    // Keep freshest live snapshot by syncedAt
+    if (b.live && inc.live) {
+        const bLiveTs = b.live.syncedAt ? (Date.parse(b.live.syncedAt) || 0) : 0;
+        const iLiveTs = inc.live.syncedAt ? (Date.parse(inc.live.syncedAt) || 0) : 0;
+        next.live = iLiveTs >= bLiveTs ? { ...b.live, ...inc.live } : { ...inc.live, ...b.live };
+    } else if (b.live || inc.live) {
+        next.live = inc.live || b.live;
+    }
+
+    if (b.days || inc.days) {
+        next.days = mergeGpsDaysMaps(b.days, inc.days);
+    }
+
+    if (b.tripsByDate || inc.tripsByDate) {
+        next.tripsByDate = mergeTripsByDateMaps(b.tripsByDate, inc.tripsByDate, { preferBaseScalars });
+    }
+
+    if (b.tripsMeta || inc.tripsMeta) {
+        next.tripsMeta = mergeTripsMetaMaps(b.tripsMeta, inc.tripsMeta);
+    }
+
+    if (b.syncedDayWindows || inc.syncedDayWindows) {
+        next.syncedDayWindows = {
+            ...(b.syncedDayWindows || {}),
+            ...(inc.syncedDayWindows || {})
+        };
+    }
+
+    const mergedVoltage = mergeVoltageHistoryLists(b.voltageHistory, inc.voltageHistory);
+    if (mergedVoltage !== undefined) {
+        next.voltageHistory = mergedVoltage;
+    }
+
+    if (Array.isArray(b.notifiedStopIds) || Array.isArray(inc.notifiedStopIds)) {
+        next.notifiedStopIds = Array.from(new Set([
+            ...(Array.isArray(b.notifiedStopIds) ? b.notifiedStopIds : []),
+            ...(Array.isArray(inc.notifiedStopIds) ? inc.notifiedStopIds : [])
+        ]));
+    }
+
+    // Preserve monotonic sync timestamps/dates
+    const maxStr = (x, y) => {
+        const sx = x ? String(x) : '';
+        const sy = y ? String(y) : '';
+        return sx >= sy ? sx : sy;
+    };
+    const maxLastSyncedDate = maxStr(b.lastSyncedDate, inc.lastSyncedDate);
+    if (maxLastSyncedDate) next.lastSyncedDate = maxLastSyncedDate;
+    const maxLastSyncedAt = maxStr(b.lastSyncedAt, inc.lastSyncedAt);
+    if (maxLastSyncedAt) next.lastSyncedAt = maxLastSyncedAt;
+    const maxLastTripsDate = maxStr(b.lastTripsSyncedDate, inc.lastTripsSyncedDate);
+    if (maxLastTripsDate) next.lastTripsSyncedDate = maxLastTripsDate;
+    const maxLastTripsAt = maxStr(b.lastTripsSyncedAt, inc.lastTripsSyncedAt);
+    if (maxLastTripsAt) next.lastTripsSyncedAt = maxLastTripsAt;
+    const maxReconciledAt = maxStr(b.lastTripsReconciledAt, inc.lastTripsReconciledAt);
+    if (maxReconciledAt) next.lastTripsReconciledAt = maxReconciledAt;
+
+    return next;
+}
+
+/**
  * Saves or updates the vehicle profile.
+ * Safely deep-merges `gpsCache` (days, tripsByDate, tripsMeta, trackPoints, voltageHistory)
+ * so stale callers or concurrent syncs can never overwrite accumulated GPS history.
  * @param {Object} profile
+ * @param {Object} [options={}]
  * @returns {Promise<Object>}
  */
-export async function saveVehicleProfile(profile) {
+export async function saveVehicleProfile(profile, options = {}) {
     const current = await getVehicleProfile();
-    const mergedGpsCache = (current?.gpsCache || profile?.gpsCache)
-        ? {
-            ...(current?.gpsCache || {}),
-            ...(profile?.gpsCache || {}),
-        }
-        : undefined;
+    const mergedGpsCache = options.replaceGpsCache
+        ? profile?.gpsCache
+        : mergeGpsCacheObjects(current?.gpsCache, profile?.gpsCache, options);
     const updated = {
         ...current,
         ...profile,
@@ -1060,7 +1395,10 @@ export async function clearAllData() {
     }
     try { await clearStore(DELETED_STORE); } catch { /* store ausente en BD antigua */ }
     // Re-seed default vehicle profile (unconfigured for onboarding)
-    await saveVehicleProfile({ ...DEFAULT_VEHICLE_PROFILE, isConfigured: false, onboardingCompleted: false });
+    await saveVehicleProfile(
+        { ...DEFAULT_VEHICLE_PROFILE, isConfigured: false, onboardingCompleted: false },
+        { replaceGpsCache: true }
+    );
 }
 
 // --------------------------------------------------------------------------
@@ -1121,99 +1459,54 @@ export function mergeVehicleProfileRecords(local, incoming) {
     if (!local || typeof local !== 'object') return incoming;
     if (!incoming || typeof incoming !== 'object') return local;
 
-    const merged = JSON.parse(JSON.stringify(incoming));
+    const localTs = local.updatedAt ? (Date.parse(local.updatedAt) || 0) : 0;
+    const incomingTs = incoming.updatedAt ? (Date.parse(incoming.updatedAt) || 0) : 0;
+    const incomingWinsScalars = incomingTs >= localTs;
+    const primary = incomingWinsScalars ? incoming : local;
+    const secondary = incomingWinsScalars ? local : incoming;
 
-    // Preserve local GPS password when cloud payload scrubbed it
-    if (local.gpsConfig && typeof local.gpsConfig === 'object' && local.gpsConfig.password) {
+    const merged = JSON.parse(JSON.stringify(primary));
+
+    // Always preserve non-empty local GPS password when cloud payload scrubbed it
+    const resolvedPassword = primary.gpsConfig?.password || local.gpsConfig?.password || incoming.gpsConfig?.password || '';
+    if (primary.gpsConfig || secondary.gpsConfig) {
         merged.gpsConfig = {
-            ...(merged.gpsConfig || {}),
-            password: merged.gpsConfig?.password ? merged.gpsConfig.password : local.gpsConfig.password,
+            ...(secondary.gpsConfig || {}),
+            ...(primary.gpsConfig || {}),
+            ...(resolvedPassword ? { password: resolvedPassword } : {})
         };
     }
 
-    const localCache = local.gpsCache;
-    if (localCache && typeof localCache === 'object') {
-        const incomingCache = (merged.gpsCache && typeof merged.gpsCache === 'object') ? merged.gpsCache : {};
-        const nextCache = { ...incomingCache };
-
-        // Preserve local trackPoints inside tripsByDate[date] and any pruned local dates
-        if (localCache.tripsByDate && typeof localCache.tripsByDate === 'object') {
-            const nextTripsByDate = (nextCache.tripsByDate && typeof nextCache.tripsByDate === 'object')
-                ? { ...nextCache.tripsByDate }
-                : {};
-
-            for (const dateKey of Object.keys(localCache.tripsByDate)) {
-                const localDayTrips = localCache.tripsByDate[dateKey];
-                const incomingDayTrips = nextTripsByDate[dateKey];
-
-                if (!Array.isArray(incomingDayTrips)) {
-                    if (Array.isArray(localDayTrips)) {
-                        nextTripsByDate[dateKey] = JSON.parse(JSON.stringify(localDayTrips));
-                    }
-                    continue;
-                }
-
-                if (Array.isArray(localDayTrips) && localDayTrips.length > 0) {
-                    const localById = new Map();
-                    for (const lt of localDayTrips) {
-                        if (lt && lt.id) localById.set(lt.id, lt);
-                    }
-
-                    nextTripsByDate[dateKey] = incomingDayTrips.map((trip, idx) => {
-                        if (!trip || typeof trip !== 'object') return trip;
-                        if (Array.isArray(trip.trackPoints) && trip.trackPoints.length > 0) {
-                            return trip;
-                        }
-                        let match = trip.id ? localById.get(trip.id) : null;
-                        if (!match && trip.startTimeMs) {
-                            match = localDayTrips.find(lt => lt && lt.startTimeMs === trip.startTimeMs);
-                        }
-                        if (!match && localDayTrips[idx] && Array.isArray(localDayTrips[idx].trackPoints)) {
-                            match = localDayTrips[idx];
-                        }
-                        if (match && Array.isArray(match.trackPoints) && match.trackPoints.length > 0) {
-                            return { ...trip, trackPoints: JSON.parse(JSON.stringify(match.trackPoints)) };
-                        }
-                        return trip;
-                    });
-                }
-            }
-
-            nextCache.tripsByDate = nextTripsByDate;
-        }
-
-        // Preserve local voltageHistory samples without dropping local history
-        if (Array.isArray(localCache.voltageHistory) && localCache.voltageHistory.length > 0) {
-            if (!Array.isArray(nextCache.voltageHistory) || nextCache.voltageHistory.length === 0) {
-                nextCache.voltageHistory = JSON.parse(JSON.stringify(localCache.voltageHistory));
+    // Union learned gas stations without duplicates
+    const priStations = Array.isArray(primary.learnedGasStations) ? primary.learnedGasStations : [];
+    const secStations = Array.isArray(secondary.learnedGasStations) ? secondary.learnedGasStations : [];
+    if (priStations.length > 0 || secStations.length > 0) {
+        const stationByKey = new Map();
+        for (const st of [...secStations, ...priStations]) {
+            if (!st || typeof st !== 'object') continue;
+            const skey = st.id || `${Math.round((Number(st.lat) || 0) * 10000)}_${Math.round((Number(st.lng) || 0) * 10000)}`;
+            const existing = stationByKey.get(skey);
+            if (!existing) {
+                stationByKey.set(skey, { ...st });
             } else {
-                const seen = new Set();
-                const combined = [];
-                for (const sample of [...localCache.voltageHistory, ...nextCache.voltageHistory]) {
-                    const key = (sample && typeof sample === 'object')
-                        ? String(sample.t ?? sample.ts ?? sample.timestamp ?? sample.time ?? JSON.stringify(sample))
-                        : String(sample);
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                        combined.push(sample);
-                    }
-                }
-                nextCache.voltageHistory = combined;
+                stationByKey.set(skey, {
+                    ...existing,
+                    ...st,
+                    refuelCount: Math.max(Number(existing.refuelCount) || 0, Number(st.refuelCount) || 0)
+                });
             }
         }
-
-        // Preserve local notifiedStopIds without dropping deduplication history
-        if (Array.isArray(localCache.notifiedStopIds) && localCache.notifiedStopIds.length > 0) {
-            if (!Array.isArray(nextCache.notifiedStopIds) || nextCache.notifiedStopIds.length === 0) {
-                nextCache.notifiedStopIds = [...localCache.notifiedStopIds];
-            } else {
-                nextCache.notifiedStopIds = Array.from(new Set([...localCache.notifiedStopIds, ...nextCache.notifiedStopIds]));
-            }
-        }
-
-        merged.gpsCache = nextCache;
+        merged.learnedGasStations = Array.from(stationByKey.values());
     }
 
+    // Deep union-merge gpsCache (days, tripsByDate + trackPoints, tripsMeta, voltageHistory, notifiedStopIds)
+    if (local.gpsCache || incoming.gpsCache) {
+        merged.gpsCache = mergeGpsCacheObjects(secondary.gpsCache, primary.gpsCache, {
+            preferBaseScalars: false
+        });
+    }
+
+    merged.updatedAt = new Date(Math.max(localTs, incomingTs) || Date.now()).toISOString();
     return merged;
 }
 
@@ -1303,11 +1596,15 @@ export async function importAllStores(snapshot, options = { merge: false }) {
                     return;
                 }
 
+                // Fusión simétrica para perfil vehicular: conserva el escalar más reciente pero siempre fusiona gpsCache y estaciones
+                if (store.name === STORES.VEHICLE_PROFILE && local) {
+                    const merged = mergeVehicleProfileRecords(local, item);
+                    writeRecord(merged);
+                    return;
+                }
+
                 if (local && localTs > incomingTs) return; // lo local es más nuevo: se conserva
-                const itemToStore = (store.name === STORES.VEHICLE_PROFILE && local)
-                    ? mergeVehicleProfileRecords(local, item)
-                    : item;
-                writeRecord(itemToStore);
+                writeRecord(item);
             };
         };
 

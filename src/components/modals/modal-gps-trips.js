@@ -21,6 +21,7 @@ import {
     getCachedGpsTrips,
     groupTripsByDay,
     computeTripsSummary,
+    classifyTripDatesToFetch,
     IOPGPS_INSTALL_DATE
 } from '../../core/iopgps-sync.js';
 import { createRouteMap } from '../gps/gps-route-map.js';
@@ -48,6 +49,7 @@ let activeTrip = null;
 
 let isRefreshing = false;
 let isLoading = false;
+let loadRequestToken = 0;
 
 function resolveTripPlaceLabel(trip, endType = 'start', preferRaw = false) {
     if (!trip) return endType === 'start' ? 'Origen' : 'Destino';
@@ -185,6 +187,23 @@ function handleBackAction(fromPopState = false) {
 }
 
 /**
+ * Hydrates in-memory modal state from local IndexedDB cache in 0 ms (no network).
+ */
+function hydrateFromCachedProfile(profile, scope) {
+    const { start, end } = resolveScopeDates(scope);
+    const cached = getCachedGpsTrips(start, end, profile);
+    const fuelPriceCop = Number(profile?.fuelPriceCop) || 16000;
+    const baseEff = Number(profile?.benchmarkEff) || Number(profile?.defaultEfficiencyKmGal) || 33.71;
+
+    currentTrips = cached;
+    currentDays = groupTripsByDay(cached, { fuelPriceCop, baseEff });
+    currentSummary = computeTripsSummary(cached, [], { fuelPriceCop, baseEff });
+    refreshGeospatialContext(profile, cached);
+
+    return { start, end, cached };
+}
+
+/**
  * Opens the GPS DATA Inspector.
  * 
  * @param {Object} [options={}] - { initialScope, cycleStartDate, cycleEndDate }
@@ -206,21 +225,14 @@ export async function openGpsTripsModal(options = {}) {
     modalRootEl.classList.remove('hidden');
 
     // 1. Instant zero-latency cache load
-    const { start, end } = resolveScopeDates(currentScope);
     const profile = await getVehicleProfile().catch(() => null);
-    const cached = getCachedGpsTrips(start, end, profile);
-    const fuelPriceCop = Number(profile?.fuelPriceCop) || 16000;
-    const baseEff = Number(profile?.benchmarkEff) || Number(profile?.defaultEfficiencyKmGal) || 33.71;
-
-    currentTrips = cached;
-    currentDays = groupTripsByDay(cached, { fuelPriceCop, baseEff });
-    currentSummary = computeTripsSummary(cached, [], { fuelPriceCop, baseEff });
-    refreshGeospatialContext(profile, cached);
+    const { start, end } = hydrateFromCachedProfile(profile, currentScope);
 
     renderView();
 
-    // 2. Fetch from network only if cache was empty for this range
-    if (cached.length === 0) {
+    // 2. Fetch from network ONLY for missing, unfinalized, missing-track, or stale-today dates
+    const plan = classifyTripDatesToFetch(start, end, profile, { forceRefresh: false });
+    if (plan.datesToFetch.length > 0 || plan.zeroActivityPastDays.length > 0) {
         await loadTripsData({ forceRefresh: false });
     }
 }
@@ -229,6 +241,9 @@ export async function openGpsTripsModal(options = {}) {
  * Closes and resets the modal.
  */
 export function closeGpsTripsModal() {
+    loadRequestToken++;
+    isLoading = false;
+    isRefreshing = false;
     if (routeMapController) {
         try { routeMapController.destroy(); } catch (_) {}
         routeMapController = null;
@@ -244,11 +259,14 @@ export function closeGpsTripsModal() {
 }
 
 /**
- * Loads trips for the current scope with optional forceRefresh.
+ * Loads trips for the current scope incrementally (never re-fetching sealed past days).
  */
 async function loadTripsData(opts = {}) {
-    if (isLoading || isRefreshing) return;
     const force = Boolean(opts.forceRefresh);
+    if ((isLoading || isRefreshing) && !opts.allowOverride) return;
+
+    const reqToken = ++loadRequestToken;
+    const requestedScope = currentScope;
 
     if (force) {
         isRefreshing = true;
@@ -258,8 +276,30 @@ async function loadTripsData(opts = {}) {
     renderHeaderControls();
 
     try {
-        const { start, end } = resolveScopeDates(currentScope);
-        const res = await fetchGpsCycleTrips(start, end, { forceRefresh: force });
+        const { start, end } = resolveScopeDates(requestedScope);
+        const res = await fetchGpsCycleTrips(start, end, {
+            forceRefresh: force,
+            onProgress: (prog) => {
+                if (reqToken !== loadRequestToken || requestedScope !== currentScope) return;
+                const progTrips = Array.isArray(prog?.trips) ? prog.trips : [];
+                const snapProfile = store.getState()?.vehicleProfile || null;
+                const fuelPriceCop = Number(snapProfile?.fuelPriceCop) || 16000;
+                const baseEff = Number(snapProfile?.benchmarkEff) || Number(snapProfile?.defaultEfficiencyKmGal) || 33.71;
+
+                currentTrips = progTrips;
+                currentDays = groupTripsByDay(progTrips, { fuelPriceCop, baseEff });
+                currentSummary = prog?.summary || computeTripsSummary(progTrips, [], { fuelPriceCop, baseEff });
+                refreshGeospatialContext(snapProfile, progTrips);
+
+                // Stream updates cleanly on Level 0 without interrupting active map inspection
+                if (currentLevel === 'days' && modalRootEl && !modalRootEl.classList.contains('hidden')) {
+                    renderLevelDays();
+                }
+            }
+        });
+
+        if (reqToken !== loadRequestToken || requestedScope !== currentScope) return;
+
         const trips = Array.isArray(res?.trips) ? res.trips : [];
         const profile = await getVehicleProfile().catch(() => null);
         const fuelPriceCop = Number(profile?.fuelPriceCop) || 16000;
@@ -282,9 +322,13 @@ async function loadTripsData(opts = {}) {
     } catch (err) {
         console.warn('[OCTANE GPS] Error loading trips:', err?.message);
     } finally {
-        isLoading = false;
-        isRefreshing = false;
-        renderView();
+        if (reqToken === loadRequestToken) {
+            isLoading = false;
+            isRefreshing = false;
+            if (modalRootEl && !modalRootEl.classList.contains('hidden')) {
+                renderView();
+            }
+        }
     }
 }
 
@@ -439,7 +483,17 @@ function bindLevelDaysEvents() {
                 if (newScope !== currentScope) {
                     currentScope = newScope;
                     playHorologyTick(1100, 0.01, 0.02);
-                    await loadTripsData({ forceRefresh: false });
+
+                    // Instant 0 ms render from accumulated local cache
+                    const profile = await getVehicleProfile().catch(() => null);
+                    const { start, end } = hydrateFromCachedProfile(profile, currentScope);
+                    renderView();
+
+                    // Only hit API if this scope has missing/unfinalized/stale dates
+                    const plan = classifyTripDatesToFetch(start, end, profile, { forceRefresh: false });
+                    if (plan.datesToFetch.length > 0 || plan.zeroActivityPastDays.length > 0) {
+                        await loadTripsData({ forceRefresh: false, allowOverride: true });
+                    }
                 }
             });
         });

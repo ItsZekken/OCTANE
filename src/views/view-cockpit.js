@@ -2329,17 +2329,7 @@ function handleChassisStageTap(stageEl) {
         // 4. Subtle amber flash
         triggerAmberFlash(stageEl);
 
-        // 5. Recurrent route detector: scan gpsCache.tripsByDate or loaded trips
-        try {
-            const profile = cockpitState.vehicleProfile || store.getState()?.vehicleProfile;
-            const tripsByDate = profile?.gpsCache?.tripsByDate;
-            const recurrentRoute = detectRecurrentRoute(tripsByDate);
-            if (recurrentRoute) {
-                localStorage.setItem('octane_active_ghost_race', JSON.stringify(recurrentRoute));
-            }
-        } catch (_) {}
-
-        // 6. Open Ghost Race modal
+        // 5. Open Ghost Race modal (re-scans full accumulated GPS archive in IndexedDB + store)
         openGhostRaceModal();
     }
 }

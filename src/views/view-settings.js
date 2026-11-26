@@ -954,7 +954,7 @@ export async function renderSettingsView(container) {
     profile = { ...profile, ...pendingVehicle };
 
     try {
-      await saveVehicleProfile(profile);
+      profile = await saveVehicleProfile(profile);
       if (store && typeof store.setState === 'function') {
         store.setState({ vehicleProfile: profile });
       }
@@ -1052,7 +1052,7 @@ export async function renderSettingsView(container) {
     playHorologyTick(1400, 0.015, 0.03);
     profile.gaugeStyle = pendingGauge;
     try {
-      await saveVehicleProfile(profile);
+      profile = await saveVehicleProfile(profile);
       if (store && typeof store.setState === 'function') {
         store.setState({ vehicleProfile: profile });
       }
@@ -1131,10 +1131,9 @@ export async function renderSettingsView(container) {
     };
 
     try {
-      await saveVehicleProfile(updated);
-      profile = updated;
+      profile = await saveVehicleProfile(updated);
       if (store && typeof store.setState === 'function') {
-        store.setState({ vehicleProfile: profile, fuelPriceCop: updated.fuelPriceCop });
+        store.setState({ vehicleProfile: profile, fuelPriceCop: profile.fuelPriceCop });
       }
       if (typeof syncToCloud === 'function') syncToCloud();
       showToast('AJUSTES GUARDADOS');
@@ -1171,7 +1170,7 @@ export async function renderSettingsView(container) {
       });
 
       try {
-        await saveVehicleProfile(profile);
+        profile = await saveVehicleProfile(profile);
         if (store && typeof store.setState === 'function') {
           store.setState({ vehicleProfile: profile });
         }
@@ -1198,7 +1197,7 @@ export async function renderSettingsView(container) {
         stationAlertsEnabled
       });
       try {
-        await saveVehicleProfile(profile);
+        profile = await saveVehicleProfile(profile);
         if (store && typeof store.setState === 'function') {
           store.setState({ vehicleProfile: profile });
         }
@@ -1242,7 +1241,7 @@ export async function renderSettingsView(container) {
       syncGpsBtn.innerText = 'SINCRONIZANDO...';
 
       try {
-        await saveVehicleProfile(profile);
+        profile = await saveVehicleProfile(profile);
         if (store && typeof store.setState === 'function') {
           store.setState({ vehicleProfile: profile });
         }

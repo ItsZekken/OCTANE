@@ -953,7 +953,7 @@ export async function openRefuelModal(options = {}) {
 
       if (profileDirty) {
         try {
-          await saveVehicleProfile(profile);
+          profile = await saveVehicleProfile(profile);
         } catch (_) {}
       }
 
